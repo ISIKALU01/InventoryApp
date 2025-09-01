@@ -53,7 +53,7 @@ export default function AdminDashboard() {
                 <p className="text-xs text-gray-600">{session.user.department} • Admin</p>
               </div>
               <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
+                onClick={() => signOut({ callbackUrl: `${window.location.origin}/` })}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium"
               >
                 Logout

@@ -42,11 +42,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex">
-      <Head>
-        <title>PGIMS - Login</title>
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-
       {/* Image Section - Hidden on mobile */}
       <div className="hidden md:flex w-1/2 bg-gradient-to-r from-indigo-900 to-purple-800 relative">
         <Image

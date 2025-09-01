@@ -52,9 +52,8 @@ export default function StaffDashboard() {
                 <p className="text-sm font-medium">{session.user.name}</p>
                 <p className="text-xs">{session.user.department}</p>
               </div>
-              <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="bg-white text-green-700 px-4 py-2 rounded-md text-sm font-medium"
+              <button onClick={() => signOut({ callbackUrl: `${window.location.origin}/` })}               
+               className="bg-white text-green-700 px-4 py-2 rounded-md text-sm font-medium"
               >
                 Logout
               </button>
