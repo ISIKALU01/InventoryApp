@@ -1,81 +1,66 @@
-// pages/index.js
+// pages/login.js
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import Image from 'next/image';
-
-// For local images, you would import them like this:
-// import professionalImage from '../public/images/professional-woman.jpg';
-// import workspaceImage from '../public/images/workspace.jpg';
-
-// Since we're using remote images in this example, we'll use the Next.js Image component with remote URLs
-// For local images, you would use: <Image src={professionalImage} alt="Professional woman" />
+import { signIn } from 'next-auth/react';
+import Head from 'next/head';
+import Image from 'next/image'
 
 export default function Login() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-
-  // Admin password (in a real app, this would be validated server-side)
-  const ADMIN_PASSWORD = 'admin123';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    // Validate inputs
-    if (!username.trim()) {
-      setError('Username is required');
+    const result = await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
+    });
+
+    if (result.error) {
+      setError('Invalid email or password');
       setIsLoading(false);
       return;
     }
 
-    if (!password) {
-      setError('Password is required');
-      setIsLoading(false);
-      return;
+    // Get the user role and redirect accordingly
+    const response = await fetch('/api/auth/session');
+    const session = await response.json();
+    
+    if (session.user.role === 'admin') {
+      router.push('/admin-dashboard');
+    } else {
+      router.push('/staff-dashboard');
     }
-
-    // Simulate API call
-    setTimeout(() => {
-      // Store authentication data
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('username', username);
-      
-      // Route based on password
-      if (password === ADMIN_PASSWORD) {
-        localStorage.setItem('userRole', 'admin');
-        router.push('/admin-dashboard');
-      } else {
-        localStorage.setItem('userRole', 'staff');
-        router.push('/staff-dashboard');
-      }
-    }, 1000);
   };
 
   return (
-    <div className="min-h-screen flex font-raleway">
-     
+    <div className="min-h-screen flex">
+      <Head>
+        <title>PGIMS - Login</title>
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
 
       {/* Image Section - Hidden on mobile */}
       <div className="hidden md:flex w-1/2 bg-gradient-to-r from-indigo-900 to-purple-800 relative">
         <Image
           src="https://images.unsplash.com/photo-1589156280159-27698a70f29e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1472&q=80"
           alt="Professional woman"
-          fill
-          priority
-          sizes="(max-width: 768px) 100vw, 50vw"
-          className="object-cover opacity-90"
-          placeholder="blur"
-          blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAFAAUDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAeEAABBAIDAQAAAAAAAAAAAAABAAIDBAUREiExUf/EABUBAQEAAAAAAAAAAAAAAAAAAAIE/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAECETH/2gAMAwEAAhEDEQA/AJvH5G9XqRRxWpmMaNGnOICIslYc7ckjif/Z"
+          className="absolute inset-0 w-full h-full object-cover opacity-90"
+          width={100}
+          height={100}
         />
         <div className="absolute inset-0 bg-indigo-900 opacity-80"></div>
         
-        <div className="relative z-10 flex flex-col justify-center items-center text-white p-12 font-raleway w-full">
-          <h1 className="text-4xl font-raleway mb-6 text-center">Inventory Management System</h1>
-          <p className="text-xl font-raleway text-center max-w-md">Efficiently manage your inventory with our powerful system</p>
+        <div className="relative z-10 flex flex-col justify-center items-center text-white p-12 w-full">
+          <h1 className="text-4xl font-bold mb-6 text-center">Inventory Management System</h1>
+          <p className="text-xl text-center max-w-md">Efficiently manage your inventory with our powerful system</p>
           
           <div className="mt-12 space-y-4">
             <div className="flex items-center">
@@ -115,21 +100,18 @@ export default function Login() {
           <Image
             src="https://images.unsplash.com/photo-1551836022-d5d88e9218df?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80"
             alt="Professional workspace"
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover filter blur-sm"
-            placeholder="blur"
-            blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAFAAUDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAeEAABBAIDAQAAAAAAAAAAAAABAAIDBAUREiExUf/EABUBAQEAAAAAAAAAAAAAAAAAAAIE/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAECETH/2gAMAwEAAhEDEQA/AJvH5G9XqRRxWpmMaNGnOICIslYc7ckjif/Z"
+            className="absolute inset-0 w-full h-full object-cover filter blur-sm"
+            width={100}
+            height={100}
           />
           <div className="absolute inset-0 bg-black opacity-50"></div>
         </div>
 
-        <div className="w-full font-raleway max-w-md bg-white shadow-xl z-10 md:shadow-none md:rounded-none md:bg-transparent">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl z-10 md:shadow-none md:rounded-none md:bg-transparent">
           <div className="bg-white py-8 px-6 rounded-2xl shadow-lg md:shadow-xl md:px-8">
             <div className="flex justify-center mb-6">
               <div className="flex items-center justify-center bg-indigo-900 text-white rounded-full w-20 h-20 shadow-lg">
-                <span className="text-2xl font-raleway font-bold">PGIMS</span>
+                <span className="text-2xl font-bold">PGIMS</span>
               </div>
             </div>
             
@@ -146,23 +128,23 @@ export default function Login() {
               )}
               
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                  Username
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  Email
                 </label>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                     </svg>
                   </div>
                   <input
-                    id="username"
-                    name="username"
-                    type="text"
+                    id="email"
+                    name="email"
+                    type="email"
                     className="py-3 pl-10 pr-4 block w-full border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="Enter your username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
               </div>
@@ -188,28 +170,8 @@ export default function Login() {
                   />
                 </div>
                 <p className="mt-2 text-xs text-gray-500">
-                  Use password <span className="font-mono">admin123</span> for admin access
+                  Demo: admin@example.com/admin123, john@example.com/john123
                 </p>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <input
-                    id="remember-me"
-                    name="remember-me"
-                    type="checkbox"
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                    Remember me
-                  </label>
-                </div>
-
-                <div className="text-sm">
-                  <a href="#" className="font-medium text-indigo-600 hover:text-indigo-500">
-                    Forgot password?
-                  </a>
-                </div>
               </div>
 
               <div>
@@ -232,15 +194,6 @@ export default function Login() {
                 </button>
               </div>
             </form>
-            
-            <div className="mt-6 bg-blue-50 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-blue-800">Demo Instructions:</h3>
-              <ul className="mt-2 text-xs text-blue-600 space-y-1">
-                <li>• Enter any username</li>
-                <li>• Use password <span className="font-mono">admin123</span> to access Admin Dashboard</li>
-                <li>• Use any other password to access Staff Dashboard</li>
-              </ul>
-            </div>
           </div>
         </div>
       </div>
