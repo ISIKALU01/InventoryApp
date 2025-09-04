@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { signIn } from 'next-auth/react';
-import Head from 'next/head';
 import Image from 'next/image'
 
 export default function Login() {

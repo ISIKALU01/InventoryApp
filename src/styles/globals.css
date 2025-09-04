@@ -28,7 +28,7 @@ body {
 
 /* Custom transitions for sidebar */
 .sidebar-transition {
-  transition: transform 0.3s ease-in-out;
+  transition: transform 0.5s ease-in-out;
 }
 
 /* Smooth scrolling */
@@ -38,7 +38,7 @@ html {
 
 /* Custom scrollbar for sidebar */
 .sidebar::-webkit-scrollbar {
-  width: 4px;
+  width: 1px;
 }
 
 .sidebar::-webkit-scrollbar-track {
@@ -47,7 +47,7 @@ html {
 
 .sidebar::-webkit-scrollbar-thumb {
   background: #6366f1;
-  border-radius: 4px;
+  border-radius: 1px;
 }
 
 .sidebar::-webkit-scrollbar-thumb:hover {

@@ -40,20 +40,21 @@ export default function StaffDashboard() {
         <title>Staff Dashboard - PGIMS</title>
       </Head>
       
-      <header className="bg-green-600 shadow">
+      <header className="bg-grey-900 shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div>
-              <h1 className="text-2xl font-bold text-white">Staff Dashboard</h1>
-              <p className="text-sm text-green-100">Welcome back, {session.user.name}</p>
+          <div className="flex flex-col sm:flex-row justify-between items-center py-4 sm:py-0 sm:h-16">
+            <div className="mb-4 sm:mb-0 text-center sm:text-left">
+              <p className="text-xl text-black">Welcome back, {session.user.name}</p>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-right text-white">
+            <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
+              <div className="text-center sm:text-right text-black">
                 <p className="text-sm font-medium">{session.user.name}</p>
                 <p className="text-xs">{session.user.department}</p>
               </div>
-              <button onClick={() => signOut({ callbackUrl: `${window.location.origin}/` })}               
-               className="bg-white text-green-700 px-4 py-2 rounded-md text-sm font-medium"
+              <button 
+                onClick={() => signOut({ callbackUrl: `${window.location.origin}/` })}               
+                className="bg-white text-green-700 px-4 py-2 rounded-md text-sm font-medium cursor-pointer 
+                w-full sm:w-auto"
               >
                 Logout
               </button>

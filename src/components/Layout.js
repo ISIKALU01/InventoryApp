@@ -54,7 +54,7 @@ export default function Layout({ children }) {
         `}>
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-800">
+              <h1 className="text-xl font-semibold pl-[100px] text-gray-800">
                 {router.pathname === '/dashboard' ? 'Dashboard' : 
                  router.pathname === '/transaction' ? 'Transactions' :
                  router.pathname === '/inventory' ? 'Inventory' :

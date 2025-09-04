@@ -41,20 +41,20 @@ export default function AdminDashboard() {
       </Head>
       
       <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-sm text-gray-600">Welcome back, {session.user.name}</p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 font-raleway">
+          <div className="flex flex-col sm:flex-row justify-between items-center py-4 sm:py-0 sm:h-16">
+            <div className="mb-4 sm:mb-0 text-center sm:text-left">
+              <p className="text-xl text-gray-600">Welcome back, {session.user.name}</p>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
+            <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
+              <div className="text-center sm:text-right">
                 <p className="text-sm font-medium text-gray-900">{session.user.name}</p>
                 <p className="text-xs text-gray-600">{session.user.department} • Admin</p>
               </div>
               <button
                 onClick={() => signOut({ callbackUrl: `${window.location.origin}/` })}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+                className="bg-indigo-600 text-white px-4 py-2 cursor-pointer rounded-md text-sm font-medium w-full 
+                sm:w-auto"
               >
                 Logout
               </button>
@@ -116,3 +116,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
