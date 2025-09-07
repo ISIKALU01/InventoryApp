@@ -53,18 +53,19 @@ export default function Layout({ children }) {
           ${!isSidebarOpen && !isMobile ? 'ml-0' : ''}
         `}>
           <div className="flex items-center justify-between p-4">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold pl-[100px] text-gray-800">
+            <div className="flex items-center justify-center lg:justify-start w-full lg:w-auto">
+              <h1 className="text-xl font-normal font-raleway text-gray-800 text-center md:text-left">
                 {router.pathname === '/dashboard' ? 'Dashboard' : 
-                 router.pathname === '/transaction' ? 'Transactions' :
-                 router.pathname === '/inventory' ? 'Inventory' :
-                 router.pathname === '/accounts' ? 'Accounts' :
-                 router.pathname === '/deleted-transactions' ? 'Deleted Transactions' :
-                 router.pathname === '/settings' ? 'Settings' :
-                 router.pathname === '/folio' ? 'Folio' : 'Page'}
+                router.pathname === '/admin-dashboard' ? 'Admin Dashboard' :
+                router.pathname === '/staff-dashboard' ? 'Staff Dashboard' :
+                router.pathname.startsWith('/transaction/') ? 'Transaction' :
+                router.pathname === '/inventory' ? 'Inventory' :
+                router.pathname === '/accounts' ? 'Accounts' :
+                router.pathname === '/deleted-transactions' ? 'Deleted Transactions' :
+                router.pathname === '/settings' ? 'Settings' :
+                router.pathname === '/folio' ? 'Folio' : 'Page'}
               </h1>
             </div>
-            
             {/* Add any header buttons or user info here */}
           </div>
         </div>

@@ -107,10 +107,12 @@ export default function Sidebar({ onToggle }) {
       icon: <FaMoneyBill className="w-5 h-5" />,
       roles: ['admin', 'staff'],
       submenu: [
-        { name: 'Sales/Invoice', path: '/transaction/sales-invoice', icon: <FaReceipt className="w-4 h-4" />, roles: ['admin', 'staff'] },
-        { name: 'Sales List', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" />, roles: ['admin', 'staff'] },
-        { name: 'Sales Summary', path: '/transaction/sales-summary', icon: <FaClipboardCheck className="w-4 h-4" />, roles: ['admin', 'staff'] },
-        { name: 'Payment Analysis', path: '/transaction/payment-analysis', icon: <FaChartBar className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'payment', path: '/transaction/payment', icon: <FaCreditCard className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, roles: ['admin', 'staff'] }
       ]
     },
     { 
