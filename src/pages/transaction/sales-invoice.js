@@ -25,6 +25,7 @@ export default function SalesInvoice() {
 
   // Success popup state
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // New state for loading
 
   // Sample categories
   const categories = [
@@ -215,8 +216,14 @@ export default function SalesInvoice() {
     setQueuedOrders(queuedOrders.slice(0, -1));
   };
 
-  // Process Payment Function
-  const handleProcessPayment = () => {
+  // Process Payment Function with loading effect
+  const handleProcessPayment = async () => {
+    // Show loading state
+    setIsProcessing(true);
+    
+    // Simulate processing delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
     // Process the current order
     const orderData = {
       cartItems,
@@ -236,7 +243,8 @@ export default function SalesInvoice() {
     const existingTransactions = JSON.parse(localStorage.getItem('salesTransactions') || '[]');
     localStorage.setItem('salesTransactions', JSON.stringify([...existingTransactions, orderData]));
     
-    // Show success popup
+    // Hide loading and show success popup
+    setIsProcessing(false);
     setShowSuccessPopup(true);
     
     // Clear the current order
@@ -616,9 +624,21 @@ export default function SalesInvoice() {
               <div className="space-y-2">
                 <button 
                   onClick={handleProcessPayment}
-                  className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition-colors font-medium text-sm outline-none focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  disabled={isProcessing}
+                  className={`w-full py-2 rounded font-medium text-sm outline-none focus:outline-none focus:ring-1 ${
+                    isProcessing 
+                      ? 'bg-indigo-400 cursor-not-allowed' 
+                      : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500 text-white'
+                  } transition-colors`}
                 >
-                  Process Order
+                  {isProcessing ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Processing...
+                    </div>
+                  ) : (
+                    'Process Order'
+                  )}
                 </button>
                 <button 
                   onClick={() => setCartItems([])}
@@ -648,6 +668,21 @@ export default function SalesInvoice() {
               >
                 Continue
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {isProcessing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm mx-auto">
+            <div className="flex flex-col items-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">Processing Order</h3>
+              <p className="text-sm text-gray-600 text-center">
+                Please wait while we save your order...
+              </p>
             </div>
           </div>
         </div>
