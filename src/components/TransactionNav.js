@@ -6,7 +6,7 @@ import {
 } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
 
-export default function TransactionNav() {
+export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrdersCount }) {
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -23,7 +23,7 @@ export default function TransactionNav() {
     },
     { 
       name: 'Payment', 
-      path: '/transaction/payment'
+      path: 'transaction/payment'
     },
     { 
       name: 'Sales List', 
@@ -38,6 +38,9 @@ export default function TransactionNav() {
       path: '/transaction/payment-analysis'
     },
   ];
+
+  // Check if current page is Sales Point
+  const isSalesPoint = router.pathname === '/transaction/sales-invoice';
 
   // Check screen size on mount and resize
   useEffect(() => {
@@ -79,38 +82,85 @@ export default function TransactionNav() {
           ))}
         </div>
         
-        <div className="flex gap-0 font-raleway">
-          <button className="
-            flex items-center px-2 py-1 text-xs font-medium bg-indigo-600 text-white 
-            border border-gray-300 rounded-l-md hover:bg-indigo-800 transition-all duration-200
-          ">
-            Queue Order
-          </button>
-          <button className="
-            flex items-center px-2 py-1 text-xs font-medium bg-indigo-600 text-white 
-            border border-gray-300 border-l-0 rounded-r-md hover:bg-indigo-800 transition-all duration-200
-          ">
-            Recall Order
-          </button>
-        </div>
+        {/* Only show Queue/Recall buttons on Sales Point page */}
+        {isSalesPoint && (
+          <div className="flex gap-0 font-raleway">
+            <button 
+              onClick={onQueueOrder}
+              disabled={queuedOrdersCount >= 3}
+              className={`
+                flex items-center px-2 py-1 text-xs font-medium
+                border border-gray-300 rounded-l-md transition-all duration-200
+                ${queuedOrdersCount >= 3 
+                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                  : 'bg-indigo-600 text-white hover:bg-indigo-800'
+                }
+              `}
+            >
+              Queue Order {queuedOrdersCount > 0 && `(${queuedOrdersCount}/3)`}
+            </button>
+            <button 
+              onClick={onRecallOrder}
+              disabled={queuedOrdersCount === 0}
+              className={`
+                flex items-center px-2 py-1 text-xs font-medium
+                border border-gray-300 border-l-0 rounded-r-md transition-all duration-200
+                ${queuedOrdersCount === 0 
+                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                  : 'bg-indigo-600 text-white hover:bg-indigo-800'
+                }
+              `}
+            >
+              Recall Order
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Mobile Layout */}
       <div className="md:hidden">
         {/* Mobile Header */}
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-700">Sales Point</h3>
+          <h3 className="text-lg font-medium text-gray-700">
+            {navItems.find(item => item.path === router.pathname)?.name || 'Transaction'}
+          </h3>
           
           <div className="flex items-center gap-2">
-            {/* Only show Recall button on mobile, not Queue button */}
-            <button className="
-              flex items-center font-raleway px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 
-              border border-gray-300 rounded-md hover:bg-gray-200 transition-all duration-200
-            ">
-              Recall Order
-            </button>
+            {/* Only show Queue/Recall buttons on Sales Point page */}
+            {isSalesPoint && (
+              <>
+                <button 
+                  onClick={onQueueOrder}
+                  disabled={queuedOrdersCount >= 3}
+                  className={`
+                    flex items-center px-2 py-1 text-xs font-medium
+                    border border-gray-300 rounded-md transition-all duration-200
+                    ${queuedOrdersCount >= 3 
+                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                      : 'bg-indigo-600 text-white hover:bg-indigo-800'
+                    }
+                  `}
+                >
+                  Queue {queuedOrdersCount > 0 && `(${queuedOrdersCount})`}
+                </button>
+                <button 
+                  onClick={onRecallOrder}
+                  disabled={queuedOrdersCount === 0}
+                  className={`
+                    flex items-center px-2 py-1 text-xs font-medium
+                    border border-gray-300 rounded-md transition-all duration-200
+                    ${queuedOrdersCount === 0 
+                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                      : 'bg-indigo-600 text-white hover:bg-indigo-800'
+                    }
+                  `}
+                >
+                  Recall
+                </button>
+              </>
+            )}
             
-            {/* Three-dotted menu button on the right - always shows ellipsis icon */}
+            {/* Three-dotted menu button on the right */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
