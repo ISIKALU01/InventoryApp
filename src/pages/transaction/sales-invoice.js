@@ -2,7 +2,7 @@
 import { useRouter } from 'next/router';
 import TransactionNav from '../../components/TransactionNav';
 import { useState, useEffect } from 'react';
-import { FaSearch, FaShoppingCart, FaPlus, FaMinus, FaTrash, FaCheck, FaCheckCircle } from 'react-icons/fa';
+import { FaSearch, FaShoppingCart, FaPlus, FaMinus, FaTrash, FaCheck, FaCheckCircle, FaPrint } from 'react-icons/fa';
 
 export default function SalesInvoice() {
   const router = useRouter();
@@ -21,11 +21,11 @@ export default function SalesInvoice() {
   // Queue state management
   const [queuedOrders, setQueuedOrders] = useState([]);
   const [currentOrderId, setCurrentOrderId] = useState(1);
-  const [activeOrderIndex, setActiveOrderIndex] = useState(0);
 
   // Success popup state
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // New state for loading
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedOrder, setProcessedOrder] = useState(null);
 
   // Sample categories
   const categories = [
@@ -80,7 +80,7 @@ export default function SalesInvoice() {
       category: 'electronics', 
       sold: 142,
       stock: 25,
-      stockStatus: 'in-stock' // in-stock, low-stock, out-of-stock
+      stockStatus: 'in-stock'
     },
     { 
       id: 'CT002', 
@@ -117,33 +117,6 @@ export default function SalesInvoice() {
       sold: 34,
       stock: 12,
       stockStatus: 'in-stock'
-    },
-    { 
-      id: 'SW006', 
-      name: 'Smart Watch', 
-      price: 199.99, 
-      category: 'electronics', 
-      sold: 78,
-      stock: 3,
-      stockStatus: 'low-stock'
-    },
-    { 
-      id: 'RS007', 
-      name: 'Running Shorts', 
-      price: 29.99, 
-      category: 'clothing', 
-      sold: 67,
-      stock: 18,
-      stockStatus: 'in-stock'
-    },
-    { 
-      id: 'CM008', 
-      name: 'Coffee Maker', 
-      price: 49.99, 
-      category: 'electronics', 
-      sold: 45,
-      stock: 7,
-      stockStatus: 'low-stock'
     }
   ];
 
@@ -226,9 +199,9 @@ export default function SalesInvoice() {
     
     // Process the current order
     const orderData = {
-      cartItems,
+      cartItems: [...cartItems],
       invoiceNumber: invoiceNumber || `INV-${Date.now()}`,
-      selectedDate,
+      selectedDate: selectedDate || new Date().toISOString().split('T')[0],
       selectedCurrency,
       customerType,
       paymentMethod,
@@ -243,6 +216,9 @@ export default function SalesInvoice() {
     const existingTransactions = JSON.parse(localStorage.getItem('salesTransactions') || '[]');
     localStorage.setItem('salesTransactions', JSON.stringify([...existingTransactions, orderData]));
     
+    // Set the processed order for receipt
+    setProcessedOrder(orderData);
+    
     // Hide loading and show success popup
     setIsProcessing(false);
     setShowSuccessPopup(true);
@@ -252,9 +228,119 @@ export default function SalesInvoice() {
     setInvoiceNumber('');
     setAmountTendered('');
     setBankAccount('');
-    
-    // Hide popup after 3 seconds
-    setTimeout(() => setShowSuccessPopup(false), 3000);
+  };
+
+  // Print receipt function
+  const printReceipt = () => {
+    const receiptElement = document.getElementById('receipt');
+    if (receiptElement) {
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Print Receipt</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 0;
+                padding: 10px;
+                color: #000;
+                font-size: 12px;
+              }
+              .receipt-container {
+                width: 100%;
+                max-width: 280px;
+                margin: 0 auto;
+              }
+              .receipt-header {
+                text-align: center;
+                margin-bottom: 10px;
+                border-bottom: 1px dashed #ddd;
+                padding-bottom: 8px;
+              }
+              .receipt-header h2 {
+                margin: 0;
+                font-size: 14px;
+                font-weight: bold;
+              }
+              .receipt-header p {
+                margin: 3px 0;
+                font-size: 10px;
+              }
+              .receipt-info {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 8px;
+                font-size: 10px;
+              }
+              .receipt-items {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 10px;
+                font-size: 10px;
+              }
+              .receipt-items th {
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+                padding: 3px 0;
+                font-weight: bold;
+              }
+              .receipt-items td {
+                padding: 2px 0;
+              }
+              .receipt-totals {
+                border-top: 1px dashed #ddd;
+                padding-top: 8px;
+                margin-top: 8px;
+                font-size: 11px;
+              }
+              .receipt-totals .total-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 3px;
+              }
+              .receipt-totals .grand-total {
+                font-weight: bold;
+                border-top: 1px solid #ddd;
+                padding-top: 5px;
+                margin-top: 5px;
+              }
+              .receipt-footer {
+                text-align: center;
+                margin-top: 10px;
+                border-top: 1px dashed #ddd;
+                padding-top: 8px;
+                font-size: 9px;
+              }
+              @media print {
+                body { 
+                  margin: 0; 
+                  padding: 10px;
+                }
+              }
+              @media (max-width: 480px) {
+                body {
+                  font-size: 11px;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="receipt-container">
+              ${receiptElement.innerHTML}
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      
+      // Wait for content to load then print
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    }
   };
 
   // Filter products based on category and search
@@ -652,19 +738,93 @@ export default function SalesInvoice() {
         </div>
       </div>
 
-      {/* Success Popup */}
-      {showSuccessPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm mx-auto">
-            <div className="flex flex-col items-center">
-              <FaCheckCircle className="text-green-500 text-4xl mb-3" />
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Order Saved Successfully!</h3>
-              <p className="text-sm text-gray-600 text-center">
-                Your order has been processed and saved to the sales list.
+      {/* Success Popup with Receipt */}
+      {showSuccessPopup && processedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 max-w-md w-full mx-4">
+            <div className="flex flex-col items-center mb-3">
+              <FaCheckCircle className="text-green-500 text-3xl mb-2" />
+              <h3 className="text-lg font-semibold text-gray-800 mb-1">Order Processed!</h3>
+              <p className="text-xs text-gray-600 text-center">
+                Your order has been processed successfully.
               </p>
+            </div>
+            
+            {/* Compact Receipt */}
+            <div id="receipt" className="border border-gray-200 rounded p-3 mb-3 bg-white text-xs">
+              <div className="text-center mb-2">
+                <h2 className="text-sm font-bold">STORE RECEIPT</h2>
+                <p className="text-[10px] text-gray-600">123 Business Street, City, State</p>
+              </div>
+              
+              <div className="flex justify-between mb-2">
+                <span>Invoice: {processedOrder.invoiceNumber}</span>
+                <span>{new Date(processedOrder.timestamp).toLocaleDateString()}</span>
+              </div>
+              
+              <div className="border-t border-gray-200 pt-1 mb-2">
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th className="text-left pb-1 text-[10px]">Item</th>
+                      <th className="text-center pb-1 text-[10px]">Qty</th>
+                      <th className="text-right pb-1 text-[10px]">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {processedOrder.cartItems.map(item => (
+                      <tr key={item.id} className="border-b border-gray-100">
+                        <td className="py-1 text-[10px]">{item.name}</td>
+                        <td className="text-center py-1 text-[10px]">{item.quantity}</td>
+                        <td className="text-right py-1 text-[10px]">${(item.price * item.quantity).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="border-t border-gray-200 pt-2 text-[11px]">
+                <div className="flex justify-between font-bold">
+                  <span>TOTAL:</span>
+                  <span>${processedOrder.total.toFixed(2)}</span>
+                </div>
+              </div>
+              
+              <div className="border-t border-gray-200 mt-2 pt-2 text-[10px]">
+                <div className="flex justify-between mb-1">
+                  <span>Payment:</span>
+                  <span>{paymentMethods.find(m => m.id === processedOrder.paymentMethod)?.name}</span>
+                </div>
+                {processedOrder.amountTendered && (
+                  <div className="flex justify-between">
+                    <span>Amount Tendered:</span>
+                    <span>${parseFloat(processedOrder.amountTendered).toFixed(2)}</span>
+                  </div>
+                )}
+                {processedOrder.paymentMethod === 'cash' && processedOrder.amountTendered && (
+                  <div className="flex justify-between">
+                    <span>Change:</span>
+                    <span>${(parseFloat(processedOrder.amountTendered) - processedOrder.total).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="text-center text-[9px] mt-2 pt-2 border-t border-gray-200">
+                <p>Thank you for your purchase!</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={printReceipt}
+                className="flex items-center bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700 transition-colors"
+              >
+                <FaPrint className="mr-1 text-xs" />
+                Print Receipt
+              </button>
               <button
                 onClick={() => setShowSuccessPopup(false)}
-                className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+                className="bg-gray-200 text-gray-800 px-3 py-1.5 rounded text-sm hover:bg-gray-300 transition-colors"
               >
                 Continue
               </button>
@@ -676,11 +836,11 @@ export default function SalesInvoice() {
       {/* Loading Overlay */}
       {isProcessing && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm mx-auto">
+          <div className="bg-white rounded-lg p-4 max-w-xs mx-auto">
             <div className="flex flex-col items-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Processing Order</h3>
-              <p className="text-sm text-gray-600 text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-3"></div>
+              <h3 className="text-base font-semibold text-gray-800 mb-1">Processing Order</h3>
+              <p className="text-xs text-gray-600 text-center">
                 Please wait while we save your order...
               </p>
             </div>
