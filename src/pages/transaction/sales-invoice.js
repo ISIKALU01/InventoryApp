@@ -2,10 +2,12 @@
 import { useRouter } from 'next/router';
 import TransactionNav from '../../components/TransactionNav';
 import { useState, useEffect } from 'react';
-import { FaSearch, FaShoppingCart, FaPlus, FaMinus, FaTrash, FaCheck, FaCheckCircle, FaPrint } from 'react-icons/fa';
+import { FaSearch, FaShoppingCart, FaPlus, FaMinus, FaTrash, FaCheck, FaCheckCircle, FaPrint, FaExclamationTriangle } from 'react-icons/fa';
+import { useSession } from 'next-auth/react';
 
 export default function SalesInvoice() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [cartItems, setCartItems] = useState([]);
@@ -26,6 +28,10 @@ export default function SalesInvoice() {
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedOrder, setProcessedOrder] = useState(null);
+
+  // Error message state
+  const [errorMessage, setErrorMessage] = useState('');
+  const [showError, setShowError] = useState(false);
 
   // Sample categories
   const categories = [
@@ -120,6 +126,16 @@ export default function SalesInvoice() {
     }
   ];
 
+  // Show error message for 3 seconds
+  const showErrorMsg = (message) => {
+    setErrorMessage(message);
+    setShowError(true);
+    setTimeout(() => {
+      setShowError(false);
+      setErrorMessage('');
+    }, 3000);
+  };
+
   // Get stock status badge
   const getStockBadge = (stockStatus, stock) => {
     const styles = {
@@ -191,6 +207,34 @@ export default function SalesInvoice() {
 
   // Process Payment Function with loading effect
   const handleProcessPayment = async () => {
+    // Validate amount tendered for cash payments
+    if (paymentMethod === 'cash') {
+      const tendered = parseFloat(amountTendered) || 0;
+      const total = getCartTotal();
+      
+      if (tendered < total) {
+        showErrorMsg(`Insufficient amount. Total is $${total.toFixed(2)}`);
+        return;
+      }
+    }
+    
+    // Validate amount for other payment methods that require amount
+    if (requiresAmountTendered() && paymentMethod !== 'cash') {
+      const tendered = parseFloat(amountTendered) || 0;
+      const total = getCartTotal();
+      
+      if (tendered !== total) {
+        showErrorMsg(`Amount must equal total of $${total.toFixed(2)}`);
+        return;
+      }
+    }
+    
+    // Validate bank account for methods that require it
+    if (requiresBankAccount() && !bankAccount) {
+      showErrorMsg('Please select a bank account');
+      return;
+    }
+    
     // Show loading state
     setIsProcessing(true);
     
@@ -209,7 +253,10 @@ export default function SalesInvoice() {
       bankAccount,
       total: getCartTotal(),
       timestamp: new Date().toISOString(),
-      transactionId: `TXN-${Date.now()}`
+      transactionId: `TXN-${Date.now()}`,
+      // Add user information to the order
+      processedBy: session?.user?.name || 'Unknown User',
+      userId: session?.user?.id || 'unknown'
     };
     
     // Save to localStorage for the sales list page
@@ -270,7 +317,7 @@ export default function SalesInvoice() {
               }
               .receipt-info {
                 display: flex;
-                justify-content: space-between;
+                justify-between;
                 margin-bottom: 8px;
                 font-size: 10px;
               }
@@ -420,8 +467,8 @@ export default function SalesInvoice() {
               Queued Orders: {queuedOrders.length}/3
             </span>
             <span className="text-xs text-blue-600">
-              Click "Recall Order" to continue with queued orders
-            </span>
+             Click &quot;Recall Order&quot; to continue with queued orders
+            </span>   
           </div>
         </div>
       )}
@@ -438,7 +485,7 @@ export default function SalesInvoice() {
                 <select 
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  className="w-full px-4 py-3 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                 >
                   {categories.map(category => (
                     <option key={category.id} value={category.id}>
@@ -448,15 +495,15 @@ export default function SalesInvoice() {
                 </select>
               </div>
               
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 flex">
                 <input
                   type="text"
                   placeholder="Search products..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-l-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  className="flex-1 min-w-0 px-4 py-3 border border-gray-300 rounded-l-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                 />
-                <button className="px-4 py-2 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 transition-colors outline-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                <button className="px-4 py-3 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 transition-colors outline-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                   <FaSearch />
                 </button>
               </div>
@@ -573,62 +620,58 @@ export default function SalesInvoice() {
           {/* Cart Summary */}
           {cartItems.length > 0 && (
             <div className="border-t pt-3">
-              <div className="flex justify-between items-center mb-3 p-2 bg-gray-50 rounded-lg">
-                <span className="font-semibold text-gray-700 text-sm">Total:</span>
+              <div className="flex justify-between items-center mb-4 p-3 bg-gray-50 rounded-lg">
+                <span className="font-semibold text-gray-700">Total:</span>
                 <span className="text-lg font-bold text-indigo-600">
                   ${getCartTotal().toFixed(2)}
                 </span>
               </div>
 
               {/* Additional Payment Fields */}
-              <div className="space-y-2 mb-3 p-2 bg-gray-50 rounded-lg">
+              <div className="space-y-4 mb-4">
                 {/* Invoice Number and Date */}
-                <div className="flex gap-2 mb-2">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Invoice #</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
                     <input
                       type="text"
-                      placeholder="INV-001"
+                      placeholder="Invoice # (e.g. INV-001)"
                       value={invoiceNumber}
                       onChange={(e) => setInvoiceNumber(e.target.value)}
-                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                     />
                   </div>
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                  <div>
                     <input
                       type="date"
                       value={selectedDate}
                       onChange={(e) => setSelectedDate(e.target.value)}
-                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                     />
                   </div>
                 </div>
 
                 {/* Currency Selection */}
-                <div className="mb-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Currency</label>
-                  <select 
-                    value={selectedCurrency}
-                    onChange={(e) => setSelectedCurrency(e.target.value)}
-                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                  >
-                    {currencies.map(currency => (
-                      <option key={currency.id} value={currency.id}>
-                        {currency.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <div>
+                    <select 
+                      value={selectedCurrency}
+                      onChange={(e) => setSelectedCurrency(e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    >
+                      {currencies.map(currency => (
+                        <option key={currency.id} value={currency.id}>
+                          {currency.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                 {/* Customer Type and Payment Method */}
-                <div className="flex gap-2 mb-2">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Customer</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
                     <select 
                       value={customerType}
                       onChange={(e) => setCustomerType(e.target.value)}
-                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                     >
                       {customerTypes.map(type => (
                         <option key={type.id} value={type.id}>
@@ -637,12 +680,11 @@ export default function SalesInvoice() {
                       ))}
                     </select>
                   </div>
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Payment</label>
+                  <div>
                     <select 
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                     >
                       {paymentMethods.map(method => (
                         <option key={method.id} value={method.id}>
@@ -655,12 +697,11 @@ export default function SalesInvoice() {
 
                 {/* Conditional Payment Fields */}
                 {requiresBankAccount() && (
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Bank Account</label>
+                  <div>
                     <select 
                       value={bankAccount}
                       onChange={(e) => setBankAccount(e.target.value)}
-                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                     >
                       <option value="">Select Bank Account</option>
                       {bankAccounts.map(account => (
@@ -673,19 +714,16 @@ export default function SalesInvoice() {
                 )}
 
                 {requiresAmountTendered() && (
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      {paymentMethod === 'cash' ? 'Amount Tendered' : 'Amount Paid'}
-                    </label>
+                  <div>
                     <input
                       type="number"
-                      placeholder="0.00"
+                      placeholder={paymentMethod === 'cash' ? 'Amount Tendered' : 'Amount Paid'}
                       value={amountTendered}
                       onChange={(e) => setAmountTendered(e.target.value)}
-                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                     />
                     {paymentMethod === 'cash' && amountTendered && (
-                      <div className="text-xs text-gray-600 mt-1">
+                      <div className="text-sm text-gray-600 mt-2 p-2 bg-blue-50 rounded">
                         Change: ${getChangeAmount().toFixed(2)}
                       </div>
                     )}
@@ -693,25 +731,25 @@ export default function SalesInvoice() {
                 )}
 
                 {/* Save to Print Later */}
-                <div className="flex items-center">
+                <div className="flex items-center p-2">
                   <input
                     type="checkbox"
                     id="saveForLater"
                     checked={saveForLater}
                     onChange={(e) => setSaveForLater(e.target.checked)}
-                    className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   />
-                  <label htmlFor="saveForLater" className="ml-1 block text-xs text-gray-700">
+                  <label htmlFor="saveForLater" className="ml-2 block text-sm text-gray-700">
                     Save to print later
                   </label>
                 </div>
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <button 
                   onClick={handleProcessPayment}
                   disabled={isProcessing}
-                  className={`w-full py-2 rounded font-medium text-sm outline-none focus:outline-none focus:ring-1 ${
+                  className={`w-full py-3 rounded font-medium text-sm outline-none focus:outline-none focus:ring-2 ${
                     isProcessing 
                       ? 'bg-indigo-400 cursor-not-allowed' 
                       : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500 text-white'
@@ -728,7 +766,7 @@ export default function SalesInvoice() {
                 </button>
                 <button 
                   onClick={() => setCartItems([])}
-                  className="w-full bg-gray-200 text-gray-700 py-1.5 rounded hover:bg-gray-300 transition-colors text-sm outline-none focus:outline-none focus:ring-1 focus:ring-gray-500"
+                  className="w-full bg-gray-200 text-gray-700 py-2.5 rounded hover:bg-gray-300 transition-colors text-sm outline-none focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
                   Clear Cart
                 </button>
@@ -760,6 +798,12 @@ export default function SalesInvoice() {
               <div className="flex justify-between mb-2">
                 <span>Invoice: {processedOrder.invoiceNumber}</span>
                 <span>{new Date(processedOrder.timestamp).toLocaleDateString()}</span>
+              </div>
+              
+              {/* Display the user who processed the order */}
+              <div className="flex justify-between mb-2 text-[10px]">
+                <span>Processed By:</span>
+                <span className="font-medium">{processedOrder.processedBy}</span>
               </div>
               
               <div className="border-t border-gray-200 pt-1 mb-2">
@@ -833,6 +877,14 @@ export default function SalesInvoice() {
         </div>
       )}
 
+      {/* Error Message Popup */}
+      {showError && (
+        <div className="fixed bottom-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg z-50 flex items-center">
+          <FaExclamationTriangle className="mr-2" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       {/* Loading Overlay */}
       {isProcessing && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -840,9 +892,7 @@ export default function SalesInvoice() {
             <div className="flex flex-col items-center">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-3"></div>
               <h3 className="text-base font-semibold text-gray-800 mb-1">Processing Order</h3>
-              <p className="text-xs text-gray-600 text-center">
-                Please wait while we save your order...
-              </p>
+                <p className="text-xs text-gray-600 text-center">Please wait while we save your order&apos;s details</p>
             </div>
           </div>
         </div>

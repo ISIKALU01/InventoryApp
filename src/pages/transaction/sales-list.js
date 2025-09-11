@@ -1,7 +1,7 @@
 // pages/transaction/sales-list.js
 import { useState, useEffect } from 'react';
 import TransactionNav from '../../components/TransactionNav';
-import { FaSearch, FaFileExport, FaShoppingCart, FaMoneyBillWave, FaTrash, FaEye, FaSlidersH, FaTimes } from 'react-icons/fa';
+import { FaSearch, FaFileExport, FaShoppingCart, FaMoneyBillWave, FaTrash, FaEye, FaSlidersH, FaTimes, FaPrint, FaArrowLeft, FaUser } from 'react-icons/fa';
 
 export default function SalesList() {
   const [transactions, setTransactions] = useState([]);
@@ -13,6 +13,7 @@ export default function SalesList() {
   const [expandedTransaction, setExpandedTransaction] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [viewReceipt, setViewReceipt] = useState(null); // State for viewing receipt
 
   // Sample locations and users
   const locations = ['Main Store', 'Branch 1', 'Branch 2', 'Online'];
@@ -46,7 +47,8 @@ export default function SalesList() {
     if (searchTerm) {
       filtered = filtered.filter(transaction =>
         transaction.transactionId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.customerType?.toLowerCase().includes(searchTerm.toLowerCase())
+        transaction.customerType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.processedBy?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
@@ -81,11 +83,12 @@ export default function SalesList() {
   }, 0);
 
   const exportToCSV = () => {
-    const headers = ['Date', 'Transaction ID', 'Customer Type', 'Amount', 'Discount', 'Payment Method'];
+    const headers = ['Date', 'Transaction ID', 'Customer Type', 'Processed By', 'Amount', 'Discount', 'Payment Method'];
     const csvData = filteredTransactions.map(transaction => [
       transaction.selectedDate || (transaction.timestamp ? new Date(transaction.timestamp).toLocaleDateString() : 'N/A'),
       transaction.transactionId || 'N/A',
       transaction.customerType || 'N/A',
+      transaction.processedBy || 'Unknown User',
       `$${(transaction.total || 0).toFixed(2)}`,
       '$0.00',
       transaction.paymentMethod || 'N/A'
@@ -126,6 +129,233 @@ export default function SalesList() {
     setSelectedUser('');
   };
 
+  // Print receipt function
+  const printReceipt = (transaction) => {
+    const receiptElement = document.getElementById(`receipt-${transaction.transactionId}`);
+    if (receiptElement) {
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Print Receipt - ${transaction.transactionId}</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 0;
+                padding: 10px;
+                color: #000;
+                font-size: 12px;
+              }
+              .receipt-container {
+                width: 100%;
+                max-width: 280px;
+                margin: 0 auto;
+              }
+              .receipt-header {
+                text-align: center;
+                margin-bottom: 10px;
+                border-bottom: 1px dashed #ddd;
+                padding-bottom: 8px;
+              }
+              .receipt-header h2 {
+                margin: 0;
+                font-size: 14px;
+                font-weight: bold;
+              }
+              .receipt-header p {
+                margin: 3px 0;
+                font-size: 10px;
+              }
+              .receipt-info {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 8px;
+                font-size: 10px;
+              }
+              .receipt-items {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 10px;
+                font-size: 10px;
+              }
+              .receipt-items th {
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+                padding: 3px 0;
+                font-weight: bold;
+              }
+              .receipt-items td {
+                padding: 2px 0;
+              }
+              .receipt-totals {
+                border-top: 1px dashed #ddd;
+                padding-top: 8px;
+                margin-top: 8px;
+                font-size: 11px;
+              }
+              .receipt-totals .total-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 3px;
+              }
+              .receipt-totals .grand-total {
+                font-weight: bold;
+                border-top: 1px solid #ddd;
+                padding-top: 5px;
+                margin-top: 5px;
+              }
+              .receipt-footer {
+                text-align: center;
+                margin-top: 10px;
+                border-top: 1px dashed #ddd;
+                padding-top: 8px;
+                font-size: 9px;
+              }
+              @media print {
+                body { 
+                  margin: 0; 
+                  padding: 10px;
+                }
+              }
+              @media (max-width: 480px) {
+                body {
+                  font-size: 11px;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="receipt-container">
+              ${receiptElement.innerHTML}
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      
+      // Wait for content to load then print
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    }
+  };
+
+  // View receipt function
+  const viewTransactionReceipt = (transaction) => {
+    setViewReceipt(transaction);
+  };
+
+  // Back to list function
+  const backToList = () => {
+    setViewReceipt(null);
+  };
+
+  // If we're viewing a receipt, show the receipt view
+  if (viewReceipt) {
+    return (
+      <div className="pt-0 mt-0 font-raleway min-h-screen bg-gray-100">
+        <div className="bg-white p-4 shadow">
+          <div className="flex items-center">
+            <button
+              onClick={backToList}
+              className="flex items-center text-indigo-600 hover:text-indigo-800 mr-4"
+            >
+              <FaArrowLeft className="mr-1" />
+            </button>
+            <h1 className="text-xl font-normal text-gray-800">Transaction Receipt</h1>
+          </div>
+        </div>
+        
+        <div className="p-4">
+          <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-4">
+            {/* Compact Receipt */}
+            <div id={`receipt-${viewReceipt.transactionId}`} className="border border-gray-200 rounded p-3 mb-3 bg-white text-xs">
+              <div className="text-center mb-2">
+                <h2 className="text-sm font-bold">STORE RECEIPT</h2>
+                <p className="text-[10px] text-gray-600">123 Business Street, City, State</p>
+              </div>
+              
+              <div className="flex justify-between mb-2">
+                <span>Invoice: {viewReceipt.invoiceNumber}</span>
+                <span>{new Date(viewReceipt.timestamp).toLocaleDateString()}</span>
+              </div>
+              
+              {/* Display the user who processed the order */}
+              <div className="flex justify-between mb-2 text-[10px]">
+                <span>Processed By:</span>
+                <span className="font-medium">{viewReceipt.processedBy || 'Unknown User'}</span>
+              </div>
+              
+              <div className="border-t border-gray-200 pt-1 mb-2">
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th className="text-left pb-1 text-[10px]">Item</th>
+                      <th className="text-center pb-1 text-[10px]">Qty</th>
+                      <th className="text-right pb-1 text-[10px]">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewReceipt.cartItems.map(item => (
+                      <tr key={item.id} className="border-b border-gray-100">
+                        <td className="py-1 text-[10px]">{item.name}</td>
+                        <td className="text-center py-1 text-[10px]">{item.quantity}</td>
+                        <td className="text-right py-1 text-[10px]">${(item.price * item.quantity).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="border-t border-gray-200 pt-2 text-[11px]">
+                <div className="flex justify-between font-bold">
+                  <span>TOTAL:</span>
+                  <span>${viewReceipt.total.toFixed(2)}</span>
+                </div>
+              </div>
+              
+              <div className="border-t border-gray-200 mt-2 pt-2 text-[10px]">
+                <div className="flex justify-between mb-1">
+                  <span>Payment:</span>
+                  <span>{viewReceipt.paymentMethod}</span>
+                </div>
+                {viewReceipt.amountTendered && (
+                  <div className="flex justify-between">
+                    <span>Amount Tendered:</span>
+                    <span>${parseFloat(viewReceipt.amountTendered).toFixed(2)}</span>
+                  </div>
+                )}
+                {viewReceipt.paymentMethod === 'cash' && viewReceipt.amountTendered && (
+                  <div className="flex justify-between">
+                    <span>Change:</span>
+                    <span>${(parseFloat(viewReceipt.amountTendered) - viewReceipt.total).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="text-center text-[9px] mt-2 pt-2 border-t border-gray-200">
+                <p>Thank you for your purchase!</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => printReceipt(viewReceipt)}
+                className="flex items-center bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700 transition-colors"
+              >
+                <FaPrint className="mr-1 text-xs" />
+                Print Receipt
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Normal sales list view
   return (
     <div className="pt-0 mt-0 font-raleway">
       <TransactionNav />
@@ -317,8 +547,8 @@ export default function SalesList() {
                   onClick={exportToCSV}
                   className="flex-1 px-2 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center justify-center text-xs"
                 >
-                  <FaFileExport className="mr-1 text-xs" />
-                  Export CSV
+                    <FaFileExport className="mr-1 text-xs" />
+                    Export CSV
                 </button>
               </div>
             </div>
@@ -342,6 +572,9 @@ export default function SalesList() {
                     Customer Type
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Processed By
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Amount
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -354,7 +587,11 @@ export default function SalesList() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredTransactions.map((transaction) => (
-                  <tr key={transaction.transactionId}>
+                  <tr 
+                    key={transaction.transactionId} 
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => viewTransactionReceipt(transaction)}
+                  >
                     <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                       {transaction.selectedDate || (transaction.timestamp ? new Date(transaction.timestamp).toLocaleDateString() : 'N/A')}
                       <br />
@@ -369,6 +606,12 @@ export default function SalesList() {
                       {transaction.customerType || 'N/A'}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                      <div className="flex items-center">
+                        <FaUser className="mr-1 text-gray-400 text-2xs" />
+                        {transaction.processedBy || 'Unknown User'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                       ${(transaction.total || 0).toFixed(2)}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
@@ -376,7 +619,10 @@ export default function SalesList() {
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">
                       <button
-                        onClick={() => deleteTransaction(transaction.transactionId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteTransaction(transaction.transactionId);
+                        }}
                         className="text-red-600 hover:text-red-900 p-0.5"
                         aria-label="Delete transaction"
                       >
@@ -392,7 +638,11 @@ export default function SalesList() {
           {/* Mobile Cards */}
           <div className="md:hidden">
             {filteredTransactions.map((transaction) => (
-              <div key={transaction.transactionId} className="border-b border-gray-200 p-2">
+              <div 
+                key={transaction.transactionId} 
+                className="border-b border-gray-200 p-2 cursor-pointer"
+                onClick={() => viewTransactionReceipt(transaction)}
+              >
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-medium text-xs text-gray-900">
@@ -407,6 +657,10 @@ export default function SalesList() {
                     <p className="text-2xs">
                       Customer: {transaction.customerType || 'N/A'}
                     </p>
+                    <p className="text-2xs flex items-center">
+                      <FaUser className="mr-1 text-gray-400" />
+                      {transaction.processedBy || 'Unknown User'}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="font-medium text-xs text-gray-900">
@@ -417,14 +671,20 @@ export default function SalesList() {
                     </p>
                     <div className="flex justify-end space-x-1 mt-1">
                       <button
-                        onClick={() => toggleTransactionDetails(transaction.transactionId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTransactionDetails(transaction.transactionId);
+                        }}
                         className="text-blue-600 p-0.5"
                         aria-label="View details"
                       >
                         <FaEye className="text-xs" />
                       </button>
                       <button
-                        onClick={() => deleteTransaction(transaction.transactionId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteTransaction(transaction.transactionId);
+                        }}
                         className="text-red-600 p-0.5"
                         aria-label="Delete transaction"
                       >
@@ -451,6 +711,13 @@ export default function SalesList() {
                         </>
                       )}
                     </div>
+                    <button
+                      onClick={() => viewTransactionReceipt(transaction)}
+                      className="mt-2 text-indigo-600 text-xs flex items-center"
+                    >
+                      <FaEye className="mr-1" />
+                      View Receipt
+                    </button>
                   </div>
                 )}
               </div>
