@@ -1,7 +1,6 @@
-// pages/login.js
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import Image from 'next/image'
 
 export default function Login() {
@@ -23,26 +22,27 @@ export default function Login() {
     });
 
     if (result.error) {
-      setError('Invalid email or password');
+      setError(result.error || 'Invalid email or password');
       setIsLoading(false);
       return;
     }
 
-    // Get the user role and redirect accordingly
-    const response = await fetch('/api/auth/session');
-    const session = await response.json();
+    // Get session data directly from NextAuth
+    const session = await getSession();
     
-    if (session.user.role === 'admin') {
+    if (session?.user?.role === 'admin') {
       router.push('/admin-dashboard');
-    } else {
+    } else if (session?.user?.role === 'staff') {
       router.push('/staff-dashboard');
+    } else {
+      // Fallback if role is not set
+      router.push('/');
     }
   };
 
   return (
     <div className="min-h-screen flex">
-      {/* Image Section - Hidden on mobile */}
-      <div className="hidden md:flex w-1/2 bg-gradient-to-r from-indigo-900 to-purple-800 relative">
+        <div className="hidden md:flex w-1/2 bg-gradient-to-r from-indigo-900 to-purple-800 relative">
         <Image
           src="https://images.unsplash.com/photo-1589156280159-27698a70f29e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1472&q=80"
           alt="Professional woman"
@@ -88,7 +88,7 @@ export default function Login() {
       </div>
 
       {/* Form Section */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 lg:p-12">
+      <div className="w-full md:w-1/2 flex items-center justify-center text-black p-4 md:p-8 lg:p-12">
         {/* Mobile background image (blurry) */}
         <div className="md:hidden fixed inset-0 z-0">
           <Image

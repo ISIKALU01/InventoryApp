@@ -1,8 +1,7 @@
-// pages/api/auth/[...nextauth].js
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
-// Mock user database (replace with real database in production)
+// Mock user database
 const users = [
   {
     id: "1",
@@ -74,6 +73,7 @@ export default NextAuth({
     },
     async session({ session, token }) {
       if (token) {
+        session.user.id = token.sub;
         session.user.role = token.role;
         session.user.department = token.department;
         session.user.avatar = token.avatar;
@@ -83,5 +83,11 @@ export default NextAuth({
   },
   pages: {
     signIn: "/login",
-  }
+  },
+  // Add session strategy for better compatibility
+  session: {
+    strategy: "jwt",
+  },
+  // Debug mode for development
+  debug: process.env.NODE_ENV === 'development',
 });

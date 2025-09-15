@@ -552,7 +552,7 @@ export default function SalesInvoice() {
         </div>
 
         {/* Cart Section */}
-        <div className="w-full lg:w-96 bg-white rounded-lg shadow-md p-4">
+        <div className="w-full lg:w-96 bg-white rounded-lg text-black shadow-md p-4">
           <div className="flex items-center mb-4">
             <FaShoppingCart className="text-indigo-600 mr-2 text-sm" />
             <h2 className="text-base font-semibold text-gray-800">Order preview</h2>
