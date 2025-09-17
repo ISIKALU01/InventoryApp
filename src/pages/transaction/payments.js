@@ -1,7 +1,7 @@
 // pages/transaction/payment.js
 import { useState, useEffect } from 'react';
 import TransactionNav from '../../components/TransactionNav';
-import { FaSearch, FaFileExport, FaPlusCircle, FaMinusCircle, FaMoneyBill, FaTrash, FaEye, FaFilter, FaTimes, FaPlus } from 'react-icons/fa';
+import { FaSearch, FaFileExport, FaPlusCircle, FaMinusCircle, FaMoneyBill, FaTrash, FaEye, FaSlidersH, FaPlus } from 'react-icons/fa';
 
 export default function Payments() {
   const [transactions, setTransactions] = useState([]);
@@ -230,7 +230,7 @@ export default function Payments() {
                       showFilters ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                     }`}
                   >
-                    <FaFilter className="text-xs" />
+                    <FaSlidersH className="text-xs" />
                   </button>
                 </div>
               ) : (
