@@ -23,7 +23,7 @@ export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrde
     },
     { 
       name: 'Payment', 
-      path: 'transaction/payment'
+      path: '/transaction/payments'
     },
     { 
       name: 'Sales List', 

@@ -92,7 +92,8 @@ export default function Sidebar({ onToggle }) {
 
   // Check if current path is a dashboard path
   const isDashboardActive = () => {
-    return router.pathname === '/admin-dashboard' || router.pathname === '/staff-dashboard' || router.pathname === '/dashboard';
+    return router.pathname === '/admin-dashboard' || router.pathname === '/staff-dashboard' || 
+       router.pathname === '/dashboard';
   };
 
   const menuItems = [
@@ -109,7 +110,7 @@ export default function Sidebar({ onToggle }) {
       submenu: [
           { name: 'sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'payment', path: '/transaction/payment', icon: <FaCreditCard className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'payment', path: '/transaction/payments', icon: <FaCreditCard className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, roles: ['admin', 'staff'] }

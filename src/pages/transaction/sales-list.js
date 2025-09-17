@@ -355,9 +355,17 @@ export default function SalesList() {
     );
   }
 
+
+
+
+
+
+
+
   // Normal sales list view
   return (
     <div className="pt-0 mt-0 font-raleway">
+      <h1 className="text-xl font-normal font-raleway text-gray-800 mb-6 hidden md:block">Sales List</h1>
       <TransactionNav />
       
       <div className="mt-4 space-y-4 px-2 md:px-0">
@@ -730,6 +738,7 @@ export default function SalesList() {
             </div>
           )}
         </div>
+        
       </div>
 
       <style jsx>{`
