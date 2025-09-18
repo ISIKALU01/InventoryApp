@@ -5,7 +5,8 @@ import {
   FaSearch,
   FaFileExport,
   FaSlidersH,
-  FaPlus, FaShoppingCart, FaChartLine
+  FaPlus,
+  FaBuilding,
 } from "react-icons/fa";
 
 export default function SalesSummary() {
@@ -31,22 +32,40 @@ export default function SalesSummary() {
 
   // Sample data for demonstration
   useEffect(() => {
-    // Mock transaction data
+    // Mock transaction data matching the structure
     const mockTransactions = [
       {
-        product: 1,
-        baseQty: 125.5,
-        amount: 500,
+        id: 1,
+        description: "Office Supplies",
+        category: "direct expenses",
+        postedBy: "Admin User",
+        amount: 3000,
+        date: "2023-10-15",
+        time: "14:30",
+        product: "Stationery",
+        baseQty: "50 units"
       },
       {
-        product: 1,
-        baseQty: 125.5,
-        amount: 500,
+        id: 2,
+        description: "Equipment Maintenance",
+        category: "operational expenses",
+        postedBy: "Admin User",
+        amount: 3000,
+        date: "2023-10-16",
+        time: "10:15",
+        product: "Printer Service",
+        baseQty: "1 service"
       },
       {
-        product: 1,
-        baseQty: 125.5,
-        amount: 500,
+        id: 3,
+        description: "Software License",
+        category: "IT expenses",
+        postedBy: "Admin User",
+        amount: 3000,
+        date: "2023-10-17",
+        time: "16:45",
+        product: "Adobe Creative Suite",
+        baseQty: "1 license"
       },
     ];
     setTransactions(mockTransactions);
@@ -65,13 +84,20 @@ export default function SalesSummary() {
     if (searchTerm) {
       filtered = filtered.filter(
         (transaction) =>
+          transaction.description
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          transaction.category
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          transaction.postedBy
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
           transaction.product
             ?.toLowerCase()
             .includes(searchTerm.toLowerCase()) ||
-          transaction.baseQty
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          transaction.amount?.toString().includes(searchTerm)
+          transaction.amount
+            ?.toString().includes(searchTerm)
       );
     }
 
@@ -101,19 +127,23 @@ export default function SalesSummary() {
 
   const exportToCSV = () => {
     const headers = [
+      "Description",
+      "Category",
       "Amount",
       "Date",
       "Time",
-      "Purpose",
-      "Persons",
+      "Product",
+      "Base Quantity",
       "Posted By",
     ];
     const csvData = filteredTransactions.map((transaction) => [
-      `$${transaction.amount.toFixed(2)}`,
+      transaction.description,
+      transaction.category,
+      `N${transaction.amount.toFixed(2)}`,
       transaction.date,
       transaction.time,
-      transaction.purpose,
-      transaction.persons,
+      transaction.product,
+      transaction.baseQty,
       transaction.postedBy,
     ]);
 
@@ -126,7 +156,7 @@ export default function SalesSummary() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `payments-report-${
+    link.download = `expenses-report-${
       new Date().toISOString().split("T")[0]
     }.csv`;
     link.click();
@@ -147,21 +177,21 @@ export default function SalesSummary() {
   return (
     <div className="max-w-6xl mx-auto pb-16 md:pb-0">
       <h1 className="text-xl font-normal font-raleway text-gray-800 mb-6 hidden md:block">
-        Sales Summary
+        Expenses
       </h1>
       <TransactionNav />
 
       <div className="mt-4 space-y-4 px-2 md:px-0">
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="">
           <div className="bg-white rounded shadow p-3">
             <div className="flex items-center">
               <div className="p-2 bg-green-100 rounded mr-2">
-                <FaShoppingCart className="text-green-600 text-sm" />
+                <FaBuilding className="text-blue-600 text-sm" />
               </div>
               <div>
                 <h3 className="text-xs font-medium text-gray-600">
-                  Products
+                  Expenses Balance
                 </h3>
                 <p className="text-lg font-bold text-gray-800">
                   N
@@ -169,20 +199,6 @@ export default function SalesSummary() {
                     .reduce((sum, transaction) => sum + transaction.amount, 0)
                     .toFixed(2)}
                 </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded shadow p-3">
-            <div className="flex items-center">
-              <div className="p-2 bg-red-100 rounded mr-2">
-                <FaChartLine className="text-red-600 text-sm" />
-              </div>
-              <div>
-                <h3 className="text-xs font-medium text-gray-600">
-                  Sales
-                </h3>
-                <p className="text-lg font-bold text-gray-800">N0.00</p>
               </div>
             </div>
           </div>
@@ -364,23 +380,26 @@ export default function SalesSummary() {
           )}
         </div>
 
-        {/* Payment Log Table */}
+        {/* expenses Log Table */}
         <div className="bg-white rounded shadow overflow-hidden">
           {/* Desktop Table */}
-          <div className="hidden md:block overflow-x-auto">
+          <div className="hidden md:block text-black overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Product
+                  <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+                    Date & time
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date & Time
+                  <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+                    Description
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    baseQty
+                  <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+                    Category
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+                    Postedby
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                     Amount
                   </th>
                 </tr>
@@ -388,13 +407,19 @@ export default function SalesSummary() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredTransactions.map((transaction) => (
                   <tr key={transaction.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {transaction.product}
+                    <td className="px-4 py-3 text-sm text-black">
+                      {transaction.date} {transaction.time}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {transaction.baseQty}
+                      <td className="px-4 py-3 text-sm text-black">
+                      {transaction.description}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 text-sm text-black">
+                      {transaction.category}
+                    </td>
+                     <td className="px-4 py-3 text-sm text-black">
+                      {transaction.postedby}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-black">
                       N{transaction.amount.toFixed(2)}
                     </td>
                   </tr>
@@ -404,7 +429,7 @@ export default function SalesSummary() {
           </div>
 
           {/* Mobile Cards */}
-          <div className="md:hidden">
+          <div className="md:hidden text-black">
             {filteredTransactions.map((transaction) => (
               <div
                 key={transaction.id}
@@ -413,21 +438,24 @@ export default function SalesSummary() {
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex justify-between">
-                      <span className="font-medium text-gray-900">
-                        ${transaction.amount.toFixed(2)}
+                      <span className="font-medium text-black">
+                        N{transaction.amount.toFixed(2)}
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-black">
                         {transaction.time}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      {transaction.product}
+                    <div className="text-sm text-black mt-1">
+                      {transaction.description}
                     </div>
-                    <div className="text-sm text-gray-700 mt-1">
-                      {transaction.baseQty}
+                    <div className="text-sm text-black mt-1">
+                      {transaction.category}
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">
+                    <div className="text-xs text-black mt-1">
                       {transaction.date}
+                    </div>
+                    <div className="text-xs text-black mt-1">
+                      {transaction.postedby}
                     </div>
                   </div>
                 </div>
@@ -435,11 +463,11 @@ export default function SalesSummary() {
             ))}
           </div>
 
-          {/* {filteredTransactions.length === 0 && ( */}
+          {filteredTransactions.length === 0 && (
             <div className="text-center py-6">
-              {/* <p className="text-gray-500 text-xs">There is no data</p> */}
+              <p className="text-black text-xs">There is no data</p>
             </div>
-          {/* )} */}
+          )}
         </div>
       </div>
 
