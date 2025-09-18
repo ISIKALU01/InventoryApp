@@ -1,15 +1,18 @@
-// pages/transaction/sales-summary.js
+// pages/transaction/payment-analysis.js
 import { useState, useEffect } from "react";
 import TransactionNav from "../../components/TransactionNav";
 import {
   FaSearch,
   FaFileExport,
   FaSlidersH,
-  FaPlus,
-  FaBuilding,
+  FaBalanceScale,
+  FaArrowUp,
+  FaMoneyBill,
+  FaArrowDown,
+  FaUndo,
 } from "react-icons/fa";
 
-export default function SalesSummary() {
+export default function PaymentAnalysis() {
   const [transactions, setTransactions] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -36,37 +39,40 @@ export default function SalesSummary() {
     const mockTransactions = [
       {
         id: 1,
-        description: "Office Supplies",
-        category: "direct expenses",
-        postedBy: "Admin User",
-        amount: 3000,
+        paymentMethod: "Cash",
+        salesPayment: 1500.00,
+        paidIn: 1500.00,
+        paidOut: 0.00,
+        cashBack: 0.00,
+        balance: 1500.00,
         date: "2023-10-15",
         time: "14:30",
-        product: "Stationery",
-        baseQty: "50 units"
+        postedBy: "Cashier 1"
       },
       {
         id: 2,
-        description: "Equipment Maintenance",
-        category: "operational expenses",
-        postedBy: "Admin User",
-        amount: 3000,
-        date: "2023-10-16",
-        time: "10:15",
-        product: "Printer Service",
-        baseQty: "1 service"
+        paymentMethod: "Card",
+        salesPayment: 2500.00,
+        paidIn: 2500.00,
+        paidOut: 0.00,
+        cashBack: 0.00,
+        balance: 2500.00,
+        date: "2023-10-15",
+        time: "15:45",
+        postedBy: "Sales Staff 1"
       },
       {
         id: 3,
-        description: "Software License",
-        category: "IT expenses",
-        postedBy: "Admin User",
-        amount: 3000,
-        date: "2023-10-17",
-        time: "16:45",
-        product: "Adobe Creative Suite",
-        baseQty: "1 license"
-      },
+        paymentMethod: "Transfer",
+        salesPayment: 3500.00,
+        paidIn: 3500.00,
+        paidOut: 0.00,
+        cashBack: 0.00,
+        balance: 3500.00,
+        date: "2023-10-16",
+        time: "10:15",
+        postedBy: "Admin User"
+      }
     ];
     setTransactions(mockTransactions);
     setFilteredTransactions(mockTransactions);
@@ -84,20 +90,17 @@ export default function SalesSummary() {
     if (searchTerm) {
       filtered = filtered.filter(
         (transaction) =>
-          transaction.description
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          transaction.category
+          transaction.paymentMethod
             ?.toLowerCase()
             .includes(searchTerm.toLowerCase()) ||
           transaction.postedBy
             ?.toLowerCase()
             .includes(searchTerm.toLowerCase()) ||
-          transaction.product
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          transaction.amount
-            ?.toString().includes(searchTerm)
+          transaction.salesPayment?.toString().includes(searchTerm) ||
+          transaction.paidIn?.toString().includes(searchTerm) ||
+          transaction.paidOut?.toString().includes(searchTerm) ||
+          transaction.cashBack?.toString().includes(searchTerm) ||
+          transaction.balance?.toString().includes(searchTerm)
       );
     }
 
@@ -127,23 +130,25 @@ export default function SalesSummary() {
 
   const exportToCSV = () => {
     const headers = [
-      "Description",
-      "Category",
-      "Amount",
+      "Payment Method",
+      "Sales Payment",
+      "Paid In",
+      "Paid Out",
+      "Cash Back",
+      "Balance",
       "Date",
       "Time",
-      "Product",
-      "Base Quantity",
-      "Posted By",
+      "Posted By"
     ];
     const csvData = filteredTransactions.map((transaction) => [
-      transaction.description,
-      transaction.category,
-      `N${transaction.amount.toFixed(2)}`,
+      transaction.paymentMethod,
+      `N${transaction.salesPayment.toFixed(2)}`,
+      `N${transaction.paidIn.toFixed(2)}`,
+      `N${transaction.paidOut.toFixed(2)}`,
+      `N${transaction.cashBack.toFixed(2)}`,
+      `N${transaction.balance.toFixed(2)}`,
       transaction.date,
       transaction.time,
-      transaction.product,
-      transaction.baseQty,
       transaction.postedBy,
     ]);
 
@@ -156,7 +161,7 @@ export default function SalesSummary() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `expenses-report-${
+    link.download = `payment-analysis-report-${
       new Date().toISOString().split("T")[0]
     }.csv`;
     link.click();
@@ -174,31 +179,110 @@ export default function SalesSummary() {
     setShowFilters(!showFilters);
   };
 
+  // Calculate summary values
+  const summary = {
+    salesPayment: transactions.reduce((sum, transaction) => sum + transaction.salesPayment, 0),
+    paidIn: transactions.reduce((sum, transaction) => sum + transaction.paidIn, 0),
+    paidOut: transactions.reduce((sum, transaction) => sum + transaction.paidOut, 0),
+    cashBack: transactions.reduce((sum, transaction) => sum + transaction.cashBack, 0),
+    balance: transactions.reduce((sum, transaction) => sum + transaction.balance, 0)
+  };
+
   return (
     <div className="max-w-6xl mx-auto pb-16 md:pb-0">
       <h1 className="text-xl font-normal font-raleway text-gray-800 mb-6 hidden md:block">
-        Expenses
+        Payment Analysis
       </h1>
       <TransactionNav />
 
       <div className="mt-4 space-y-4 px-2 md:px-0">
         {/* Summary Cards */}
         <div className="">
-          <div className="bg-white rounded shadow p-3">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded mr-2">
-                <FaBuilding className="text-blue-600 text-sm" />
+          <div className="bg-white rounded shadow p-2">
+            <div className="flex flex-col sm:flex-row sm:flex-nowrap sm:overflow-x-auto gap-2 sm:justify-between sm:space-x-1 md:space-x-2">
+              {/* Sales Payment Card */}
+              <div className="flex-1 sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] p-2 md:p-3 rounded">
+                <div className="flex items-center">
+                  <div className="p-1 md:p-1.5 bg-blue-100 rounded mr-1 md:mr-2">
+                    <FaMoneyBill className="text-blue-600 text-xs md:text-sm" />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] md:text-xs font-medium text-gray-600">
+                      Sales Payment
+                    </h3>
+                    <p className="text-sm md:text-lg font-bold text-gray-800">
+                      N{summary.salesPayment.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xs font-medium text-gray-600">
-                  Expenses Balance
-                </h3>
-                <p className="text-lg font-bold text-gray-800">
-                  N
-                  {transactions
-                    .reduce((sum, transaction) => sum + transaction.amount, 0)
-                    .toFixed(2)}
-                </p>
+
+              {/* Paid In Card */}
+              <div className="flex-1 sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] p-2 md:p-3 rounded">
+                <div className="flex items-center">
+                  <div className="p-1 md:p-1.5 bg-green-100 rounded mr-1 md:mr-2">
+                    <FaArrowDown className="text-green-600 text-xs md:text-sm" />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] md:text-xs font-medium text-gray-600">
+                      Paid In
+                    </h3>
+                    <p className="text-sm md:text-lg font-bold text-gray-800">
+                      N{summary.paidIn.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Paid Out Card */}
+              <div className="flex-1 sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] p-2 md:p-3 rounded">
+                <div className="flex items-center">
+                  <div className="p-1 md:p-1.5 bg-red-100 rounded mr-1 md:mr-2">
+                    <FaArrowUp className="text-red-600 text-xs md:text-sm" />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] md:text-xs font-medium text-gray-600">
+                      Paid Out
+                    </h3>
+                    <p className="text-sm md:text-lg font-bold text-gray-800">
+                      N{summary.paidOut.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cash Back Card */}
+              <div className="flex-1 sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] p-2 md:p-3 rounded">
+                <div className="flex items-center">
+                  <div className="p-1 md:p-1.5 bg-purple-100 rounded mr-1 md:mr-2">
+                    <FaUndo className="text-purple-600 text-xs md:text-sm" />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] md:text-xs font-medium text-gray-600">
+                      Cash Back
+                    </h3>
+                    <p className="text-sm md:text-lg font-bold text-gray-800">
+                      N{summary.cashBack.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Balance Card */}
+              <div className="flex-1 sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] p-2 md:p-3 rounded">
+                <div className="flex items-center">
+                  <div className="p-1 md:p-1.5 bg-yellow-100 rounded mr-1 md:mr-2">
+                    <FaBalanceScale className="text-yellow-600 text-xs md:text-sm" />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] md:text-xs font-medium text-gray-600">
+                      Balance
+                    </h3>
+                    <p className="text-sm md:text-lg font-bold text-gray-800">
+                      N{summary.balance.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -380,7 +464,7 @@ export default function SalesSummary() {
           )}
         </div>
 
-        {/* expenses Log Table */}
+        {/* Payment Analysis Log Table */}
         <div className="bg-white rounded shadow overflow-hidden">
           {/* Desktop Table */}
           <div className="hidden md:block text-black overflow-x-auto">
@@ -388,19 +472,22 @@ export default function SalesSummary() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                    Date & time
+                    Payment Method
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                    Description
+                    Sales Payment
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                    Category
+                    Paid In
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                    Postedby
+                    Paid Out
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                    Amount
+                    Cash Back
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+                    Balance
                   </th>
                 </tr>
               </thead>
@@ -408,19 +495,22 @@ export default function SalesSummary() {
                 {filteredTransactions.map((transaction) => (
                   <tr key={transaction.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm text-black">
-                      {transaction.date} {transaction.time}
-                    </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                      {transaction.description}
+                      {transaction.paymentMethod}
                     </td>
                     <td className="px-4 py-3 text-sm text-black">
-                      {transaction.category}
+                      N{transaction.salesPayment.toFixed(2)}
                     </td>
-                     <td className="px-4 py-3 text-sm text-black">
-                      {transaction.postedby}
+                    <td className="px-4 py-3 text-sm text-black">
+                      N{transaction.paidIn.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-black">
-                      N{transaction.amount.toFixed(2)}
+                    <td className="px-4 py-3 text-sm text-black">
+                      N{transaction.paidOut.toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-black">
+                      N{transaction.cashBack.toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-black">
+                      N{transaction.balance.toFixed(2)}
                     </td>
                   </tr>
                 ))}
@@ -439,23 +529,26 @@ export default function SalesSummary() {
                   <div className="flex-1">
                     <div className="flex justify-between">
                       <span className="font-medium text-black">
-                        N{transaction.amount.toFixed(2)}
+                        {transaction.paymentMethod}
                       </span>
                       <span className="text-xs text-black">
                         {transaction.time}
                       </span>
                     </div>
                     <div className="text-sm text-black mt-1">
-                      {transaction.description}
+                      Sales: N{transaction.salesPayment.toFixed(2)}
                     </div>
                     <div className="text-sm text-black mt-1">
-                      {transaction.category}
+                      Paid In: N{transaction.paidIn.toFixed(2)}
                     </div>
-                    <div className="text-xs text-black mt-1">
-                      {transaction.date}
+                    <div className="text-sm text-black mt-1">
+                      Paid Out: N{transaction.paidOut.toFixed(2)}
                     </div>
-                    <div className="text-xs text-black mt-1">
-                      {transaction.postedby}
+                    <div className="text-sm text-black mt-1">
+                      Cash Back: N{transaction.cashBack.toFixed(2)}
+                    </div>
+                    <div className="text-sm text-black mt-1">
+                      Balance: N{transaction.balance.toFixed(2)}
                     </div>
                   </div>
                 </div>
@@ -470,15 +563,6 @@ export default function SalesSummary() {
           )}
         </div>
       </div>
-
-      {/* Floating Action Button for Mobile */}
-      {isMobile && (
-        <div className="fixed bottom-6 right-6 z-10 md:hidden">
-          <button className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors">
-            <FaPlus className="text-xl" />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
