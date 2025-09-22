@@ -5,6 +5,11 @@ import { useEffect } from "react";
 import Head from "next/head";
 import InventorySummary from "@/components/InventorySummary";
 import SalesAnalysis from "@/components/SalesAnalysis";
+import Trend from "@/components/TrendChart";
+import TopCategory from "@/components/TopCatgry";
+import CashFlow from "@/components/CashFlow";
+import ProfitLoss from "@/components/ProfitLoss";
+import DebtorCreditor from "@/components/DebtorCreditor";
 
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
@@ -102,9 +107,22 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4 mb-8">
             <SalesAnalysis />
             <InventorySummary />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4 mb-8">
+            <Trend />
+            <TopCategory />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4">
+            <CashFlow />
+            <div className="grid grid-cols-1 gap-8">
+              <ProfitLoss />
+              <DebtorCreditor />
+            </div>
           </div>
         </div>
       </main>

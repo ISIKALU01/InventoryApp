@@ -1,4 +1,4 @@
-// components/SalesDashboard.js
+// components/SalesAnalysis.js
 import { useState } from "react";
 
 export default function SalesAnalysis() {
