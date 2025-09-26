@@ -59,7 +59,7 @@ export default function Layout({ children }) {
                 router.pathname === '/admin-dashboard' ? 'Admin Dashboard' :
                 router.pathname === '/staff-dashboard' ? 'Staff Dashboard' :
                 router.pathname.startsWith('/transaction/') ? 'Transaction' :
-                router.pathname === '/inventory' ? 'Inventory' :
+                router.pathname.startsWith('/Inventory/') ? 'Inventory' :
                 router.pathname === '/accounts' ? 'Accounts' :
                 router.pathname === '/deleted-transactions' ? 'Deleted Transactions' :
                 router.pathname === '/settings' ? 'Settings' :
