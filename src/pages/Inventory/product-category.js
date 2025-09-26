@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaSearch, FaSlidersH } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaShoppingCart, FaSearch, FaSlidersH } from 'react-icons/fa';
 
 // Main Product Categories Component
 export default function ProductCategories() {
@@ -12,6 +12,29 @@ export default function ProductCategories() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
 
+  // Sample initial data
+  useEffect(() => {
+    const initialCategories = [
+      { id: 1, name: 'Electronics', description: 'Electronic devices and accessories' },
+      { id: 2, name: 'Clothing', description: 'Apparel and fashion items' },
+      { id: 3, name: 'Home & Garden', description: 'Home improvement and gardening' },
+      { id: 4, name: 'Sports', description: 'Sports equipment and accessories' },
+      { id: 5, name: 'Books', description: 'Books and educational materials' },
+    ];
+    setCategories(initialCategories);
+    setFilteredCategories(initialCategories);
+  }, []);
+
+  // Calculate summary metrics
+  const calculateSummary = () => {
+    const totalCategories = categories.length;
+
+    return {
+      totalCategories,
+    };
+  };
+
+  const summary = calculateSummary();
 
   // Detect mobile screen size
   useEffect(() => {
@@ -80,10 +103,34 @@ export default function ProductCategories() {
   return (
     <div className="relative max-w-6xl mx-auto pb-16 md:pb-0">
       <h1 className="hidden mb-6 text-xl font-normal text-gray-800 md:block font-raleway">
-        Product Categories
+        Product Category
       </h1>
 
       <div className="mt-4 space-y-4 px-2 md:px-0">
+        {/* Summary Cards */}
+        <div className="">
+          <div className="p-2 bg-white rounded shadow">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:overflow-x-auto sm:justify-between sm:space-x-1 md:space-x-2">
+              {/* CATEGORIES SUMMARY CARD */}
+              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
+                <div className="flex items-center">
+                  <div className="p-1 mr-1 rounded bg-blue-100 md:mr-2 md:p-1.5">
+                    <FaShoppingCart className="text-xs text-blue-600 md:text-sm" />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
+                      All products
+                    </h3>
+                    <p className="text-sm font-bold text-gray-800 md:text-lg">
+                      {summary.totalCategories}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Filters and Actions */}
         <div className="p-3 bg-white rounded shadow">
           <div className="flex flex-col w-full gap-3 md:flex-row items-stretch">
@@ -131,8 +178,8 @@ export default function ProductCategories() {
               )}
             </div>
 
-            {/* Right side - Action buttons */}
-            <div className="flex justify-start w-full gap-2 md:justify-end md:w-auto">
+            {/* Right side - Action buttons - Hidden on medium screens and below */}
+            <div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
@@ -142,26 +189,6 @@ export default function ProductCategories() {
               </button>
             </div>
           </div>
-
-          {/* Filter dropdown for mobile */}
-          {isMobile && showFilters && (
-            <div className="grid grid-cols-1 gap-2 p-2 mt-3 bg-gray-50 rounded">
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={clearFilters}
-                  className="flex-1 px-2 py-1.5 text-xs text-gray-700 transition-colors bg-gray-200 rounded hover:bg-gray-300"
-                >
-                  Clear Filters
-                </button>
-                <button
-                  onClick={toggleFilters}
-                  className="flex-1 px-2 py-1.5 text-xs text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
-                >
-                  Apply Filters
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Categories Table */}
@@ -192,17 +219,17 @@ export default function ProductCategories() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleEditClick(category)}
-                          className="flex items-center px-2 py-1 text-xs text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
+                          className="flex items-center p-2 text-gray-600 transition-colors rounded hover:text-blue-600 hover:bg-gray-100"
+                          title="Edit"
                         >
-                          <FaEdit className="mr-1" />
-                          Edit
+                          <FaEdit />
                         </button>
                         <button
                           onClick={() => handleDeleteCategory(category.id)}
-                          className="flex items-center px-2 py-1 text-xs text-white transition-colors bg-red-600 rounded hover:bg-red-700"
+                          className="flex items-center p-2 text-gray-600 transition-colors rounded hover:text-red-600 hover:bg-gray-100"
+                          title="Delete"
                         >
-                          <FaTrash className="mr-1" />
-                          Delete
+                          <FaTrash />
                         </button>
                       </div>
                     </td>
@@ -225,17 +252,17 @@ export default function ProductCategories() {
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => handleEditClick(category)}
-                        className="flex items-center flex-1 px-2 py-1 text-xs text-white transition-colors bg-blue-600 rounded justify-center hover:bg-blue-700"
+                        className="flex items-center flex-1 p-2 text-gray-600 transition-colors rounded justify-center hover:text-blue-600 hover:bg-gray-100"
+                        title="Edit"
                       >
-                        <FaEdit className="mr-1" />
-                        Edit
+                        <FaEdit />
                       </button>
                       <button
                         onClick={() => handleDeleteCategory(category.id)}
-                        className="flex items-center flex-1 px-2 py-1 text-xs text-white transition-colors bg-red-600 rounded justify-center hover:bg-red-700"
+                        className="flex items-center flex-1 p-2 text-gray-600 transition-colors rounded justify-center hover:text-red-600 hover:bg-gray-100"
+                        title="Delete"
                       >
-                        <FaTrash className="mr-1" />
-                        Delete
+                        <FaTrash />
                       </button>
                     </div>
                   </div>
@@ -302,7 +329,7 @@ function AddCategoryModal({ isOpen, onClose, onAdd }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-50">
       <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
         <div className="p-4 border-b">
           <h2 className="text-lg font-semibold">Add New Category</h2>
@@ -375,8 +402,8 @@ function EditCategoryModal({ isOpen, onClose, onEdit, category }) {
   if (!isOpen || !category) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-50">
+      <div className="bg-gray-100 rounded-lg shadow-lg w-full max-w-md mx-4">
         <div className="p-4 border-b">
           <h2 className="text-lg font-semibold">Edit Category</h2>
         </div>
