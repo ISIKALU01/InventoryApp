@@ -1,3 +1,4 @@
+import InventoryNav from '@/components/InventoryNav';
 import { useState, useEffect } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaShoppingCart, FaSearch, FaSlidersH } from 'react-icons/fa';
 
@@ -105,6 +106,7 @@ export default function ProductCategories() {
       <h1 className="hidden mb-6 text-xl font-normal text-gray-800 md:block font-raleway">
         Product Category
       </h1>
+      < InventoryNav />
 
       <div className="mt-4 space-y-4 px-2 md:px-0">
         {/* Summary Cards */}
@@ -119,7 +121,7 @@ export default function ProductCategories() {
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      All products
+                      All Products
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
                       {summary.totalCategories}

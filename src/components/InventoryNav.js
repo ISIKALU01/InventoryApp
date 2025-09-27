@@ -13,7 +13,7 @@ export default function InventoryNav() {
   const navItems = [
     {
       name: "Product Category",
-      path: "/Inventory/product-category",
+      path: "/inventory/product-category",
     },
     {
       name: "View Adjustment",

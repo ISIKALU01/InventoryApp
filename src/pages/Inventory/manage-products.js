@@ -5,13 +5,15 @@ import {
   FaPlus,
   FaFileImport,
   FaSlidersH,
-  FaShoppingCart,
-  FaUniversity,
-  FaTag,
-  FaPercentage,
-  FaMoneyBillWave,
   FaTimes,
+  FaStore,
+  FaCogs,
+  FaChartBar,
+  FaEdit,
+  FaTrash,
 } from "react-icons/fa";
+
+const API_BASE_URL = "https://pgims-production.up.railway.app/api";
 
 // Modal Components
 const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
@@ -21,7 +23,6 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Handle CSV import logic here
     console.log("Importing CSV with:", { measurementUnit, stockDate, csvFile });
     onImport({ measurementUnit, stockDate, csvFile });
     onClose();
@@ -32,9 +33,8 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-50">
       <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">Import Stock from CSV</h2>
+          <h2 className="text-lg font-semibold text-gray-800">Import Products from CSV</h2>
           <button
             onClick={onClose}
             className="text-gray-400 transition-colors hover:text-gray-600"
@@ -43,9 +43,7 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Measurement Unit */}
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
               Measurement Unit *
@@ -66,10 +64,9 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
             </select>
           </div>
 
-          {/* Stock Date */}
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
-              Stock Date *
+              Product Date *
             </label>
             <input
               type="date"
@@ -80,7 +77,6 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
             />
           </div>
 
-          {/* CSV File Upload */}
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
               CSV File *
@@ -99,7 +95,6 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
             </div>
           </div>
 
-          {/* Buttons */}
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -112,7 +107,7 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
               type="submit"
               className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-md transition-colors hover:bg-blue-700"
             >
-              Import Stock
+              Import Products
             </button>
           </div>
         </form>
@@ -121,43 +116,27 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
   );
 };
 
-const AddStockModal = ({ isOpen, onClose, onAdd }) => {
+const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
   const [formData, setFormData] = useState({
     name: "",
     sku: "",
     category: "",
-    cost: "",
     price: "",
-    quantity: "",
-    measurementUnit: "",
-    stockDate: "",
+    measurement: "unit",
+    sold: "0",
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Handle add stock logic here
-    console.log("Adding stock:", formData);
-    
-    // Convert string values to numbers before passing to onAdd
-    const processedData = {
-      ...formData,
-      cost: parseFloat(formData.cost) || 0,
-      price: parseFloat(formData.price) || 0,
-      quantity: parseInt(formData.quantity) || 0,
-    };
-    
-    onAdd(processedData);
+    await onAdd(formData);
     onClose();
-    // Reset form
     setFormData({
       name: "",
       sku: "",
       category: "",
-      cost: "",
       price: "",
-      quantity: "",
-      measurementUnit: "",
-      stockDate: "",
+      measurement: "unit",
+      sold: "0",
     });
   };
 
@@ -173,20 +152,18 @@ const AddStockModal = ({ isOpen, onClose, onAdd }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-50">
       <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">Add New Stock</h2>
+          <h2 className="text-lg font-semibold text-gray-800">Add New Product</h2>
           <button
             onClick={onClose}
             className="text-gray-400 transition-colors hover:text-gray-600"
+            disabled={isLoading}
           >
             <FaTimes className="text-sm" />
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          {/* Product Name */}
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
               Product Name *
@@ -197,11 +174,11 @@ const AddStockModal = ({ isOpen, onClose, onAdd }) => {
               value={formData.name}
               onChange={handleChange}
               required
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isLoading}
+              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
             />
           </div>
 
-          {/* SKU */}
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
               SKU *
@@ -212,11 +189,11 @@ const AddStockModal = ({ isOpen, onClose, onAdd }) => {
               value={formData.sku}
               onChange={handleChange}
               required
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isLoading}
+              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
             />
           </div>
 
-          {/* Category */}
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
               Category *
@@ -226,32 +203,21 @@ const AddStockModal = ({ isOpen, onClose, onAdd }) => {
               value={formData.category}
               onChange={handleChange}
               required
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isLoading}
+              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
             >
               <option value="">Select Category</option>
-              <option value="Electronics">Food</option>
-              <option value="Furniture">Alchohol</option>
-              <option value="Stationery">Energy Drinks</option>
-              <option value="Clothing">Soft Drinks</option>
+              <option value="Food">Food</option>
+              <option value="Alcohol">Alcohol</option>
+              <option value="Energy Drinks">Energy Drinks</option>
+              <option value="Soft Drinks">Soft Drinks</option>
+              <option value="Electronics">Electronics</option>
+              <option value="Clothing">Clothing</option>
+              <option value="Services">Services</option>
             </select>
           </div>
 
-          {/* Cost and Price */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block mb-1 text-sm font-medium text-gray-700">
-                Cost *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                name="cost"
-                value={formData.cost}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
             <div>
               <label className="block mb-1 text-sm font-medium text-gray-700">
                 Price *
@@ -263,39 +229,23 @@ const AddStockModal = ({ isOpen, onClose, onAdd }) => {
                 value={formData.price}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Quantity and Measurement Unit */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block mb-1 text-sm font-medium text-gray-700">
-                Quantity *
-              </label>
-              <input
-                type="number"
-                name="quantity"
-                value={formData.quantity}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={isLoading}
+                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
               />
             </div>
             <div>
               <label className="block mb-1 text-sm font-medium text-gray-700">
-                Unit *
+                Measurement *
               </label>
               <select
-                name="measurementUnit"
-                value={formData.measurementUnit}
+                name="measurement"
+                value={formData.measurement}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={isLoading}
+                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
               >
-                <option value="">Select Unit</option>
-                <option value="pieces">Unit</option>
+                <option value="unit">Unit</option>
                 <option value="kilograms">Kilograms</option>
                 <option value="liters">Liters</option>
                 <option value="meters">Meters</option>
@@ -305,35 +255,42 @@ const AddStockModal = ({ isOpen, onClose, onAdd }) => {
             </div>
           </div>
 
-          {/* Stock Date */}
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
-              Stock Date *
+              Initial Sold Quantity
             </label>
             <input
-              type="date"
-              name="stockDate"
-              value={formData.stockDate}
+              type="number"
+              name="sold"
+              value={formData.sold}
               onChange={handleChange}
-              required
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isLoading}
+              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
             />
           </div>
 
-          {/* Buttons */}
           <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md transition-colors hover:bg-gray-50"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md transition-colors hover:bg-gray-50 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 text-sm text-white bg-green-600 rounded-md transition-colors hover:bg-green-700"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 text-sm text-white bg-green-600 rounded-md transition-colors hover:bg-green-700 disabled:opacity-50 flex items-center justify-center"
             >
-              Add Stock
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Adding...
+                </>
+              ) : (
+                'Add Product'
+              )}
             </button>
           </div>
         </form>
@@ -342,95 +299,153 @@ const AddStockModal = ({ isOpen, onClose, onAdd }) => {
   );
 };
 
-// Helper function to safely format numbers
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return '$0.00';
   const num = typeof value === 'string' ? parseFloat(value) : value;
   return isNaN(num) ? '$0.00' : `$${num.toFixed(2)}`;
 };
 
-// Helper function to safely calculate numeric values
-const safeCalculate = (items, property) => {
-  return items.reduce((sum, item) => {
-    const value = item[property];
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    return sum + (isNaN(num) ? 0 : num);
-  }, 0);
+// API Service Functions
+const productAPI = {
+  async getAllProducts() {
+    const response = await fetch(`${API_BASE_URL}/products`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch products: ${response.status}`);
+    }
+    
+    return response.json();
+  },
+
+  async createProduct(productData) {
+    const response = await fetch(`${API_BASE_URL}/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(productData),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || `Failed to create product: ${response.status}`);
+    }
+    
+    return response.json();
+  },
+
+  async updateProduct(id, productData) {
+    const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(productData),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to update product: ${response.status}`);
+    }
+    
+    return response.json();
+  },
+
+  async deleteProduct(id) {
+    const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to delete product: ${response.status}`);
+    }
+    
+    return response.json();
+  }
 };
 
-// Main Inventory Component
-export default function Inventory() {
-  const [inventory, setInventory] = useState([]);
-  const [filteredInventory, setFilteredInventory] = useState([]);
+// Main Products Component
+export default function Products() {
+  const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedStore, setSelectedStore] = useState("");
+  const [selectedUser, setSelectedUser] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // Calculate summary metrics with safe number handling
-  const calculateSummary = () => {
-    const totalItems = inventory.length;
-    
-    // Safely calculate totals with number conversion
-    const totalStockBalance = inventory.reduce((sum, item) => {
-      const cost = typeof item.cost === 'string' ? parseFloat(item.cost) : item.cost;
-      const quantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity;
-      const costValue = isNaN(cost) ? 0 : cost;
-      const quantityValue = isNaN(quantity) ? 0 : quantity;
-      return sum + (costValue * quantityValue);
-    }, 0);
-    
-    const totalRetailValue = inventory.reduce((sum, item) => {
-      const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
-      const quantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity;
-      const priceValue = isNaN(price) ? 0 : price;
-      const quantityValue = isNaN(quantity) ? 0 : quantity;
-      return sum + (priceValue * quantityValue);
-    }, 0);
-    
-    // Calculate average markup and profit margin safely
-    let averageMarkup = 0;
-    let averageProfitMargin = 0;
-    
-    if (inventory.length > 0) {
-      const validItems = inventory.filter(item => {
-        const cost = typeof item.cost === 'string' ? parseFloat(item.cost) : item.cost;
-        const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
-        return !isNaN(cost) && !isNaN(price) && cost > 0;
-      });
-      
-      if (validItems.length > 0) {
-        averageMarkup = validItems.reduce((sum, item) => {
-          const cost = typeof item.cost === 'string' ? parseFloat(item.cost) : item.cost;
-          const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
-          return sum + ((price - cost) / cost * 100);
-        }, 0) / validItems.length;
-        
-        averageProfitMargin = validItems.reduce((sum, item) => {
-          const cost = typeof item.cost === 'string' ? parseFloat(item.cost) : item.cost;
-          const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
-          return sum + ((price - cost) / price * 100);
-        }, 0) / validItems.length;
-      }
+  // Load products on component mount
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const productsData = await productAPI.getAllProducts();
+      setProducts(productsData);
+    } catch (err) {
+      setError(err.message);
+      console.error("Error loading products:", err);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // Calculate summary metrics for retail, services, and total
+  const calculateSummary = () => {
+    const retailProducts = products.filter(product => 
+      product.category && !product.category.toLowerCase().includes('service')
+    );
+    
+    const serviceProducts = products.filter(product => 
+      product.category && product.category.toLowerCase().includes('service')
+    );
+
+    const totalRetailSales = retailProducts.reduce((sum, product) => {
+      const price = typeof product.price === 'string' ? parseFloat(product.price) : product.price;
+      const sold = typeof product.sold === 'string' ? parseInt(product.sold) : product.sold || 0;
+      const priceValue = isNaN(price) ? 0 : price;
+      const soldValue = isNaN(sold) ? 0 : sold;
+      return sum + (priceValue * soldValue);
+    }, 0);
+
+    const totalServiceSales = serviceProducts.reduce((sum, product) => {
+      const price = typeof product.price === 'string' ? parseFloat(product.price) : product.price;
+      const sold = typeof product.sold === 'string' ? parseInt(product.sold) : product.sold || 0;
+      const priceValue = isNaN(price) ? 0 : price;
+      const soldValue = isNaN(sold) ? 0 : sold;
+      return sum + (priceValue * soldValue);
+    }, 0);
 
     return {
-      totalItems,
-      totalStockBalance,
-      totalRetailValue,
-      averageMarkup,
-      averageProfitMargin,
+      retail: totalRetailSales,
+      services: totalServiceSales,
+      total: totalRetailSales + totalServiceSales,
     };
   };
 
   const summary = calculateSummary();
 
-  // Categories and statuses for filters
-  const categories = [...new Set(inventory.map(item => item.category))];
-  const stores = [...new Set(inventory.map(item => item.store))];
+  // Categories and users for filters
+  const categories = [...new Set(products.map(product => product.category))];
+  const users = [...new Set(products.map(product => product.user))];
 
   // Detect mobile screen size
   useEffect(() => {
@@ -443,38 +458,38 @@ export default function Inventory() {
     return () => window.removeEventListener("resize", checkIsMobile);
   }, []);
 
-  // Filter inventory based on filters
+  // Filter products based on filters
   useEffect(() => {
-    let filtered = inventory;
+    let filtered = products;
 
     if (searchTerm) {
       filtered = filtered.filter(
-        (item) =>
-          item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.category?.toLowerCase().includes(searchTerm.toLowerCase())
+        (product) =>
+          product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          product.category?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     if (selectedCategory) {
       filtered = filtered.filter(
-        (item) => item.category === selectedCategory
+        (product) => product.category === selectedCategory
       );
     }
 
-    if (selectedStore) {
+    if (selectedUser) {
       filtered = filtered.filter(
-        (item) => item.store === selectedStore
+        (product) => product.user === selectedUser
       );
     }
 
-    setFilteredInventory(filtered);
-  }, [inventory, searchTerm, selectedCategory, selectedStore]);
+    setFilteredProducts(filtered);
+  }, [products, searchTerm, selectedCategory, selectedUser]);
 
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedCategory("");
-    setSelectedStore("");
+    setSelectedUser("");
   };
 
   const toggleFilters = () => {
@@ -482,117 +497,129 @@ export default function Inventory() {
   };
 
   const handleImportCSV = (importData) => {
-    // Handle CSV import logic here
     console.log("Importing CSV data:", importData);
-    // Add your CSV processing logic
   };
 
-  const handleAddStock = (stockData) => {
-    // Handle add stock logic here
-    console.log("Adding new stock:", stockData);
-    // Add your stock creation logic
-    const newItem = {
-      id: inventory.length + 1,
-      ...stockData,
-      status: stockData.quantity > 10 ? "In Stock" : stockData.quantity > 0 ? "Low Stock" : "Out of Stock",
-      dispensed: 0, // Default value for dispensed
-      closingStock: stockData.quantity // Initially closing stock equals available stock
-    };
-    setInventory([...inventory, newItem]);
+  const handleAddProduct = async (productData) => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const newProduct = await productAPI.createProduct(productData);
+      setProducts(prev => [...prev, newProduct]);
+      setShowAddProductModal(false);
+    } catch (err) {
+      setError(err.message);
+      console.error("Error adding product:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditProduct = async (id, productData) => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const updatedProduct = await productAPI.updateProduct(id, productData);
+      setProducts(prev => prev.map(product => 
+        product.id === id ? updatedProduct : product
+      ));
+    } catch (err) {
+      setError(err.message);
+      console.error("Error updating product:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this product?")) {
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+    try {
+      await productAPI.deleteProduct(id);
+      setProducts(prev => prev.filter(product => product.id !== id));
+    } catch (err) {
+      setError(err.message);
+      console.error("Error deleting product:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="relative max-w-6xl mx-auto pb-16 md:pb-0">
       <h1 className="hidden mb-6 text-xl font-normal text-gray-800 md:block font-raleway">
-        Inventory
+        Products
       </h1>
       <InventoryNav />
 
+      {/* Error Display */}
+      {error && (
+        <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 border border-red-300 rounded">
+          <strong>Error:</strong> {error}
+          <button 
+            onClick={() => setError("")}
+            className="float-right font-bold"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <div className="mt-4 space-y-4 px-2 md:px-0">
-        {/* Summary Cards */}
+        {/* Summary Cards - Retail, Services, Total */}
         <div className="">
           <div className="p-2 bg-white rounded shadow">
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:overflow-x-auto sm:justify-between sm:space-x-1 md:space-x-2">
-              {/* ITEMS */}
+              {/* RETAIL */}
               <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
                 <div className="flex items-center">
                   <div className="p-1 mr-1 rounded bg-blue-100 md:mr-2 md:p-1.5">
-                    <FaShoppingCart className="text-xs text-blue-600 md:text-sm" />
+                    <FaStore className="text-xs text-blue-600 md:text-sm" />
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Items
+                      Retail
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {summary.totalItems}
+                      {formatCurrency(summary.retail)}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Stock Balance card */}
+              {/* SERVICES */}
               <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
                 <div className="flex items-center">
                   <div className="p-1 mr-1 rounded bg-green-100 md:mr-2 md:p-1.5">
-                    <FaUniversity className="text-xs text-green-600 md:text-sm" />
+                    <FaCogs className="text-xs text-green-600 md:text-sm" />
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Stock Balance
+                      Services
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      ${summary.totalStockBalance.toFixed(2)}
+                      {formatCurrency(summary.services)}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Potential retail value */}
-              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-                <div className="flex items-center">
-                  <div className="p-1 mr-1 rounded bg-red-100 md:mr-2 md:p-1.5">
-                    <FaTag className="text-xs text-red-600 md:text-sm" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Retail Value
-                    </h3>
-                    <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      ${summary.totalRetailValue.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Mark up card */}
+              {/* TOTAL */}
               <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
                 <div className="flex items-center">
                   <div className="p-1 mr-1 rounded bg-purple-100 md:mr-2 md:p-1.5">
-                    <FaPercentage className="text-xs text-purple-600 md:text-sm" />
+                    <FaChartBar className="text-xs text-purple-600 md:text-sm" />
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Avg Markup
+                      Total
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {summary.averageMarkup.toFixed(1)}%
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Profit Card */}
-              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-                <div className="flex items-center">
-                  <div className="p-1 mr-1 rounded bg-yellow-100 md:mr-2 md:p-1.5">
-                    <FaMoneyBillWave className="text-xs text-yellow-600 md:text-sm" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Profit Margin
-                    </h3>
-                    <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {summary.averageProfitMargin.toFixed(1)}%
+                      {formatCurrency(summary.total)}
                     </p>
                   </div>
                 </div>
@@ -612,7 +639,7 @@ export default function Inventory() {
                   <div className="flex-1 relative">
                     <input
                       type="text"
-                      placeholder="Search inventory..."
+                      placeholder="Search products..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
@@ -637,7 +664,7 @@ export default function Inventory() {
                   <div className="relative w-full md:w-48">
                     <input
                       type="text"
-                      placeholder="Search inventory..."
+                      placeholder="Search products..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
@@ -663,17 +690,17 @@ export default function Inventory() {
                       </select>
                     </div>
 
-                    {/* Store filter */}
+                    {/* User filter */}
                     <div className="w-auto">
                       <select
-                        value={selectedStore}
-                        onChange={(e) => setSelectedStore(e.target.value)}
+                        value={selectedUser}
+                        onChange={(e) => setSelectedUser(e.target.value)}
                         className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                       >
-                        <option value="">All Stores</option>
-                        {stores.map((store) => (
-                          <option key={store} value={store}>
-                            {store}
+                        <option value="">All Users</option>
+                        {users.map((user) => (
+                          <option key={user} value={user}>
+                            {user}
                           </option>
                         ))}
                       </select>
@@ -683,21 +710,30 @@ export default function Inventory() {
               )}
             </div>
 
-            {/* Right side - Action buttons - Hidden on medium screens and below */}
+            {/* Right side - Action buttons */}
             <div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
               <button
                 onClick={() => setShowImportModal(true)}
                 className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
+                disabled={isLoading}
               >
                 <FaFileImport className="mr-1 text-xs" />
                 Import CSV
               </button>
               <button
-                onClick={() => setShowAddStockModal(true)}
+                onClick={() => setShowAddProductModal(true)}
                 className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
+                disabled={isLoading}
               >
                 <FaPlus className="mr-1 text-xs" />
-                Add Stock
+                Add Product
+              </button>
+              <button
+                onClick={loadProducts}
+                className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-gray-600 rounded hover:bg-gray-700"
+                disabled={isLoading}
+              >
+                {isLoading ? "Refreshing..." : "Refresh"}
               </button>
             </div>
           </div>
@@ -724,20 +760,20 @@ export default function Inventory() {
                 </select>
               </div>
 
-              {/* Store filter */}
+              {/* User filter */}
               <div>
                 <label className="block mb-1 text-xs font-medium text-gray-700">
-                  Store
+                  User
                 </label>
                 <select
-                  value={selectedStore}
-                  onChange={(e) => setSelectedStore(e.target.value)}
+                  value={selectedUser}
+                  onChange={(e) => setSelectedUser(e.target.value)}
                   className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                 >
-                  <option value="">All Stores</option>
-                  {stores.map((store) => (
-                    <option key={store} value={store}>
-                      {store}
+                  <option value="">All Users</option>
+                  {users.map((user) => (
+                    <option key={user} value={user}>
+                      {user}
                     </option>
                   ))}
                 </select>
@@ -761,8 +797,16 @@ export default function Inventory() {
           )}
         </div>
 
-        {/* Inventory Table */}
+        {/* Products Table */}
         <div className="overflow-hidden bg-white rounded shadow">
+          {/* Loading State */}
+          {isLoading && products.length === 0 && (
+            <div className="py-12 text-center">
+              <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="mt-2 text-sm text-gray-600">Loading products...</p>
+            </div>
+          )}
+
           {/* Desktop Table */}
           <div className="hidden overflow-x-auto text-black md:block">
             <table className="w-full">
@@ -772,46 +816,55 @@ export default function Inventory() {
                     Product
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
+                    SKU
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
                     Measurement
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Available Stock
+                    Sold
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Dispensed
+                    Sales Amount
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Closing Stock
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Price
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Amount
+                    Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredInventory.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
+                {filteredProducts.map((product) => (
+                  <tr key={product.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-black">
-                      {item.name}
+                      {product.name}
                     </td>
-                    <td className="px-4 py-3 text-sm text-black">{item.measurementUnit}</td>
+                    <td className="px-4 py-3 text-sm text-black">{product.sku}</td>
+                    <td className="px-4 py-3 text-sm text-black">{product.measurement || product.measuremnt}</td>
                     <td className="px-4 py-3 text-sm text-black">
-                      {item.quantity || 0}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-black">
-                      {item.dispensed || 0}
+                      {product.sold || 0}
                     </td>
                     <td className="px-4 py-3 text-sm text-black">
-                      {item.closingStock || (item.quantity || 0) - (item.dispensed || 0)}
+                      {formatCurrency((product.price || 0) * (product.sold || 0))}
                     </td>
                     <td className="px-4 py-3 text-sm text-black">
-                      {formatCurrency(item.price)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-black">
-                      {formatCurrency((item.price || 0) * (item.quantity || 0))}
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleEditProduct(product.id, product)}
+                          className="flex items-center px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200"
+                          disabled={isLoading}
+                        >
+                          <FaEdit className="mr-1" />
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="flex items-center px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200"
+                          disabled={isLoading}
+                        >
+                          <FaTrash className="mr-1" />
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -821,24 +874,40 @@ export default function Inventory() {
 
           {/* Mobile Cards */}
           <div className="text-black md:hidden">
-            {filteredInventory.map((item) => (
-              <div key={item.id} className="p-4 border-b border-gray-200">
+            {filteredProducts.map((product) => (
+              <div key={product.id} className="p-4 border-b border-gray-200">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex justify-between">
-                      <span className="font-medium text-black">{item.name}</span>
+                      <span className="font-medium text-black">{product.name}</span>
                     </div>
-                    <div className="mt-1 text-sm text-gray-600">Measurement: {item.measurementUnit}</div>
-                    <div className="mt-1 text-sm text-gray-600">Available: {item.quantity || 0}</div>
+                    <div className="mt-1 text-sm text-gray-600">SKU: {product.sku}</div>
+                    <div className="mt-1 text-sm text-gray-600">Measurement: {product.measurement || product.measuremnt}</div>
                     <div className="flex justify-between mt-2">
                       <div className="text-sm">
-                        <div>Dispensed: {item.dispensed || 0}</div>
-                        <div>Closing: {item.closingStock || (item.quantity || 0) - (item.dispensed || 0)}</div>
+                        <div>Sold: {product.sold || 0}</div>
                       </div>
                       <div className="text-sm">
-                        <div>Price: {formatCurrency(item.price)}</div>
-                        <div>Amount: {formatCurrency((item.price || 0) * (item.quantity || 0))}</div>
+                        <div>Sales: {formatCurrency((product.price || 0) * (product.sold || 0))}</div>
                       </div>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <button 
+                        onClick={() => handleEditProduct(product.id, product)}
+                        className="flex-1 px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200 flex items-center justify-center"
+                        disabled={isLoading}
+                      >
+                        <FaEdit className="mr-1" />
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="flex-1 px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200 flex items-center justify-center"
+                        disabled={isLoading}
+                      >
+                        <FaTrash className="mr-1" />
+                        Delete
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -846,15 +915,15 @@ export default function Inventory() {
             ))}
           </div>
 
-          {filteredInventory.length === 0 && (
+          {filteredProducts.length === 0 && !isLoading && (
             <div className="py-6 text-center">
-              <p className="text-xs text-black">No inventory items found</p>
+              <p className="text-xs text-black">No products found</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Fixed Action Buttons for Mobile - Placed at bottom of page */}
+      {/* Fixed Action Buttons for Mobile */}
       {isMobile && (
         <div className="fixed bottom-4 right-4 md:hidden">
           <div className="flex flex-col gap-3">
@@ -862,31 +931,42 @@ export default function Inventory() {
               onClick={() => setShowImportModal(true)}
               className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-blue-600 rounded-full shadow-lg hover:bg-blue-700 hover:scale-110"
               title="Import CSV"
+              disabled={isLoading}
             >
               <FaFileImport className="text-lg" />
             </button>
             <button
-              onClick={() => setShowAddStockModal(true)}
+              onClick={() => setShowAddProductModal(true)}
               className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-green-600 rounded-full shadow-lg hover:bg-green-700 hover:scale-110"
-              title="Add Stock"
+              title="Add Product"
+              disabled={isLoading}
             >
               <FaPlus className="text-lg" />
+            </button>
+            <button
+              onClick={loadProducts}
+              className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-gray-600 rounded-full shadow-lg hover:bg-gray-700 hover:scale-110"
+              title="Refresh"
+              disabled={isLoading}
+            >
+              ↻
             </button>
           </div>
         </div>
       )}
 
-      {/* Modals - These will now properly overlay the content */}
+      {/* Modals */}
       <ImportCSVModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         onImport={handleImportCSV}
       />
       
-      <AddStockModal
-        isOpen={showAddStockModal}
-        onClose={() => setShowAddStockModal(false)}
-        onAdd={handleAddStock}
+      <AddProductModal
+        isOpen={showAddProductModal}
+        onClose={() => setShowAddProductModal(false)}
+        onAdd={handleAddProduct}
+        isLoading={isLoading}
       />
     </div>
   );

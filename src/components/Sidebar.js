@@ -121,11 +121,11 @@ export default function Sidebar({ onToggle }) {
       icon: <FaBoxes className="w-5 h-5" />,
       roles: ['admin'], // Only admin has full access
       submenu: [
-        { name: 'Product Category', path: '/Inventory/product-category', icon: <FaTag className="w-4 h-4" />, roles: ['admin'] },
+        { name: 'Product Category', path: '/inventory/product-category', icon: <FaTag className="w-4 h-4" />, roles: ['admin'] },
         { name: 'View Adjustment', path: '/inventory/view-adjustment', icon: <FaSlidersH className="w-4 h-4" />, roles: ['admin'] },
         { name: 'Stock Requisition', path: '/inventory/stock-requisition', icon: <FaTruck className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Manage Product/Service', path: '/inventory/manage-product', icon: <FaCube className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Inventory', path: '/Inventory/Inventory', icon: <FaBoxes className="w-4 h-4" />, roles: ['admin'] },
+        { name: 'Manage Product/Service', path: '/inventory/manage-products', icon: <FaCube className="w-4 h-4" />, roles: ['admin'] },
+        { name: 'Inventory', path: '/inventory/inventory', icon: <FaBoxes className="w-4 h-4" />, roles: ['admin'] },
         { name: 'Purchase Log', path: '/inventory/purchase-log', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin'] },
         { name: 'Cost of Goods Sold', path: '/inventory/cost-of-goods', icon: <FaCalculator className="w-4 h-4" />, roles: ['admin'] },
       ]
