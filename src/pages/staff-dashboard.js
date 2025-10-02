@@ -144,7 +144,7 @@ export default function StaffDashboard() {
 
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
                 <div className="bg-gradient-to-r from-green-500 to-green-700 overflow-hidden shadow rounded-lg p-5 text-white">
-                  <h3 className="text-sm font-medium">Today's Sales</h3>
+                  <h3 className="text-sm font-medium">Today&apos Sales</h3>
                   <p className="mt-1 text-3xl font-semibold">N27,400</p>
                   <p className="text-xs opacity-90 mt-1">+12% from yesterday</p>
                 </div>
