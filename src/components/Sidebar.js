@@ -2,7 +2,6 @@
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
 import { 
   FaChartPie, 
   FaMoneyBill, 
@@ -15,9 +14,7 @@ import {
   FaChevronRight,
   FaChevronDown,
   FaBars,
-  FaReceipt,
   FaList,
-  FaClipboardCheck,
   FaChartBar,
   FaCreditCard,
   FaTag,
@@ -34,10 +31,10 @@ import {
 
 export default function Sidebar({ onToggle }) {
   const router = useRouter();
-  const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
     // Check if window is available (client-side)
@@ -53,8 +50,23 @@ export default function Sidebar({ onToggle }) {
         }
       };
       
-      // Initial check
+      // Get user role from localStorage
+      const getUserRole = () => {
+        try {
+          const userData = localStorage.getItem('user');
+          if (userData) {
+            const user = JSON.parse(userData);
+            return user.role || 'staff'; // default to staff if no role
+          }
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+        return 'staff'; // default fallback
+      };
+
+      // Initial checks
       checkIfMobile();
+      setUserRole(getUserRole());
       
       // Add event listener for window resize
       window.addEventListener('resize', checkIfMobile);
@@ -84,22 +96,24 @@ export default function Sidebar({ onToggle }) {
     }
   };
 
-  // Determine the correct dashboard path based on user role
+  // Get the correct dashboard path based on user role
   const getDashboardPath = () => {
-    if (!session || !session.user) return '/dashboard';
-    return session.user.role === 'admin' ? '/admin-dashboard' : '/staff-dashboard';
+    if (userRole === 'admin') {
+      return '/admin-dashboard';
+    } else {
+      return '/staff-dashboard';
+    }
   };
 
   // Check if current path is a dashboard path
   const isDashboardActive = () => {
-    return router.pathname === '/admin-dashboard' || router.pathname === '/staff-dashboard' || 
-       router.pathname === '/dashboard';
+    return router.pathname === '/admin-dashboard' || router.pathname === '/staff-dashboard';
   };
 
   const menuItems = [
     { 
       name: 'Dashboard', 
-      path: getDashboardPath(), // Dynamic path based on role
+      path: getDashboardPath(), // This will be dynamically set
       icon: <FaChartPie className="w-5 h-5" />, 
       roles: ['admin', 'staff'] 
     },
@@ -119,7 +133,7 @@ export default function Sidebar({ onToggle }) {
     { 
       name: 'Inventory', 
       icon: <FaBoxes className="w-5 h-5" />,
-      roles: ['admin'], // Only admin has full access
+      roles: ['admin'],
       submenu: [
         { name: 'Product Category', path: '/inventory/product-category', icon: <FaTag className="w-4 h-4" />, roles: ['admin'] },
         { name: 'View Adjustment', path: '/inventory/view-adjustment', icon: <FaSlidersH className="w-4 h-4" />, roles: ['admin'] },
@@ -133,14 +147,14 @@ export default function Sidebar({ onToggle }) {
     { 
       name: 'Accounts', 
       icon: <FaUsers className="w-5 h-5" />,
-      roles: ['admin'], // Only admin has full access
+      roles: ['admin'],
       submenu: [
         { name: 'Cash', path: '/accounts/cash', icon: <FaWallet className="w-4 h-4" />, roles: ['admin'] },
         { name: 'Float Disbursement', path: '/accounts/float-disbursement', icon: <FaCreditCard className="w-4 h-4" />, roles: ['admin'] },
         { name: 'Float', path: '/accounts/float', icon: <FaMoneyCheck className="w-4 h-4" />, roles: ['admin'] },
       ]
     },
-    { name: 'Deleted Transactions', path: '/deleted-transactions', icon: <FaTrash className="w-5 h-5" />, roles: ['admin'] }, // Only admin
+    { name: 'Deleted Transactions', path: '/deleted-transactions', icon: <FaTrash className="w-5 h-5" />, roles: ['admin'] },
     { name: 'Settings', path: '/settings', icon: <FaCog className="w-5 h-5" />, roles: ['admin', 'staff'] },
     { 
       name: 'Folio', 
@@ -148,15 +162,15 @@ export default function Sidebar({ onToggle }) {
       roles: ['admin', 'staff'],
       submenu: [
         { name: 'Bank Management', path: '/folio/bank-management', icon: <FaUniversity className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Manage Customer', path: '/folio/manage-customer', icon: <FaUsers className="w-4 h-4" />, roles: ['admin', 'staff'] },
+        { name: 'Manage Customer', path: '/folio/customer-management', icon: <FaUsers className="w-4 h-4" />, roles: ['admin', 'staff'] },
       ]
     },
   ];
 
   // Check if user has access to a menu item
   const hasAccess = (item) => {
-    if (!session || !session.user) return false;
-    return item.roles.includes(session.user.role);
+    if (!userRole) return false;
+    return item.roles.includes(userRole);
   };
 
   const toggleSidebar = () => {
@@ -181,6 +195,9 @@ export default function Sidebar({ onToggle }) {
     }
     return false;
   };
+
+  // Get current dashboard path (recalculate each render)
+  const currentDashboardPath = getDashboardPath();
 
   return (
     <>
@@ -215,7 +232,9 @@ export default function Sidebar({ onToggle }) {
             {menuItems.map((item) => {
               const userHasAccess = hasAccess(item);
               const isActive = isMenuItemActive(item);
-              const dashboardPath = getDashboardPath();
+              
+              // Use the current dashboard path for Dashboard item
+              const itemPath = item.name === 'Dashboard' ? currentDashboardPath : item.path;
               
               return (
                 <li key={item.name}>
@@ -238,16 +257,10 @@ export default function Sidebar({ onToggle }) {
                         <div className="flex items-center">
                           <span className="flex-shrink-0">
                             {item.icon}
-                            {!userHasAccess && isOpen && (
-                              <FaLock className="absolute -top-1 -right-1 w-3 h-3 text-indigo-300" />
-                            )}
                           </span>
                           {isOpen && (
                             <span className="ml-3 font-medium overflow-hidden whitespace-nowrap">
                               {item.name}
-                              {!userHasAccess && (
-                                <span className="ml-2 text-xs text-indigo-300">(Restricted)</span>
-                              )}
                             </span>
                           )}
                         </div>
@@ -255,9 +268,6 @@ export default function Sidebar({ onToggle }) {
                           <FaChevronDown 
                             className={`w-4 h-4 transition-transform duration-300 ${openDropdown === item.name ? 'rotate-180' : ''}`} 
                           />
-                        )}
-                        {isOpen && !userHasAccess && (
-                          <FaLock className="w-3 h-3 text-indigo-300" />
                         )}
                       </div>
                       
@@ -302,7 +312,6 @@ export default function Sidebar({ onToggle }) {
                                       <span className="flex-shrink-0">{subItem.icon}</span>
                                       <span className="ml-3 text-sm font-medium overflow-hidden whitespace-nowrap">
                                         {subItem.name}
-                                        <FaLock className="ml-2 inline w-3 h-3" />
                                       </span>
                                     </div>
                                   )}
@@ -314,9 +323,9 @@ export default function Sidebar({ onToggle }) {
                       )}
                     </div>
                   ) : (
-                    /* Regular menu item - Special handling for Dashboard */
+                    /* Regular menu item */
                     userHasAccess ? (
-                      <Link href={item.name === 'Dashboard' ? dashboardPath : item.path}>
+                      <Link href={itemPath}>
                         <div 
                           className={`
                             flex items-center p-3 rounded-lg transition-all duration-200 ease-in-out
@@ -353,20 +362,16 @@ export default function Sidebar({ onToggle }) {
                       >
                         <span className="flex-shrink-0">
                           {item.icon}
-                          {isOpen && (
-                            <FaLock className="absolute -top-1 -right-1 w-3 h-3 text-indigo-300" />
-                          )}
                         </span>
                         {isOpen && (
                           <span className="ml-3 font-medium overflow-hidden whitespace-nowrap">
                             {item.name}
-                            <span className="ml-2 text-xs text-indigo-300">(Restricted)</span>
                           </span>
                         )}
                         {/* Tooltip for collapsed state */}
                         {!isOpen && !isMobile && (
                           <div className="absolute left-full ml-3 px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-lg z-40">
-                            {item.name} (Restricted)
+                            {item.name}
                           </div>
                         )}
                       </div>
@@ -386,8 +391,8 @@ export default function Sidebar({ onToggle }) {
             </div>
             {isOpen && (
               <div className="ml-3 overflow-hidden">
-                <p className="text-sm font-medium truncate">{session?.user?.name || 'User Name'}</p>
-                <p className="text-xs text-indigo-300 truncate capitalize">{session?.user?.role || 'User'}</p>
+                <p className="text-sm font-medium truncate">User Name</p>
+                <p className="text-xs text-indigo-300 truncate capitalize">{userRole || 'User'}</p>
               </div>
             )}
           </div>

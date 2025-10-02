@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  FaDollarSign,
   FaChartBar,
   FaArrowUp,
   FaArrowDown,

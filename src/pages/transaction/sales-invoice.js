@@ -3,11 +3,9 @@ import { useRouter } from 'next/router';
 import TransactionNav from '../../components/TransactionNav';
 import { useState, useEffect } from 'react';
 import { FaSearch, FaShoppingCart, FaPlus, FaMinus, FaTrash, FaCheck, FaCheckCircle, FaPrint, FaExclamationTriangle } from 'react-icons/fa';
-import { useSession } from 'next-auth/react';
 
 export default function SalesInvoice() {
   const router = useRouter();
-  const { data: session } = useSession();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [cartItems, setCartItems] = useState([]);

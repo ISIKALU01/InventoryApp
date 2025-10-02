@@ -6,38 +6,36 @@ import {
   FaFileImport,
   FaSlidersH,
   FaTimes,
-  FaStore,
-  FaCogs,
-  FaChartBar,
+  FaUsers,
+  FaMoneyBillWave,
+  FaHandHoldingUsd,
   FaEdit,
   FaTrash,
+  FaPhone,
+  FaEnvelope,
 } from "react-icons/fa";
-import Router, { useRouter } from "next/router";
+import FolioNav from "../../components/FolioNav";
 
 const API_BASE_URL = "https://pgims-production.up.railway.app/api";
 
 // Modal Components
 const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
-  const [measurementUnit, setMeasurementUnit] = useState("");
-  const [stockDate, setStockDate] = useState("");
   const [csvFile, setCsvFile] = useState(null);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log("Importing CSV with:", { measurementUnit, stockDate, csvFile });
-    onImport({ measurementUnit, stockDate, csvFile });
+    console.log("Importing CSV with:", { csvFile });
+    onImport({ csvFile });
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
       <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">
-            Import Products from CSV
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-800">Import Customers from CSV</h2>
           <button
             onClick={onClose}
             className="text-gray-400 transition-colors hover:text-gray-600"
@@ -47,39 +45,6 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Measurement Unit *
-            </label>
-            <select
-              value={measurementUnit}
-              onChange={(e) => setMeasurementUnit(e.target.value)}
-              required
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Select Unit</option>
-              <option value="unit">Unit</option>
-              <option value="kilograms">Kilograms</option>
-              <option value="liters">Liters</option>
-              <option value="meters">Meters</option>
-              <option value="packs">Packs</option>
-              <option value="carton">Carton</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Product Date *
-            </label>
-            <input
-              type="date"
-              value={stockDate}
-              onChange={(e) => setStockDate(e.target.value)}
-              required
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
               CSV File *
@@ -93,7 +58,7 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
                 className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               />
               <p className="mt-2 text-xs text-gray-500">
-                Upload a CSV file with product data
+                Upload a CSV file with customer data
               </p>
             </div>
           </div>
@@ -110,7 +75,7 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
               type="submit"
               className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-md transition-colors hover:bg-blue-700"
             >
-              Import Products
+              Import Customers
             </button>
           </div>
         </form>
@@ -119,15 +84,15 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
   );
 };
 
-const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
+const AddCustomerModal = ({ isOpen, onClose, onAdd, isLoading }) => {
   const [formData, setFormData] = useState({
     name: "",
-    sku: "",
-    category: "",
-    description: "",
-    price: "",
-    measurement: "unit",
-    sold: "0",
+    phone: "",
+    email: "",
+    address: "",
+    customerType: "regular", // regular, debtor, creditor
+    creditLimit: "0",
+    currentBalance: "0",
   });
 
   const handleSubmit = async (e) => {
@@ -136,12 +101,12 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
     onClose();
     setFormData({
       name: "",
-      sku: "",
-      category: "",
-      description: "",
-      price: "",
-      measurement: "unit",
-      sold: "0",
+      phone: "",
+      email: "",
+      address: "",
+      customerType: "regular",
+      creditLimit: "0",
+      currentBalance: "0",
     });
   };
 
@@ -152,25 +117,13 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
     });
   };
 
-  // Auto-generate description when name or category changes
-  useEffect(() => {
-    if (formData.name && formData.category) {
-      setFormData((prev) => ({
-        ...prev,
-        description: `${prev.name} - ${prev.category} product`,
-      }));
-    }
-  }, [formData.name, formData.category]);
-
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-50">
       <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">
-            Add New Product
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-800">Add New Customer</h2>
           <button
             onClick={onClose}
             className="text-gray-400 transition-colors hover:text-gray-600"
@@ -183,7 +136,7 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
-              Product Name *
+              Customer Name *
             </label>
             <input
               type="text"
@@ -193,118 +146,104 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
               required
               disabled={isLoading}
               className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Enter product name"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              SKU (Stock Keeping Unit) *
-            </label>
-            <input
-              type="text"
-              name="sku"
-              value={formData.sku}
-              onChange={handleChange}
-              required
-              disabled={isLoading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="e.g., SKU001"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Category *
-            </label>
-            <select
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              required
-              disabled={isLoading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-            >
-              <option value="">Select Category</option>
-              <option value="Food">Food</option>
-              <option value="Alcohol">Alcohol</option>
-              <option value="Energy Drinks">Energy Drinks</option>
-              <option value="Soft Drinks">Soft Drinks</option>
-              <option value="Electronics">Electronics</option>
-              <option value="Clothing">Clothing</option>
-              <option value="Services">Services</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Description
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              disabled={isLoading}
-              rows="2"
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Product description (auto-generated)"
+              placeholder="Enter customer name"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block mb-1 text-sm font-medium text-gray-700">
-                Price *
+                Phone Number *
               </label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
-                name="price"
-                value={formData.price}
+                type="tel"
+                name="phone"
+                value={formData.phone}
                 onChange={handleChange}
                 required
                 disabled={isLoading}
                 className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                placeholder="0.00"
+                placeholder="Phone number"
               />
             </div>
             <div>
               <label className="block mb-1 text-sm font-medium text-gray-700">
-                Initial Stock *
+                Email Address
               </label>
               <input
-                type="number"
-                name="sold"
-                value={formData.sold}
+                type="email"
+                name="email"
+                value={formData.email}
                 onChange={handleChange}
-                required
-                min="0"
                 disabled={isLoading}
                 className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                placeholder="0"
+                placeholder="Email (optional)"
               />
             </div>
           </div>
 
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
-              Measurement Unit
+              Address
+            </label>
+            <textarea
+              name="address"
+              value={formData.address}
+              onChange={handleChange}
+              disabled={isLoading}
+              rows="2"
+              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              placeholder="Customer address (optional)"
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">
+              Customer Type *
             </label>
             <select
-              name="measurement"
-              value={formData.measurement}
+              name="customerType"
+              value={formData.customerType}
               onChange={handleChange}
+              required
               disabled={isLoading}
               className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
             >
-              <option value="unit">Unit</option>
-              <option value="kilograms">Kilograms</option>
-              <option value="liters">Liters</option>
-              <option value="meters">Meters</option>
-              <option value="packs">Packs</option>
-              <option value="boxes">Boxes</option>
+              <option value="regular">Regular Customer</option>
+              <option value="debtor">Debtor</option>
+              <option value="creditor">Creditor</option>
             </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block mb-1 text-sm font-medium text-gray-700">
+                Credit Limit
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                name="creditLimit"
+                value={formData.creditLimit}
+                onChange={handleChange}
+                disabled={isLoading}
+                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              />
+            </div>
+            <div>
+              <label className="block mb-1 text-sm font-medium text-gray-700">
+                Current Balance
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                name="currentBalance"
+                value={formData.currentBalance}
+                onChange={handleChange}
+                disabled={isLoading}
+                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              />
+            </div>
           </div>
 
           <div className="flex gap-3 pt-2">
@@ -327,7 +266,7 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
                   Adding...
                 </>
               ) : (
-                "Add Product"
+                'Add Customer'
               )}
             </button>
           </div>
@@ -338,274 +277,148 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
 };
 
 const formatCurrency = (value) => {
-  if (value === null || value === undefined) return "$0.00";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  return isNaN(num) ? "$0.00" : `$${num.toFixed(2)}`;
+  if (value === null || value === undefined) return '$0.00';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return isNaN(num) ? '$0.00' : `$${num.toFixed(2)}`;
 };
 
-// API Service Functions - UPDATED WITH AUTHENTICATION
-const productAPI = {
-  async getAuthHeaders() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      throw new Error("No authentication token found. Please log in again.");
+// API Service Functions
+const customerAPI = {
+  async getAllCustomers() {
+    const response = await fetch(`${API_BASE_URL}/customers`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch customers: ${response.status}`);
     }
-
-    return {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    };
+    
+    return response.json();
   },
 
-  async getAllProducts() {
-    try {
-      const headers = await this.getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/products`, {
-        method: "GET",
-        headers,
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        throw new Error(`Failed to fetch products: ${response.status}`);
-      }
-
-      return response.json();
-    } catch (error) {
-      if (error.message.includes("No authentication token")) {
-        // Redirect to login if no token
-        window.location.href = "/";
-      }
-      throw error;
+  async createCustomer(customerData) {
+    const response = await fetch(`${API_BASE_URL}/customers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(customerData),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || `Failed to create customer: ${response.status}`);
     }
+    
+    return response.json();
   },
 
-  async createProduct(productData) {
-    try {
-      const headers = await this.getAuthHeaders();
-
-      // Transform the data to match API expected format
-      const apiProductData = {
-        sku: productData.sku,
-        name: productData.name,
-        description:
-          productData.description ||
-          `${productData.name} - ${productData.category}`,
-        price: productData.price.toString(),
-        stock: parseInt(productData.sold) || 0,
-      };
-
-      console.log("Sending product data:", apiProductData);
-
-      const response = await fetch(`${API_BASE_URL}/products`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(apiProductData),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to create product: ${response.status}`
-        );
-      }
-
-      return response.json();
-    } catch (error) {
-      if (
-        error.message.includes("No authentication token") ||
-        error.message.includes("Authentication failed")
-      ) {
-        // Redirect to login if authentication fails
-        window.location.href = "/";
-      }
-      throw error;
+  async updateCustomer(id, customerData) {
+    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(customerData),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to update customer: ${response.status}`);
     }
+    
+    return response.json();
   },
 
-  async updateProduct(id, productData) {
-    try {
-      const headers = await this.getAuthHeaders();
-
-      // Transform the data for update
-      const apiProductData = {
-        sku: productData.sku,
-        name: productData.name,
-        description:
-          productData.description ||
-          `${productData.name} - ${productData.category}`,
-        price: productData.price.toString(),
-        stock: parseInt(productData.sold) || 0,
-      };
-
-      const response = await fetch(`${API_BASE_URL}/products/${id}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(apiProductData),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to update product: ${response.status}`
-        );
-      }
-
-      return response.json();
-    } catch (error) {
-      if (
-        error.message.includes("No authentication token") ||
-        error.message.includes("Authentication failed")
-      ) {
-        window.location.href = "/";
-      }
-      throw error;
+  async deleteCustomer(id) {
+    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to delete customer: ${response.status}`);
     }
-  },
-
-  async deleteProduct(id) {
-    try {
-      const headers = await this.getAuthHeaders();
-
-      const response = await fetch(`${API_BASE_URL}/products/${id}`, {
-        method: "DELETE",
-        headers,
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to delete product: ${response.status}`
-        );
-      }
-
-      // For DELETE, the response might be empty or a success message
-      if (response.status === 204) {
-        return { success: true };
-      }
-
-      return response.json();
-    } catch (error) {
-      if (
-        error.message.includes("No authentication token") ||
-        error.message.includes("Authentication failed")
-      ) {
-        window.location.href = "/";
-      }
-      throw error;
-    }
-  },
+    
+    return response.json();
+  }
 };
-// Main Products Component
-export default function Products() {
-  const [products, setProducts] = useState([]);
-  const [filteredProducts, setFilteredProducts] = useState([]);
+
+// Main Customers Component
+export default function Customers() {
+  const [customers, setCustomers] = useState([]);
+  const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedUser, setSelectedUser] = useState("");
+  const [selectedType, setSelectedType] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
 
-  // Check authentication on component mount
+  // Load customers on component mount
   useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/");
-        return;
-      }
-    };
-
-    checkAuth();
-  }, [router]);
-  // Load products on component mount
-  useEffect(() => {
-    loadProducts();
+    loadCustomers();
   }, []);
 
-  const loadProducts = async () => {
+  const loadCustomers = async () => {
     setIsLoading(true);
     setError("");
     try {
-      const productsData = await productAPI.getAllProducts();
-      setProducts(productsData);
+      const customersData = await customerAPI.getAllCustomers();
+      setCustomers(customersData);
     } catch (err) {
       setError(err.message);
-      console.error("Error loading products:", err);
+      console.error("Error loading customers:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Calculate summary metrics for retail, services, and total
+  // Calculate summary metrics
   const calculateSummary = () => {
-    const retailProducts = products.filter(
-      (product) =>
-        product.category && !product.category.toLowerCase().includes("service")
+    const totalCustomers = customers.length;
+    const debtors = customers.filter(customer => 
+      customer.customerType === 'debtor' || customer.currentBalance < 0
+    );
+    const creditors = customers.filter(customer => 
+      customer.customerType === 'creditor' || customer.currentBalance > 0
     );
 
-    const serviceProducts = products.filter(
-      (product) =>
-        product.category && product.category.toLowerCase().includes("service")
-    );
-
-    const totalRetailSales = retailProducts.reduce((sum, product) => {
-      const price =
-        typeof product.price === "string"
-          ? parseFloat(product.price)
-          : product.price;
-      const sold =
-        typeof product.sold === "string"
-          ? parseInt(product.sold)
-          : product.sold || 0;
-      const priceValue = isNaN(price) ? 0 : price;
-      const soldValue = isNaN(sold) ? 0 : sold;
-      return sum + priceValue * soldValue;
+    const totalDebts = debtors.reduce((sum, customer) => {
+      const balance = Math.abs(typeof customer.currentBalance === 'string' ? 
+        parseFloat(customer.currentBalance) : customer.currentBalance || 0);
+      return sum + (isNaN(balance) ? 0 : balance);
     }, 0);
 
-    const totalServiceSales = serviceProducts.reduce((sum, product) => {
-      const price =
-        typeof product.price === "string"
-          ? parseFloat(product.price)
-          : product.price;
-      const sold =
-        typeof product.sold === "string"
-          ? parseInt(product.sold)
-          : product.sold || 0;
-      const priceValue = isNaN(price) ? 0 : price;
-      const soldValue = isNaN(sold) ? 0 : sold;
-      return sum + priceValue * soldValue;
+    const totalCredits = creditors.reduce((sum, customer) => {
+      const balance = Math.abs(typeof customer.currentBalance === 'string' ? 
+        parseFloat(customer.currentBalance) : customer.currentBalance || 0);
+      return sum + (isNaN(balance) ? 0 : balance);
     }, 0);
 
     return {
-      retail: totalRetailSales,
-      services: totalServiceSales,
-      total: totalRetailSales + totalServiceSales,
+      total: totalCustomers,
+      debtors: debtors.length,
+      creditors: creditors.length,
+      totalDebts,
+      totalCredits,
     };
   };
 
   const summary = calculateSummary();
 
-  // Categories and users for filters
-  const categories = [...new Set(products.map((product) => product.category))];
-  const users = [...new Set(products.map((product) => product.user))];
+  // Customer types for filters
+  const customerTypes = [...new Set(customers.map(customer => customer.customerType))];
 
   // Detect mobile screen size
   useEffect(() => {
@@ -618,36 +431,31 @@ export default function Products() {
     return () => window.removeEventListener("resize", checkIsMobile);
   }, []);
 
-  // Filter products based on filters
+  // Filter customers based on filters
   useEffect(() => {
-    let filtered = products;
+    let filtered = customers;
 
     if (searchTerm) {
       filtered = filtered.filter(
-        (product) =>
-          product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.category?.toLowerCase().includes(searchTerm.toLowerCase())
+        (customer) =>
+          customer.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          customer.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    if (selectedCategory) {
+    if (selectedType) {
       filtered = filtered.filter(
-        (product) => product.category === selectedCategory
+        (customer) => customer.customerType === selectedType
       );
     }
 
-    if (selectedUser) {
-      filtered = filtered.filter((product) => product.user === selectedUser);
-    }
-
-    setFilteredProducts(filtered);
-  }, [products, searchTerm, selectedCategory, selectedUser]);
+    setFilteredCustomers(filtered);
+  }, [customers, searchTerm, selectedType]);
 
   const clearFilters = () => {
     setSearchTerm("");
-    setSelectedCategory("");
-    setSelectedUser("");
+    setSelectedType("");
   };
 
   const toggleFilters = () => {
@@ -658,50 +466,50 @@ export default function Products() {
     console.log("Importing CSV data:", importData);
   };
 
-  const handleAddProduct = async (productData) => {
+  const handleAddCustomer = async (customerData) => {
     setIsLoading(true);
     setError("");
     try {
-      const newProduct = await productAPI.createProduct(productData);
-      setProducts((prev) => [...prev, newProduct]);
-      setShowAddProductModal(false);
+      const newCustomer = await customerAPI.createCustomer(customerData);
+      setCustomers(prev => [...prev, newCustomer]);
+      setShowAddCustomerModal(false);
     } catch (err) {
       setError(err.message);
-      console.error("Error adding product:", err);
+      console.error("Error adding customer:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleEditProduct = async (id, productData) => {
+  const handleEditCustomer = async (id, customerData) => {
     setIsLoading(true);
     setError("");
     try {
-      const updatedProduct = await productAPI.updateProduct(id, productData);
-      setProducts((prev) =>
-        prev.map((product) => (product.id === id ? updatedProduct : product))
-      );
+      const updatedCustomer = await customerAPI.updateCustomer(id, customerData);
+      setCustomers(prev => prev.map(customer => 
+        customer.id === id ? updatedCustomer : customer
+      ));
     } catch (err) {
       setError(err.message);
-      console.error("Error updating product:", err);
+      console.error("Error updating customer:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDeleteProduct = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this product?")) {
+  const handleDeleteCustomer = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this customer?")) {
       return;
     }
 
     setIsLoading(true);
     setError("");
     try {
-      await productAPI.deleteProduct(id);
-      setProducts((prev) => prev.filter((product) => product.id !== id));
+      await customerAPI.deleteCustomer(id);
+      setCustomers(prev => prev.filter(customer => customer.id !== id));
     } catch (err) {
       setError(err.message);
-      console.error("Error deleting product:", err);
+      console.error("Error deleting customer:", err);
     } finally {
       setIsLoading(false);
     }
@@ -710,15 +518,15 @@ export default function Products() {
   return (
     <div className="relative max-w-6xl mx-auto pb-16 md:pb-0">
       <h1 className="hidden mb-6 text-xl font-normal text-gray-800 md:block font-raleway">
-        Products
+        Customers
       </h1>
-      <InventoryNav />
+      <FolioNav />
 
       {/* Error Display */}
       {error && (
         <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 border border-red-300 rounded">
           <strong>Error:</strong> {error}
-          <button
+          <button 
             onClick={() => setError("")}
             className="float-right font-bold"
           >
@@ -728,56 +536,62 @@ export default function Products() {
       )}
 
       <div className="mt-4 space-y-4 px-2 md:px-0">
-        {/* Summary Cards - Retail, Services, Total */}
+        {/* Summary Cards - Total Customers, Debtors, Creditors */}
         <div className="">
           <div className="p-2 bg-white rounded shadow">
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:overflow-x-auto sm:justify-between sm:space-x-1 md:space-x-2">
-              {/* RETAIL */}
+              {/* TOTAL CUSTOMERS */}
               <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
                 <div className="flex items-center">
                   <div className="p-1 mr-1 rounded bg-blue-100 md:mr-2 md:p-1.5">
-                    <FaStore className="text-xs text-blue-600 md:text-sm" />
+                    <FaUsers className="text-xs text-blue-600 md:text-sm" />
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Retail
+                      Total Customers
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {formatCurrency(summary.retail)}
+                      {summary.total}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* SERVICES */}
+              {/* DEBTORS */}
+              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
+                <div className="flex items-center">
+                  <div className="p-1 mr-1 rounded bg-red-100 md:mr-2 md:p-1.5">
+                    <FaMoneyBillWave className="text-xs text-red-600 md:text-sm" />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
+                      Debtors
+                    </h3>
+                    <p className="text-sm font-bold text-gray-800 md:text-lg">
+                      {summary.debtors}
+                    </p>
+                    <p className="text-[10px] text-red-600 font-medium">
+                      {formatCurrency(summary.totalDebts)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CREDITORS */}
               <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
                 <div className="flex items-center">
                   <div className="p-1 mr-1 rounded bg-green-100 md:mr-2 md:p-1.5">
-                    <FaCogs className="text-xs text-green-600 md:text-sm" />
+                    <FaHandHoldingUsd className="text-xs text-green-600 md:text-sm" />
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Services
+                      Creditors
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {formatCurrency(summary.services)}
+                      {summary.creditors}
                     </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* TOTAL */}
-              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-                <div className="flex items-center">
-                  <div className="p-1 mr-1 rounded bg-purple-100 md:mr-2 md:p-1.5">
-                    <FaChartBar className="text-xs text-purple-600 md:text-sm" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Total
-                    </h3>
-                    <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {formatCurrency(summary.total)}
+                    <p className="text-[10px] text-green-600 font-medium">
+                      {formatCurrency(summary.totalCredits)}
                     </p>
                   </div>
                 </div>
@@ -797,7 +611,7 @@ export default function Products() {
                   <div className="flex-1 relative">
                     <input
                       type="text"
-                      placeholder="Search products..."
+                      placeholder="Search customers..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
@@ -822,7 +636,7 @@ export default function Products() {
                   <div className="relative w-full md:w-48">
                     <input
                       type="text"
-                      placeholder="Search products..."
+                      placeholder="Search customers..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
@@ -832,35 +646,17 @@ export default function Products() {
 
                   {/* Desktop filters */}
                   <div className="flex gap-3">
-                    {/* Category filter */}
+                    {/* Customer Type filter */}
                     <div className="w-auto">
                       <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        value={selectedType}
+                        onChange={(e) => setSelectedType(e.target.value)}
                         className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                       >
-                        <option value="">All Categories</option>
-                        {categories.map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* User filter */}
-                    <div className="w-auto">
-                      <select
-                        value={selectedUser}
-                        onChange={(e) => setSelectedUser(e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="">All Users</option>
-                        {users.map((user) => (
-                          <option key={user} value={user}>
-                            {user}
-                          </option>
-                        ))}
+                        <option value="">All Types</option>
+                        <option value="regular">Regular</option>
+                        <option value="debtor">Debtor</option>
+                        <option value="creditor">Creditor</option>
                       </select>
                     </div>
                   </div>
@@ -879,15 +675,15 @@ export default function Products() {
                 Import CSV
               </button>
               <button
-                onClick={() => setShowAddProductModal(true)}
+                onClick={() => setShowAddCustomerModal(true)}
                 className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
                 disabled={isLoading}
               >
                 <FaPlus className="mr-1 text-xs" />
-                Add Product
+                Add Customer
               </button>
               <button
-                onClick={loadProducts}
+                onClick={loadCustomers}
                 className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-gray-600 rounded hover:bg-gray-700"
                 disabled={isLoading}
               >
@@ -899,41 +695,20 @@ export default function Products() {
           {/* Filter dropdown for mobile */}
           {isMobile && showFilters && (
             <div className="grid grid-cols-1 gap-2 p-2 mt-3 bg-gray-50 rounded">
-              {/* Category filter */}
+              {/* Customer Type filter */}
               <div>
                 <label className="block mb-1 text-xs font-medium text-gray-700">
-                  Category
+                  Customer Type
                 </label>
                 <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
                   className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                 >
-                  <option value="">All Categories</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* User filter */}
-              <div>
-                <label className="block mb-1 text-xs font-medium text-gray-700">
-                  User
-                </label>
-                <select
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">All Users</option>
-                  {users.map((user) => (
-                    <option key={user} value={user}>
-                      {user}
-                    </option>
-                  ))}
+                  <option value="">All Types</option>
+                  <option value="regular">Regular</option>
+                  <option value="debtor">Debtor</option>
+                  <option value="creditor">Creditor</option>
                 </select>
               </div>
 
@@ -955,13 +730,13 @@ export default function Products() {
           )}
         </div>
 
-        {/* Products Table */}
+        {/* Customers Table */}
         <div className="overflow-hidden bg-white rounded shadow">
           {/* Loading State */}
-          {isLoading && products.length === 0 && (
+          {isLoading && customers.length === 0 && (
             <div className="py-12 text-center">
               <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="mt-2 text-sm text-gray-600">Loading products...</p>
+              <p className="mt-2 text-sm text-gray-600">Loading customers...</p>
             </div>
           )}
 
@@ -971,19 +746,19 @@ export default function Products() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Product
+                    Name
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    SKU
+                    Phone Number
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Measurement
+                    Email
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Sold
+                    Type
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Sales Amount
+                    Balance
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
                     Actions
@@ -991,37 +766,61 @@ export default function Products() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProducts.map((product) => (
-                  <tr key={product.id} className="hover:bg-gray-50">
+                {filteredCustomers.map((customer) => (
+                  <tr key={customer.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-black">
-                      {product.name}
+                      {customer.name}
                     </td>
                     <td className="px-4 py-3 text-sm text-black">
-                      {product.sku}
+                      <div className="flex items-center">
+                        <FaPhone className="mr-2 text-xs text-gray-400" />
+                        {customer.phone}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-black">
-                      {product.measurement || product.measuremnt}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-black">
-                      {product.sold || 0}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-black">
-                      {formatCurrency(
-                        (product.price || 0) * (product.sold || 0)
+                      {customer.email ? (
+                        <div className="flex items-center">
+                          <FaEnvelope className="mr-2 text-xs text-gray-400" />
+                          {customer.email}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">No email</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        customer.customerType === 'debtor' 
+                          ? 'bg-red-100 text-red-800'
+                          : customer.customerType === 'creditor'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {customer.customerType || 'regular'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-black">
+                      <span className={
+                        (customer.currentBalance || 0) < 0 
+                          ? 'text-red-600' 
+                          : (customer.currentBalance || 0) > 0 
+                          ? 'text-green-600' 
+                          : 'text-gray-600'
+                      }>
+                        {formatCurrency(customer.currentBalance || 0)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-black">
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditProduct(product.id, product)}
+                        <button 
+                          onClick={() => handleEditCustomer(customer.id, customer)}
                           className="flex items-center px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200"
                           disabled={isLoading}
                         >
                           <FaEdit className="mr-1" />
                           Edit
                         </button>
-                        <button
-                          onClick={() => handleDeleteProduct(product.id)}
+                        <button 
+                          onClick={() => handleDeleteCustomer(customer.id)}
                           className="flex items-center px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200"
                           disabled={isLoading}
                         >
@@ -1038,45 +837,59 @@ export default function Products() {
 
           {/* Mobile Cards */}
           <div className="text-black md:hidden">
-            {filteredProducts.map((product) => (
-              <div key={product.id} className="p-4 border-b border-gray-200">
+            {filteredCustomers.map((customer) => (
+              <div key={customer.id} className="p-4 border-b border-gray-200">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex justify-between">
-                      <span className="font-medium text-black">
-                        {product.name}
+                      <span className="font-medium text-black">{customer.name}</span>
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        customer.customerType === 'debtor' 
+                          ? 'bg-red-100 text-red-800'
+                          : customer.customerType === 'creditor'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {customer.customerType || 'regular'}
                       </span>
                     </div>
-                    <div className="mt-1 text-sm text-gray-600">
-                      SKU: {product.sku}
-                    </div>
-                    <div className="mt-1 text-sm text-gray-600">
-                      Measurement: {product.measurement || product.measuremnt}
-                    </div>
-                    <div className="flex justify-between mt-2">
-                      <div className="text-sm">
-                        <div>Sold: {product.sold || 0}</div>
+                    <div className="mt-2 space-y-1 text-sm text-gray-600">
+                      <div className="flex items-center">
+                        <FaPhone className="mr-2 text-xs" />
+                        {customer.phone}
                       </div>
-                      <div className="text-sm">
-                        <div>
-                          Sales:{" "}
-                          {formatCurrency(
-                            (product.price || 0) * (product.sold || 0)
-                          )}
+                      {customer.email && (
+                        <div className="flex items-center">
+                          <FaEnvelope className="mr-2 text-xs" />
+                          {customer.email}
                         </div>
+                      )}
+                    </div>
+                    <div className="flex justify-between mt-3">
+                      <div className="text-sm font-medium">
+                        Balance: 
+                        <span className={
+                          (customer.currentBalance || 0) < 0 
+                            ? 'text-red-600 ml-1' 
+                            : (customer.currentBalance || 0) > 0 
+                            ? 'text-green-600 ml-1' 
+                            : 'text-gray-600 ml-1'
+                        }>
+                          {formatCurrency(customer.currentBalance || 0)}
+                        </span>
                       </div>
                     </div>
                     <div className="flex gap-2 mt-3">
-                      <button
-                        onClick={() => handleEditProduct(product.id, product)}
+                      <button 
+                        onClick={() => handleEditCustomer(customer.id, customer)}
                         className="flex-1 px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200 flex items-center justify-center"
                         disabled={isLoading}
                       >
                         <FaEdit className="mr-1" />
                         Edit
                       </button>
-                      <button
-                        onClick={() => handleDeleteProduct(product.id)}
+                      <button 
+                        onClick={() => handleDeleteCustomer(customer.id)}
                         className="flex-1 px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200 flex items-center justify-center"
                         disabled={isLoading}
                       >
@@ -1090,9 +903,9 @@ export default function Products() {
             ))}
           </div>
 
-          {filteredProducts.length === 0 && !isLoading && (
+          {filteredCustomers.length === 0 && !isLoading && (
             <div className="py-6 text-center">
-              <p className="text-xs text-black">No products found</p>
+              <p className="text-xs text-black">No customers found</p>
             </div>
           )}
         </div>
@@ -1111,15 +924,15 @@ export default function Products() {
               <FaFileImport className="text-lg" />
             </button>
             <button
-              onClick={() => setShowAddProductModal(true)}
+              onClick={() => setShowAddCustomerModal(true)}
               className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-green-600 rounded-full shadow-lg hover:bg-green-700 hover:scale-110"
-              title="Add Product"
+              title="Add Customer"
               disabled={isLoading}
             >
               <FaPlus className="text-lg" />
             </button>
             <button
-              onClick={loadProducts}
+              onClick={loadCustomers}
               className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-gray-600 rounded-full shadow-lg hover:bg-gray-700 hover:scale-110"
               title="Refresh"
               disabled={isLoading}
@@ -1136,11 +949,11 @@ export default function Products() {
         onClose={() => setShowImportModal(false)}
         onImport={handleImportCSV}
       />
-
-      <AddProductModal
-        isOpen={showAddProductModal}
-        onClose={() => setShowAddProductModal(false)}
-        onAdd={handleAddProduct}
+      
+      <AddCustomerModal
+        isOpen={showAddCustomerModal}
+        onClose={() => setShowAddCustomerModal(false)}
+        onAdd={handleAddCustomer}
         isLoading={isLoading}
       />
     </div>

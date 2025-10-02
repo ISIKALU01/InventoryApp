@@ -1,8 +1,7 @@
-// pages/admin-dashboard.js
-import { useSession, signOut } from "next-auth/react";
-import { useRouter } from "next/router";
-import { useEffect } from "react";
+// admin-dashboard.js
+import { useEffect, useState } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import InventorySummary from "@/components/InventorySummary";
 import SalesAnalysis from "@/components/SalesAnalysis";
 import Trend from "@/components/TrendChart";
@@ -10,35 +9,98 @@ import TopCategory from "@/components/TopCatgry";
 import CashFlow from "@/components/CashFlow";
 import ProfitLoss from "@/components/ProfitLoss";
 import DebtorCreditor from "@/components/DebtorCreditor";
+import { getLocalStorage, removeLocalStorage, verifyToken } from "../../utils/auth";
 
 export default function AdminDashboard() {
-  const { data: session, status } = useSession();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    if (status === "loading") return;
+    const checkAuth = async () => {
+      console.log("🔐 Starting auth check...");
 
-    if (!session) {
-      router.push("/login");
-      return;
-    }
+      // Check if we're in the browser environment
+      if (typeof window === "undefined") {
+        setLoading(false);
+        return;
+      }
 
-    if (session.user.role !== "admin") {
-      router.push("/staff-dashboard");
-      return;
-    }
-  }, [session, status, router]);
+      const token = getLocalStorage("token");
+      console.log("📝 Token found:", !!token);
 
-  if (status === "loading") {
+      if (!token) {
+        console.log("❌ No token found, redirecting to login");
+        router.push("/");
+        return;
+      }
+
+      try {
+        console.log("🔄 Verifying token with backend...");
+        const session = await verifyToken(token);
+
+        if (!session || !session.user) {
+          console.log("❌ Token verification failed");
+          removeLocalStorage("token");
+          router.push("/");
+          return;
+        }
+
+        const userData = session.user;
+        console.log("✅ User verified:", userData.role);
+
+        // Check if user has admin role
+        if (userData.role !== "admin") {
+          console.log("🔀 User is not admin, redirecting based on role:", userData.role);
+          if (userData.role === "staff") {
+            router.push("/staff-dashboard");
+          } else {
+            router.push("/unauthorized");
+          }
+          return;
+        }
+
+        console.log("🎉 Admin user authenticated successfully");
+        setUser(userData);
+      } catch (error) {
+        console.error("❌ Authentication check failed:", error);
+        removeLocalStorage("token");
+        router.push("/");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [router]); // Removed authChecked dependency
+
+  const handleLogout = () => {
+    console.log("🚪 Logging out...");
+    removeLocalStorage("token");
+    router.push("/");
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Verifying authentication...</p>
+        </div>
       </div>
     );
   }
 
-  if (!session || session.user.role !== "admin") {
-    return null;
+  // Don't render anything if no user (will redirect in useEffect)
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Redirecting...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -51,25 +113,19 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 font-raleway">
           <div className="flex flex-col sm:flex-row justify-between items-center py-4 sm:py-0 sm:h-16">
             <div className="mb-4 sm:mb-0 text-center sm:text-left">
-              <p className="text-xl text-gray-600">
-                Welcome back, {session.user.name}
-              </p>
+              <p className="text-xl text-gray-600">Welcome back, {user.name}</p>
             </div>
             <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
               <div className="text-center sm:text-right">
-                <p className="text-sm font-medium text-gray-900">
-                  {session.user.name}
-                </p>
+                <p className="text-sm font-medium text-gray-900">{user.name}</p>
                 <p className="text-xs text-gray-600">
-                  {session.user.department} • Admin
+                  {user.department || "Administration"} • Admin
                 </p>
               </div>
               <button
-                onClick={() =>
-                  signOut({ callbackUrl: `${window.location.origin}/` })
-                }
+                onClick={handleLogout}
                 className="bg-indigo-600 text-white px-4 py-2 cursor-pointer rounded-md text-sm font-medium w-full 
-                sm:w-auto"
+                sm:w-auto hover:bg-indigo-700 transition-colors"
               >
                 Logout
               </button>

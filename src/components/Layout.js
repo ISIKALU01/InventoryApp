@@ -1,7 +1,6 @@
 // components/Layout.js
 import { useRouter } from 'next/router';
 import Sidebar from './Sidebar';
-import { useSession, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 
 export default function Layout({ children }) {
@@ -63,7 +62,7 @@ export default function Layout({ children }) {
                 router.pathname === '/accounts' ? 'Accounts' :
                 router.pathname === '/deleted-transactions' ? 'Deleted Transactions' :
                 router.pathname === '/settings' ? 'Settings' :
-                router.pathname === '/folio' ? 'Folio' : 'Page'}
+                router.pathname.startsWith('/folio') ? 'Folio' : 'Page'}
               </h1>
             </div>
             {/* Add any header buttons or user info here */}
