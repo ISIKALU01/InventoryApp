@@ -6,7 +6,11 @@ import InventorySummary from "@/components/InventorySummary";
 import SalesAnalysis from "@/components/SalesAnalysis";
 import Trend from "@/components/TrendChart";
 import TopCategory from "@/components/TopCatgry";
-import { getLocalStorage, removeLocalStorage, verifyToken } from "../../utils/auth";
+import {
+  getLocalStorage,
+  removeLocalStorage,
+  verifyToken,
+} from "../../utils/auth";
 
 export default function StaffDashboard() {
   const [user, setUser] = useState(null);
@@ -48,7 +52,10 @@ export default function StaffDashboard() {
 
         // Check if user has staff role
         if (userData.role !== "staff") {
-          console.log("🔀 User is not staff, redirecting based on role:", userData.role);
+          console.log(
+            "🔀 User is not staff, redirecting based on role:",
+            userData.role
+          );
           if (userData.role === "admin") {
             router.push("/admin-dashboard");
           } else {
@@ -111,7 +118,9 @@ export default function StaffDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 font-raleway">
           <div className="flex flex-col sm:flex-row justify-between items-center py-4 sm:py-0 sm:h-16">
             <div className="mb-4 sm:mb-0 text-center sm:text-left">
-              <h1 className="text-2xl font-bold text-gray-900">Sales Dashboard</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Sales Dashboard
+              </h1>
               <p className="text-sm text-gray-600">Welcome back, {user.name}</p>
             </div>
             <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
@@ -144,7 +153,7 @@ export default function StaffDashboard() {
 
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
                 <div className="bg-gradient-to-r from-green-500 to-green-700 overflow-hidden shadow rounded-lg p-5 text-white">
-                  <h3 className="text-sm font-medium">Today&apos Sales</h3>
+                  <h3 className="text-sm font-medium">Today Sales</h3>
                   <p className="mt-1 text-3xl font-semibold">N27,400</p>
                   <p className="text-xs opacity-90 mt-1">+12% from yesterday</p>
                 </div>
@@ -181,7 +190,9 @@ export default function StaffDashboard() {
           {/* Quick Actions Section */}
           <div className="mt-8 bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Quick Actions
+              </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <button className="bg-green-50 hover:bg-green-100 text-green-700 px-4 py-3 rounded-md text-sm font-medium transition-colors border border-green-200">
                   New Sale
