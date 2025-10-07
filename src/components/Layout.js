@@ -62,7 +62,7 @@ export default function Layout({ children }) {
                 router.pathname === '/accounts' ? 'Accounts' :
                 router.pathname === '/deleted-transactions' ? 'Deleted Transactions' :
                 router.pathname === '/settings' ? 'Settings' :
-                router.pathname.startsWith('/folio') ? 'Folio' : 'Page'}
+                router.pathname.startsWith('/folio') ? 'Folio' : ''}
               </h1>
             </div>
             {/* Add any header buttons or user info here */}

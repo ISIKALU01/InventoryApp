@@ -13,6 +13,7 @@ import {
   FaTrash,
 } from "react-icons/fa";
 import Router, { useRouter } from "next/router";
+import { categoryAPI } from "../../../services/api";
 
 const API_BASE_URL = "https://pgims-production.up.railway.app/api";
 

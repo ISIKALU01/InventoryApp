@@ -1,6 +1,225 @@
-import InventoryNav from '@/components/InventoryNav';
-import { useState, useEffect } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaShoppingCart, FaSearch, FaSlidersH } from 'react-icons/fa';
+import InventoryNav from "@/components/InventoryNav";
+import { useState, useEffect } from "react";
+import {
+  FaPlus,
+  FaEdit,
+  FaTrash,
+  FaShoppingCart,
+  FaSearch,
+  FaSlidersH,
+  FaTimes,
+} from "react-icons/fa";
+
+import { categoryAPI } from "../../../services/api"; // Import from shared API file
+
+// Modal Components
+const AddCategoryModal = ({ isOpen, onClose, onAdd, isLoading }) => {
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (formData.name.trim()) {
+      await onAdd(formData);
+      setFormData({ name: "", description: "" });
+    }
+  };
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-50">
+      <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-800">
+            Add New Category
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 transition-colors hover:text-gray-600"
+            disabled={isLoading}
+          >
+            <FaTimes className="text-sm" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">
+              Category Name *
+            </label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              placeholder="Enter category name"
+            />
+          </div>
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">
+              Description
+            </label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              disabled={isLoading}
+              rows="3"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              placeholder="Enter category description"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 text-sm text-white bg-green-600 rounded-md transition-colors hover:bg-green-700 disabled:opacity-50 flex items-center justify-center"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Adding...
+                </>
+              ) : (
+                "Add Category"
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const EditCategoryModal = ({
+  isOpen,
+  onClose,
+  onEdit,
+  category,
+  isLoading,
+}) => {
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+  });
+
+  useEffect(() => {
+    if (category) {
+      setFormData({
+        name: category.name || "",
+        description: category.description || "",
+      });
+    }
+  }, [category]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (formData.name.trim()) {
+      await onEdit(category.id, formData);
+    }
+  };
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  if (!isOpen || !category) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+      <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-800">Edit Category</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 transition-colors hover:text-gray-600"
+            disabled={isLoading}
+          >
+            <FaTimes className="text-sm" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">
+              Category Name *
+            </label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              placeholder="Enter category name"
+            />
+          </div>
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">
+              Description
+            </label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              disabled={isLoading}
+              rows="3"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              placeholder="Enter category description"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-md transition-colors hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Updating...
+                </>
+              ) : (
+                "Update Category"
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 // Main Product Categories Component
 export default function ProductCategories() {
@@ -12,24 +231,31 @@ export default function ProductCategories() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // Sample initial data
+  // Load categories on component mount
   useEffect(() => {
-    const initialCategories = [
-      { id: 1, name: 'Electronics', description: 'Electronic devices and accessories' },
-      { id: 2, name: 'Clothing', description: 'Apparel and fashion items' },
-      { id: 3, name: 'Home & Garden', description: 'Home improvement and gardening' },
-      { id: 4, name: 'Sports', description: 'Sports equipment and accessories' },
-      { id: 5, name: 'Books', description: 'Books and educational materials' },
-    ];
-    setCategories(initialCategories);
-    setFilteredCategories(initialCategories);
+    loadCategories();
   }, []);
+
+  const loadCategories = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const categoriesData = await categoryAPI.getAllCategories();
+      setCategories(categoriesData);
+    } catch (err) {
+      setError(err.message);
+      console.error("Error loading categories:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Calculate summary metrics
   const calculateSummary = () => {
     const totalCategories = categories.length;
-
     return {
       totalCategories,
     };
@@ -71,28 +297,61 @@ export default function ProductCategories() {
     setShowFilters(!showFilters);
   };
 
-  const handleAddCategory = (categoryData) => {
-    const newCategory = {
-      id: categories.length + 1,
-      ...categoryData
-    };
-    setCategories([...categories, newCategory]);
-    setShowAddModal(false);
+  const handleAddCategory = async (categoryData) => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const newCategory = await categoryAPI.createCategory(categoryData);
+      setCategories((prev) => [...prev, newCategory]);
+      setShowAddModal(false);
+    } catch (err) {
+      setError(err.message);
+      console.error("Error adding category:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleEditCategory = (categoryData) => {
-    const updatedCategories = categories.map(category =>
-      category.id === selectedCategory.id ? { ...category, ...categoryData } : category
-    );
-    setCategories(updatedCategories);
-    setShowEditModal(false);
-    setSelectedCategory(null);
+  const handleEditCategory = async (id, categoryData) => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const updatedCategory = await categoryAPI.updateCategory(
+        id,
+        categoryData
+      );
+      setCategories((prev) =>
+        prev.map((category) =>
+          category.id === id ? updatedCategory : category
+        )
+      );
+      setShowEditModal(false);
+      setSelectedCategory(null);
+    } catch (err) {
+      setError(err.message);
+      console.error("Error updating category:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDeleteCategory = (categoryId) => {
-    if (window.confirm('Are you sure you want to delete this category?')) {
-      const updatedCategories = categories.filter(category => category.id !== categoryId);
-      setCategories(updatedCategories);
+  const handleDeleteCategory = async (categoryId) => {
+    if (!window.confirm("Are you sure you want to delete this category?")) {
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+    try {
+      await categoryAPI.deleteCategory(categoryId);
+      setCategories((prev) =>
+        prev.filter((category) => category.id !== categoryId)
+      );
+    } catch (err) {
+      setError(err.message);
+      console.error("Error deleting category:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -106,7 +365,20 @@ export default function ProductCategories() {
       <h1 className="hidden mb-6 text-xl font-normal text-gray-800 md:block font-raleway">
         Product Category
       </h1>
-      < InventoryNav />
+      <InventoryNav />
+
+      {/* Error Display */}
+      {error && (
+        <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 border border-red-300 rounded">
+          <strong>Error:</strong> {error}
+          <button
+            onClick={() => setError("")}
+            className="float-right font-bold"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="mt-4 space-y-4 px-2 md:px-0">
         {/* Summary Cards */}
@@ -121,7 +393,7 @@ export default function ProductCategories() {
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      All Products
+                      All Categories
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
                       {summary.totalCategories}
@@ -180,21 +452,59 @@ export default function ProductCategories() {
               )}
             </div>
 
-            {/* Right side - Action buttons - Hidden on medium screens and below */}
+            {/* Right side - Action buttons */}
             <div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
+                disabled={isLoading}
               >
                 <FaPlus className="mr-1 text-xs" />
                 Add Category
               </button>
+              <button
+                onClick={loadCategories}
+                className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-gray-600 rounded hover:bg-gray-700"
+                disabled={isLoading}
+              >
+                {isLoading ? "Refreshing..." : "Refresh"}
+              </button>
             </div>
           </div>
+
+          {/* Filter dropdown for mobile */}
+          {isMobile && showFilters && (
+            <div className="grid grid-cols-1 gap-2 p-2 mt-3 bg-gray-50 rounded">
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={clearFilters}
+                  className="flex-1 px-2 py-1.5 text-xs text-gray-700 transition-colors bg-gray-200 rounded hover:bg-gray-300"
+                >
+                  Clear Filters
+                </button>
+                <button
+                  onClick={toggleFilters}
+                  className="flex-1 px-2 py-1.5 text-xs text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Categories Table */}
         <div className="overflow-hidden bg-white rounded shadow">
+          {/* Loading State */}
+          {isLoading && categories.length === 0 && (
+            <div className="py-12 text-center">
+              <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="mt-2 text-sm text-gray-600">
+                Loading categories...
+              </p>
+            </div>
+          )}
+
           {/* Desktop Table */}
           <div className="hidden overflow-x-auto text-black md:block">
             <table className="w-full">
@@ -213,25 +523,31 @@ export default function ProductCategories() {
                   <tr key={category.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <div>
-                        <div className="text-sm font-medium text-black">{category.name}</div>
-                        <div className="text-xs text-gray-600">{category.description}</div>
+                        <div className="text-sm font-medium text-black">
+                          {category.name}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          {category.description}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleEditClick(category)}
-                          className="flex items-center p-2 text-gray-600 transition-colors rounded hover:text-blue-600 hover:bg-gray-100"
-                          title="Edit"
+                          className="flex items-center px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200"
+                          disabled={isLoading}
                         >
-                          <FaEdit />
+                          <FaEdit className="mr-1" />
+                          Edit
                         </button>
                         <button
                           onClick={() => handleDeleteCategory(category.id)}
-                          className="flex items-center p-2 text-gray-600 transition-colors rounded hover:text-red-600 hover:bg-gray-100"
-                          title="Delete"
+                          className="flex items-center px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200"
+                          disabled={isLoading}
                         >
-                          <FaTrash />
+                          <FaTrash className="mr-1" />
+                          Delete
                         </button>
                       </div>
                     </td>
@@ -248,23 +564,29 @@ export default function ProductCategories() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex justify-between">
-                      <span className="font-medium text-black">{category.name}</span>
+                      <span className="font-medium text-black">
+                        {category.name}
+                      </span>
                     </div>
-                    <div className="mt-1 text-sm text-gray-600">{category.description}</div>
+                    <div className="mt-1 text-sm text-gray-600">
+                      {category.description}
+                    </div>
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => handleEditClick(category)}
-                        className="flex items-center flex-1 p-2 text-gray-600 transition-colors rounded justify-center hover:text-blue-600 hover:bg-gray-100"
-                        title="Edit"
+                        className="flex-1 px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200 flex items-center justify-center"
+                        disabled={isLoading}
                       >
-                        <FaEdit />
+                        <FaEdit className="mr-1" />
+                        Edit
                       </button>
                       <button
                         onClick={() => handleDeleteCategory(category.id)}
-                        className="flex items-center flex-1 p-2 text-gray-600 transition-colors rounded justify-center hover:text-red-600 hover:bg-gray-100"
-                        title="Delete"
+                        className="flex-1 px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200 flex items-center justify-center"
+                        disabled={isLoading}
                       >
-                        <FaTrash />
+                        <FaTrash className="mr-1" />
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -273,7 +595,7 @@ export default function ProductCategories() {
             ))}
           </div>
 
-          {filteredCategories.length === 0 && (
+          {filteredCategories.length === 0 && !isLoading && (
             <div className="py-6 text-center">
               <p className="text-xs text-black">No categories found</p>
             </div>
@@ -281,15 +603,27 @@ export default function ProductCategories() {
         </div>
       </div>
 
-      {/* Fixed Add Button for Mobile */}
+      {/* Fixed Action Buttons for Mobile */}
       {isMobile && (
         <div className="fixed bottom-4 right-4 md:hidden">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-green-600 rounded-full shadow-lg hover:bg-green-700 hover:scale-110"
-          >
-            <FaPlus className="text-lg" />
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-green-600 rounded-full shadow-lg hover:bg-green-700 hover:scale-110"
+              title="Add Category"
+              disabled={isLoading}
+            >
+              <FaPlus className="text-lg" />
+            </button>
+            <button
+              onClick={loadCategories}
+              className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-gray-600 rounded-full shadow-lg hover:bg-gray-700 hover:scale-110"
+              title="Refresh"
+              disabled={isLoading}
+            >
+              ↻
+            </button>
+          </div>
         </div>
       )}
 
@@ -298,8 +632,9 @@ export default function ProductCategories() {
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onAdd={handleAddCategory}
+        isLoading={isLoading}
       />
-      
+
       <EditCategoryModal
         isOpen={showEditModal}
         onClose={() => {
@@ -308,144 +643,8 @@ export default function ProductCategories() {
         }}
         onEdit={handleEditCategory}
         category={selectedCategory}
+        isLoading={isLoading}
       />
-    </div>
-  );
-}
-
-// Add Category Modal Component
-function AddCategoryModal({ isOpen, onClose, onAdd }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    description: ''
-  });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (formData.name.trim()) {
-      onAdd(formData);
-      setFormData({ name: '', description: '' });
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold">Add New Category</h2>
-        </div>
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Category Name</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              rows="3"
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm text-white bg-green-600 rounded hover:bg-green-700"
-            >
-              Add Category
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// Edit Category Modal Component
-function EditCategoryModal({ isOpen, onClose, onEdit, category }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    description: ''
-  });
-
-  useEffect(() => {
-    if (category) {
-      setFormData({
-        name: category.name || '',
-        description: category.description || ''
-      });
-    }
-  }, [category]);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (formData.name.trim()) {
-      onEdit(formData);
-      setFormData({ name: '', description: '' });
-    }
-  };
-
-  if (!isOpen || !category) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-50">
-      <div className="bg-gray-100 rounded-lg shadow-lg w-full max-w-md mx-4">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold">Edit Category</h2>
-        </div>
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Category Name</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              rows="3"
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700"
-            >
-              Update Category
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }
