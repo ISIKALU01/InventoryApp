@@ -12,7 +12,7 @@ export default function CustomerNav() {
   const navItems = [
     {
       name: "Bank Management",
-      path: "/customers/bank-management",
+      path: "/folio/bank-management",
     },
     {
       name: "Manage Customer",
