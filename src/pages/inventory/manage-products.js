@@ -11,9 +11,10 @@ import {
   FaChartBar,
   FaEdit,
   FaTrash,
+  FaMoneyBillWave,
+  FaTags,
 } from "react-icons/fa";
-import Router, { useRouter } from "next/router";
-import { categoryAPI } from "../../../services/api";
+import { useRouter } from "next/router";
 
 const API_BASE_URL = "https://pgims-production.up.railway.app/api";
 
@@ -33,7 +34,7 @@ const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
       <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold text-gray-800">
@@ -124,44 +125,56 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
   const [formData, setFormData] = useState({
     name: "",
     sku: "",
-    category: "",
     description: "",
-    price: "",
-    measurement: "unit",
-    sold: "0",
+    price: "", // Selling price
+    stock: "", // Stock quantity
   });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await onAdd(formData);
-    onClose();
-    setFormData({
-      name: "",
-      sku: "",
-      category: "",
-      description: "",
-      price: "",
-      measurement: "unit",
-      sold: "0",
-    });
+    
+    // Convert numeric fields to proper types for API
+    const processedData = {
+      ...formData,
+      price: parseFloat(formData.price) || 0,
+      stock: parseInt(formData.stock) || 0,
+    };
+    
+    await onAdd(processedData);
   };
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    
+    if (name === "price") {
+      setFormData({
+        ...formData,
+        [name]: value === "" ? "" : value,
+      });
+    } else if (name === "stock") {
+      setFormData({
+        ...formData,
+        [name]: value === "" ? "" : value,
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
   };
 
-  // Auto-generate description when name or category changes
   useEffect(() => {
-    if (formData.name && formData.category) {
-      setFormData((prev) => ({
-        ...prev,
-        description: `${prev.name} - ${prev.category} product`,
-      }));
+    if (!isOpen) {
+      setFormData({
+        name: "",
+        sku: "",
+        description: "",
+        price: "",
+        stock: "",
+      });
     }
-  }, [formData.name, formData.category]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -200,55 +213,32 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
 
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
-              SKU (Stock Keeping Unit) *
+              SKU (Stock Keeping Unit)
             </label>
             <input
               type="text"
               name="sku"
               value={formData.sku}
               onChange={handleChange}
-              required
               disabled={isLoading}
               className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="e.g., SKU001"
+              placeholder="e.g., SKU001 (optional)"
             />
           </div>
 
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">
-              Category *
-            </label>
-            <select
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              required
-              disabled={isLoading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-            >
-              <option value="">Select Category</option>
-              <option value="Food">Food</option>
-              <option value="Alcohol">Alcohol</option>
-              <option value="Energy Drinks">Energy Drinks</option>
-              <option value="Soft Drinks">Soft Drinks</option>
-              <option value="Electronics">Electronics</option>
-              <option value="Clothing">Clothing</option>
-              <option value="Services">Services</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Description
+              Description / Category *
             </label>
             <textarea
               name="description"
               value={formData.description}
               onChange={handleChange}
+              required
               disabled={isLoading}
-              rows="2"
+              rows="3"
               className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Product description (auto-generated)"
+              placeholder="Enter product description or category"
             />
           </div>
 
@@ -272,40 +262,21 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
             </div>
             <div>
               <label className="block mb-1 text-sm font-medium text-gray-700">
-                Initial Stock *
+                Stock Quantity *
               </label>
               <input
                 type="number"
-                name="sold"
-                value={formData.sold}
+                min="0"
+                step="1"
+                name="stock"
+                value={formData.stock}
                 onChange={handleChange}
                 required
-                min="0"
                 disabled={isLoading}
                 className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
                 placeholder="0"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Measurement Unit
-            </label>
-            <select
-              name="measurement"
-              value={formData.measurement}
-              onChange={handleChange}
-              disabled={isLoading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-            >
-              <option value="unit">Unit</option>
-              <option value="kilograms">Kilograms</option>
-              <option value="liters">Liters</option>
-              <option value="meters">Meters</option>
-              <option value="packs">Packs</option>
-              <option value="boxes">Boxes</option>
-            </select>
           </div>
 
           <div className="flex gap-3 pt-2">
@@ -338,13 +309,209 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
   );
 };
 
-const formatCurrency = (value) => {
-  if (value === null || value === undefined) return "$0.00";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  return isNaN(num) ? "$0.00" : `$${num.toFixed(2)}`;
+// Edit Product Modal Component
+const EditProductModal = ({ isOpen, onClose, onEdit, isLoading, product }) => {
+  const [formData, setFormData] = useState({
+    name: "",
+    sku: "",
+    description: "",
+    price: "",
+    stock: "",
+  });
+
+  // Initialize form data when product changes or modal opens
+  useEffect(() => {
+    if (product && isOpen) {
+      setFormData({
+        name: product.name || "",
+        sku: product.sku || "",
+        description: product.description || "",
+        price: product.price?.toString() || "",
+        stock: product.stock?.toString() || "",
+      });
+    }
+  }, [product, isOpen]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Convert numeric fields to proper types for API
+    const processedData = {
+      ...formData,
+      price: parseFloat(formData.price) || 0,
+      stock: parseInt(formData.stock) || 0,
+    };
+    
+    await onEdit(product.id, processedData);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    
+    if (name === "price") {
+      setFormData({
+        ...formData,
+        [name]: value === "" ? "" : value,
+      });
+    } else if (name === "stock") {
+      setFormData({
+        ...formData,
+        [name]: value === "" ? "" : value,
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
+  };
+
+  if (!isOpen || !product) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-50">
+      <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-800">
+            Edit Product
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 transition-colors hover:text-gray-600"
+            disabled={isLoading}
+          >
+            <FaTimes className="text-sm" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 space-y-3">
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">
+              Product Name *
+            </label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              placeholder="Enter product name"
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">
+              SKU (Stock Keeping Unit)
+            </label>
+            <input
+              type="text"
+              name="sku"
+              value={formData.sku}
+              onChange={handleChange}
+              disabled={isLoading}
+              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              placeholder="e.g., SKU001 (optional)"
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">
+              Description / Category *
+            </label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+              rows="3"
+              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              placeholder="Enter product description or category"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block mb-1 text-sm font-medium text-gray-700">
+                Price *
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                name="price"
+                value={formData.price}
+                onChange={handleChange}
+                required
+                disabled={isLoading}
+                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block mb-1 text-sm font-medium text-gray-700">
+                Stock Quantity *
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                name="stock"
+                value={formData.stock}
+                onChange={handleChange}
+                required
+                disabled={isLoading}
+                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                placeholder="0"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-md transition-colors hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Updating...
+                </>
+              ) : (
+                "Update Product"
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 };
 
-// API Service Functions - UPDATED WITH AUTHENTICATION
+const formatCurrency = (value) => {
+  if (value === null || value === undefined) return "₦0.00";
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  return isNaN(num) ? "₦0.00" : `₦${num.toFixed(2)}`;
+};
+
+const formatNumber = (value) => {
+  if (value === null || value === undefined) return "0";
+  const num = typeof value === "string" ? parseInt(value) : value;
+  return isNaN(num) ? "0" : num.toLocaleString();
+};
+
+// API Service Functions
 const productAPI = {
   async getAuthHeaders() {
     const token = localStorage.getItem("token");
@@ -374,10 +541,10 @@ const productAPI = {
         throw new Error(`Failed to fetch products: ${response.status}`);
       }
 
-      return response.json();
+      const data = await response.json();
+      return data;
     } catch (error) {
       if (error.message.includes("No authentication token")) {
-        // Redirect to login if no token
         window.location.href = "/";
       }
       throw error;
@@ -388,18 +555,15 @@ const productAPI = {
     try {
       const headers = await this.getAuthHeaders();
 
-      // Transform the data to match API expected format
       const apiProductData = {
-        sku: productData.sku,
+        sku: productData.sku || "",
         name: productData.name,
-        description:
-          productData.description ||
-          `${productData.name} - ${productData.category}`,
-        price: productData.price.toString(),
-        stock: parseInt(productData.sold) || 0,
+        description: productData.description || "",
+        price: productData.price,
+        stock: productData.stock,
       };
 
-      console.log("Sending product data:", apiProductData);
+      console.log("Sending product data to API:", apiProductData);
 
       const response = await fetch(`${API_BASE_URL}/products`, {
         method: "POST",
@@ -417,13 +581,14 @@ const productAPI = {
         );
       }
 
-      return response.json();
+      const newProduct = await response.json();
+      console.log("Product created successfully:", newProduct);
+      return newProduct;
     } catch (error) {
       if (
         error.message.includes("No authentication token") ||
         error.message.includes("Authentication failed")
       ) {
-        // Redirect to login if authentication fails
         window.location.href = "/";
       }
       throw error;
@@ -434,15 +599,12 @@ const productAPI = {
     try {
       const headers = await this.getAuthHeaders();
 
-      // Transform the data for update
       const apiProductData = {
-        sku: productData.sku,
+        sku: productData.sku || "",
         name: productData.name,
-        description:
-          productData.description ||
-          `${productData.name} - ${productData.category}`,
-        price: productData.price.toString(),
-        stock: parseInt(productData.sold) || 0,
+        description: productData.description || "",
+        price: productData.price,
+        stock: productData.stock,
       };
 
       const response = await fetch(`${API_BASE_URL}/products/${id}`, {
@@ -492,7 +654,6 @@ const productAPI = {
         );
       }
 
-      // For DELETE, the response might be empty or a success message
       if (response.status === 204) {
         return { success: true };
       }
@@ -509,22 +670,31 @@ const productAPI = {
     }
   },
 };
+
 // Main Products Component
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedUser, setSelectedUser] = useState("");
+  const [selectedDescription, setSelectedDescription] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showEditProductModal, setShowEditProductModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [isEditingProduct, setIsEditingProduct] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
-  // Check authentication on component mount
+  // Extract unique descriptions for filtering
+  const descriptions = [...new Set(products
+    .map(product => product.description)
+    .filter(desc => desc && desc.trim() !== "")
+  )].sort();
+
   useEffect(() => {
     const checkAuth = () => {
       const token = localStorage.getItem("token");
@@ -536,7 +706,7 @@ export default function Products() {
 
     checkAuth();
   }, [router]);
-  // Load products on component mount
+
   useEffect(() => {
     loadProducts();
   }, []);
@@ -546,7 +716,18 @@ export default function Products() {
     setError("");
     try {
       const productsData = await productAPI.getAllProducts();
-      setProducts(productsData);
+      
+      // Ensure products is an array and has the expected structure
+      if (Array.isArray(productsData)) {
+        setProducts(productsData);
+      } else if (productsData && Array.isArray(productsData.data)) {
+        setProducts(productsData.data);
+      } else if (productsData && productsData.products) {
+        setProducts(productsData.products);
+      } else {
+        console.warn("Unexpected API response structure:", productsData);
+        setProducts([]);
+      }
     } catch (err) {
       setError(err.message);
       console.error("Error loading products:", err);
@@ -555,60 +736,47 @@ export default function Products() {
     }
   };
 
-  // Calculate summary metrics for retail, services, and total
+  // Calculate summary metrics - UPDATED without stock data
   const calculateSummary = () => {
-    const retailProducts = products.filter(
-      (product) =>
-        product.category && !product.category.toLowerCase().includes("service")
-    );
+    const totalProducts = products.length;
 
-    const serviceProducts = products.filter(
-      (product) =>
-        product.category && product.category.toLowerCase().includes("service")
-    );
+    // Count unique descriptions/categories
+    const uniqueDescriptions = new Set(
+      products
+        .map(product => product.description)
+        .filter(desc => desc && desc.trim() !== "")
+    ).size;
 
-    const totalRetailSales = retailProducts.reduce((sum, product) => {
-      const price =
-        typeof product.price === "string"
-          ? parseFloat(product.price)
-          : product.price;
-      const sold =
-        typeof product.sold === "string"
-          ? parseInt(product.sold)
-          : product.sold || 0;
-      const priceValue = isNaN(price) ? 0 : price;
-      const soldValue = isNaN(sold) ? 0 : sold;
-      return sum + priceValue * soldValue;
+    // Calculate average price
+    const totalPrice = products.reduce((sum, product) => {
+      const price = parseFloat(product.price) || 0;
+      return sum + price;
     }, 0);
+    const averagePrice = totalProducts > 0 ? totalPrice / totalProducts : 0;
 
-    const totalServiceSales = serviceProducts.reduce((sum, product) => {
-      const price =
-        typeof product.price === "string"
-          ? parseFloat(product.price)
-          : product.price;
-      const sold =
-        typeof product.sold === "string"
-          ? parseInt(product.sold)
-          : product.sold || 0;
-      const priceValue = isNaN(price) ? 0 : price;
-      const soldValue = isNaN(sold) ? 0 : sold;
-      return sum + priceValue * soldValue;
-    }, 0);
+    // Find highest priced product
+    const highestPricedProduct = products.reduce((highest, product) => {
+      const price = parseFloat(product.price) || 0;
+      return price > (parseFloat(highest.price) || 0) ? product : highest;
+    }, { price: 0 });
+
+    // Count products with SKU
+    const productsWithSKU = products.filter(product => 
+      product.sku && product.sku.trim() !== ""
+    ).length;
 
     return {
-      retail: totalRetailSales,
-      services: totalServiceSales,
-      total: totalRetailSales + totalServiceSales,
+      totalProducts,
+      uniqueDescriptions,
+      averagePrice,
+      highestPrice: parseFloat(highestPricedProduct.price) || 0,
+      productsWithSKU,
+      skuPercentage: totalProducts > 0 ? (productsWithSKU / totalProducts) * 100 : 0,
     };
   };
 
   const summary = calculateSummary();
 
-  // Categories and users for filters
-  const categories = [...new Set(products.map((product) => product.category))];
-  const users = [...new Set(products.map((product) => product.user))];
-
-  // Detect mobile screen size
   useEffect(() => {
     const checkIsMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -619,7 +787,6 @@ export default function Products() {
     return () => window.removeEventListener("resize", checkIsMobile);
   }, []);
 
-  // Filter products based on filters
   useEffect(() => {
     let filtered = products;
 
@@ -628,27 +795,22 @@ export default function Products() {
         (product) =>
           product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.category?.toLowerCase().includes(searchTerm.toLowerCase())
+          product.description?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    if (selectedCategory) {
+    if (selectedDescription) {
       filtered = filtered.filter(
-        (product) => product.category === selectedCategory
+        (product) => product.description === selectedDescription
       );
-    }
-
-    if (selectedUser) {
-      filtered = filtered.filter((product) => product.user === selectedUser);
     }
 
     setFilteredProducts(filtered);
-  }, [products, searchTerm, selectedCategory, selectedUser]);
+  }, [products, searchTerm, selectedDescription]);
 
   const clearFilters = () => {
     setSearchTerm("");
-    setSelectedCategory("");
-    setSelectedUser("");
+    setSelectedDescription("");
   };
 
   const toggleFilters = () => {
@@ -660,33 +822,44 @@ export default function Products() {
   };
 
   const handleAddProduct = async (productData) => {
-    setIsLoading(true);
+    setIsAddingProduct(true);
     setError("");
     try {
+      console.log("Adding product:", productData);
       const newProduct = await productAPI.createProduct(productData);
-      setProducts((prev) => [...prev, newProduct]);
+      console.log("Product added successfully:", newProduct);
+
+      // Refresh the products list to get the updated data from the server
+      await loadProducts();
       setShowAddProductModal(false);
     } catch (err) {
       setError(err.message);
       console.error("Error adding product:", err);
     } finally {
-      setIsLoading(false);
+      setIsAddingProduct(false);
     }
   };
 
+  const handleEditClick = (product) => {
+    setSelectedProduct(product);
+    setShowEditProductModal(true);
+  };
+
   const handleEditProduct = async (id, productData) => {
-    setIsLoading(true);
+    setIsEditingProduct(true);
     setError("");
     try {
       const updatedProduct = await productAPI.updateProduct(id, productData);
       setProducts((prev) =>
         prev.map((product) => (product.id === id ? updatedProduct : product))
       );
+      setShowEditProductModal(false);
+      setSelectedProduct(null);
     } catch (err) {
       setError(err.message);
       console.error("Error updating product:", err);
     } finally {
-      setIsLoading(false);
+      setIsEditingProduct(false);
     }
   };
 
@@ -715,7 +888,6 @@ export default function Products() {
       </h1>
       <InventoryNav />
 
-      {/* Error Display */}
       {error && (
         <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 border border-red-300 rounded">
           <strong>Error:</strong> {error}
@@ -729,11 +901,10 @@ export default function Products() {
       )}
 
       <div className="mt-4 space-y-4 px-2 md:px-0">
-        {/* Summary Cards - Retail, Services, Total */}
+        {/* Summary Cards - UPDATED */}
         <div className="">
           <div className="p-2 bg-white rounded shadow">
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:overflow-x-auto sm:justify-between sm:space-x-1 md:space-x-2">
-              {/* RETAIL */}
               <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
                 <div className="flex items-center">
                   <div className="p-1 mr-1 rounded bg-blue-100 md:mr-2 md:p-1.5">
@@ -741,33 +912,31 @@ export default function Products() {
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Retail
+                      Total Products
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {formatCurrency(summary.retail)}
+                      {summary.totalProducts}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* SERVICES */}
               <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
                 <div className="flex items-center">
                   <div className="p-1 mr-1 rounded bg-green-100 md:mr-2 md:p-1.5">
-                    <FaCogs className="text-xs text-green-600 md:text-sm" />
+                    <FaTags className="text-xs text-green-600 md:text-sm" />
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Services
+                      Categories
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {formatCurrency(summary.services)}
+                      {summary.uniqueDescriptions}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* TOTAL */}
               <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
                 <div className="flex items-center">
                   <div className="p-1 mr-1 rounded bg-purple-100 md:mr-2 md:p-1.5">
@@ -775,10 +944,26 @@ export default function Products() {
                   </div>
                   <div>
                     <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Total
+                      Avg Price
                     </h3>
                     <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {formatCurrency(summary.total)}
+                      {formatCurrency(summary.averagePrice)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
+                <div className="flex items-center">
+                  <div className="p-1 mr-1 rounded bg-orange-100 md:mr-2 md:p-1.5">
+                    <FaMoneyBillWave className="text-xs text-orange-600 md:text-sm" />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
+                      Highest Price
+                    </h3>
+                    <p className="text-sm font-bold text-gray-800 md:text-lg">
+                      {formatCurrency(summary.highestPrice)}
                     </p>
                   </div>
                 </div>
@@ -787,12 +972,10 @@ export default function Products() {
           </div>
         </div>
 
-        {/* Filters and Actions */}
+        {/* Search and Actions Section */}
         <div className="p-3 bg-white rounded shadow">
           <div className="flex flex-col w-full gap-3 md:flex-row items-stretch">
-            {/* Left side - Search and filters */}
             <div className="flex flex-col flex-grow gap-3 md:flex-row">
-              {/* Search bar and filter button for mobile */}
               {isMobile ? (
                 <div className="flex w-full gap-2">
                   <div className="flex-1 relative">
@@ -819,7 +1002,6 @@ export default function Products() {
                 </div>
               ) : (
                 <>
-                  {/* Search bar for desktop */}
                   <div className="relative w-full md:w-48">
                     <input
                       type="text"
@@ -830,46 +1012,25 @@ export default function Products() {
                     />
                     <FaSearch className="absolute right-2 top-1.5 text-xs text-gray-400" />
                   </div>
-
-                  {/* Desktop filters */}
-                  <div className="flex gap-3">
-                    {/* Category filter */}
-                    <div className="w-auto">
-                      <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="">All Categories</option>
-                        {categories.map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* User filter */}
-                    <div className="w-auto">
-                      <select
-                        value={selectedUser}
-                        onChange={(e) => setSelectedUser(e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="">All Users</option>
-                        {users.map((user) => (
-                          <option key={user} value={user}>
-                            {user}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  
+                  <div className="w-full md:w-48">
+                    <select
+                      value={selectedDescription}
+                      onChange={(e) => setSelectedDescription(e.target.value)}
+                      className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="">All Categories</option>
+                      {descriptions.map((description) => (
+                        <option key={description} value={description}>
+                          {description}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Right side - Action buttons */}
             <div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
               <button
                 onClick={() => setShowImportModal(true)}
@@ -897,42 +1058,21 @@ export default function Products() {
             </div>
           </div>
 
-          {/* Filter dropdown for mobile */}
-          {isMobile && showFilters && (
+          {isMobile && showFilters && descriptions.length > 0 && (
             <div className="grid grid-cols-1 gap-2 p-2 mt-3 bg-gray-50 rounded">
-              {/* Category filter */}
               <div>
                 <label className="block mb-1 text-xs font-medium text-gray-700">
-                  Category
+                  Description
                 </label>
                 <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  value={selectedDescription}
+                  onChange={(e) => setSelectedDescription(e.target.value)}
                   className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="">All Categories</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* User filter */}
-              <div>
-                <label className="block mb-1 text-xs font-medium text-gray-700">
-                  User
-                </label>
-                <select
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">All Users</option>
-                  {users.map((user) => (
-                    <option key={user} value={user}>
-                      {user}
+                  {descriptions.map((description) => (
+                    <option key={description} value={description}>
+                      {description}
                     </option>
                   ))}
                 </select>
@@ -958,7 +1098,6 @@ export default function Products() {
 
         {/* Products Table */}
         <div className="overflow-hidden bg-white rounded shadow">
-          {/* Loading State */}
           {isLoading && products.length === 0 && (
             <div className="py-12 text-center">
               <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -966,25 +1105,21 @@ export default function Products() {
             </div>
           )}
 
-          {/* Desktop Table */}
           <div className="hidden overflow-x-auto text-black md:block">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Product
+                    Name
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
                     SKU
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Measurement
+                    Category
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Sold
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Sales Amount
+                    Price
                   </th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
                     Actions
@@ -994,27 +1129,22 @@ export default function Products() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredProducts.map((product) => (
                   <tr key={product.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-black">
+                      {product.name || "N/A"}
+                    </td>
                     <td className="px-4 py-3 text-sm font-medium text-black">
-                      {product.name}
+                      {product.sku || "N/A"}
                     </td>
                     <td className="px-4 py-3 text-sm text-black">
-                      {product.sku}
+                      {product.description || "N/A"}
                     </td>
                     <td className="px-4 py-3 text-sm text-black">
-                      {product.measurement || product.measuremnt}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-black">
-                      {product.sold || 0}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-black">
-                      {formatCurrency(
-                        (product.price || 0) * (product.sold || 0)
-                      )}
+                      {formatCurrency(product.price)}
                     </td>
                     <td className="px-4 py-3 text-sm text-black">
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleEditProduct(product.id, product)}
+                          onClick={() => handleEditClick(product)}
                           className="flex items-center px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200"
                           disabled={isLoading}
                         >
@@ -1037,7 +1167,6 @@ export default function Products() {
             </table>
           </div>
 
-          {/* Mobile Cards */}
           <div className="text-black md:hidden">
             {filteredProducts.map((product) => (
               <div key={product.id} className="p-4 border-b border-gray-200">
@@ -1045,31 +1174,23 @@ export default function Products() {
                   <div className="flex-1">
                     <div className="flex justify-between">
                       <span className="font-medium text-black">
-                        {product.name}
+                        {product.name || "N/A"}
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-gray-600">
-                      SKU: {product.sku}
+                      SKU: {product.sku || "N/A"}
                     </div>
                     <div className="mt-1 text-sm text-gray-600">
-                      Measurement: {product.measurement || product.measuremnt}
+                      Category: {product.description || "N/A"}
                     </div>
-                    <div className="flex justify-between mt-2">
+                    <div className="mt-2">
                       <div className="text-sm">
-                        <div>Sold: {product.sold || 0}</div>
-                      </div>
-                      <div className="text-sm">
-                        <div>
-                          Sales:{" "}
-                          {formatCurrency(
-                            (product.price || 0) * (product.sold || 0)
-                          )}
-                        </div>
+                        Price: {formatCurrency(product.price)}
                       </div>
                     </div>
                     <div className="flex gap-2 mt-3">
                       <button
-                        onClick={() => handleEditProduct(product.id, product)}
+                        onClick={() => handleEditClick(product)}
                         className="flex-1 px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200 flex items-center justify-center"
                         disabled={isLoading}
                       >
@@ -1099,7 +1220,6 @@ export default function Products() {
         </div>
       </div>
 
-      {/* Fixed Action Buttons for Mobile */}
       {isMobile && (
         <div className="fixed bottom-4 right-4 md:hidden">
           <div className="flex flex-col gap-3">
@@ -1131,7 +1251,6 @@ export default function Products() {
         </div>
       )}
 
-      {/* Modals */}
       <ImportCSVModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
@@ -1142,7 +1261,18 @@ export default function Products() {
         isOpen={showAddProductModal}
         onClose={() => setShowAddProductModal(false)}
         onAdd={handleAddProduct}
-        isLoading={isLoading}
+        isLoading={isAddingProduct}
+      />
+
+      <EditProductModal
+        isOpen={showEditProductModal}
+        onClose={() => {
+          setShowEditProductModal(false);
+          setSelectedProduct(null);
+        }}
+        onEdit={handleEditProduct}
+        isLoading={isEditingProduct}
+        product={selectedProduct}
       />
     </div>
   );
