@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://pgims-production.up.railway.app/api";
+const API_BASE_URL = "https://pgimsapp-production.up.railway.app/api";
 
 export const customerAPI = {
   async getAuthHeaders() {
@@ -110,6 +110,27 @@ export const customerAPI = {
       const errorData = await response.json().catch(() => null);
       throw new Error(
         errorData?.message || `Failed to make deposit: ${response.status}`
+      );
+    }
+
+    return response.json();
+  },
+
+  // Add this to your existing customerAPI object
+  async getCustomerDeposits(customerId) {
+    const headers = await this.getAuthHeaders();
+    const response = await fetch(
+      `${API_BASE_URL}/customers/${customerId}/deposits`,
+      {
+        method: "GET",
+        headers: headers,
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.message || `Failed to fetch deposits: ${response.status}`
       );
     }
 

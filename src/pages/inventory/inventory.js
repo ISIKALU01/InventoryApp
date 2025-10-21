@@ -18,7 +18,7 @@ import {
   FaExclamationTriangle,
 } from "react-icons/fa";
 
-const API_BASE_URL = "https://pgims-production.up.railway.app/api";
+const API_BASE_URL = "https://pgimsapp-production.up.railway.app/api";
 
 // API Service functions with authentication
 const inventoryAPI = {
@@ -712,9 +712,9 @@ const EditStockModal = ({
 
 // Helper function to safely format numbers
 const formatCurrency = (value) => {
-  if (value === null || value === undefined) return "$0.00";
+  if (value === null || value === undefined) return "N0.00";
   const num = typeof value === "string" ? parseFloat(value) : value;
-  return isNaN(num) ? "$0.00" : `$${num.toFixed(2)}`;
+  return isNaN(num) ? "N0.00" : `N${num.toFixed(2)}`;
 };
 
 // Main Inventory Component

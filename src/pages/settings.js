@@ -18,7 +18,7 @@ import {
   FaDatabase
 } from "react-icons/fa";
 
-const API_BASE_URL = "https://pgims-production.up.railway.app/api";
+const API_BASE_URL = "https://pgimsapp-production.up.railway.app/api";
 
 // API Service for Stores
 const storeAPI = {
