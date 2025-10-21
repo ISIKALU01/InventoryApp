@@ -3,7 +3,7 @@ import TransactionNav from "../../components/TransactionNav";
 import ProductList from "../../components/transaction/productList";
 import OrderPreview from "../../components/transaction/orderPreview";
 import { useState, useEffect } from "react";
-import { inventoryAPI, orderItemAPI, orderAPI } from "../transaction/salesApi";
+import { inventoryAPI, orderItemAPI, orderAPI } from "../../../utils/salesApi";
 
 export default function SalesInvoice() {
   const [inventory, setInventory] = useState([]);
