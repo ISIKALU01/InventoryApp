@@ -496,19 +496,21 @@ export const orderItemAPI = {
   },
 };
 
-
-
 export const orderAPI = {
-  // Create a new order
   async createOrder() {
     try {
       const headers = await getAuthHeaders();
 
-      // Only include the required fields from the API documentation
+      // Use a valid product that exists and has stock
       const orderData = {
-        customer_id: 1, // Default to walk-in customer
-        items: [], // Empty array to start
-        payment_method: "cash", // Default payment method
+        customer_id: 1,
+        items: [
+          {
+            product_id: 1, // Make sure this product exists and has stock
+            quantity: 100,
+          },
+        ],
+        payment_method: "cash",
       };
 
       console.log("Creating order with data:", orderData);

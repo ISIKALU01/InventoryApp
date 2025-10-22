@@ -1,19 +1,16 @@
 // pages/transaction/sales-invoice.js
 import TransactionNav from "../../components/TransactionNav";
-import ProductList from "../../components/transaction/productList";
-import OrderPreview from "../../components/transaction/orderPreview";
 import { useState, useEffect } from "react";
-import { inventoryAPI, orderItemAPI, orderAPI } from "../../../utils/salesApi";
+import { inventoryAPI } from "../../../utils/salesApi";
 
 export default function SalesInvoice() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stores, setStores] = useState([]);
-  const [cart, setCart] = useState([]);
-  const [currentOrderId, setCurrentOrderId] = useState(null);
-  const [creatingOrder, setCreatingOrder] = useState(false);
-
+  const [selectedStore, setSelectedStore] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredInventory, setFilteredInventory] = useState([]);
 
   // Fetch inventory data
   useEffect(() => {
@@ -48,107 +45,82 @@ export default function SalesInvoice() {
     fetchInventory();
   }, []);
 
-  // Create a new order when component mounts
+  // Filter inventory based on store and search term
   useEffect(() => {
-    createNewOrder();
-  }, []);
-
-  // Create new order function
-  const createNewOrder = async () => {
-    try {
-      setCreatingOrder(true);
-      const response = await orderAPI.createOrder();
-
-      if (response && response.data) {
-        const orderId = response.data.id || response.data._id;
-        setCurrentOrderId(orderId);
-        console.log("New order created with ID:", orderId);
-      } else {
-        throw new Error("Invalid response from order creation");
-      }
-    } catch (error) {
-      console.error("Failed to create order:", error);
-      alert("Failed to create new order. Please refresh the page.");
-    } finally {
-      setCreatingOrder(false);
-    }
-  };
-
-  // Add item to cart
-  const addToCart = (cartItem) => {
-    const existingItem = cart.find(
-      (item) => item.productId === cartItem.productId
-    );
-
-    if (existingItem) {
-      setCart(
-        cart.map((item) =>
-          item.productId === cartItem.productId
-            ? { ...cartItem, quantity: item.quantity + 1 }
-            : item
-        )
+    let filtered = inventory;
+    
+    // Filter by store
+    if (selectedStore) {
+      filtered = filtered.filter(item => 
+        item.store && item.store.name === selectedStore
       );
-    } else {
-      setCart([...cart, cartItem]);
     }
-  };
-
-  // Update cart
-  const updateCart = (updatedCart) => {
-    setCart(updatedCart);
-  };
-
-  // Clear cart and create new order
-  const clearCart = async () => {
-    if (cart.length === 0) {
-      await createNewOrder();
-      return;
-    }
-
-    try {
-      const deletePromises = cart.map((item) =>
-        item.orderItemId
-          ? orderItemAPI.deleteOrderItem(item.orderItemId)
-          : Promise.resolve()
-      );
-
-      await Promise.all(deletePromises);
-      setCart([]);
-      await createNewOrder();
-      console.log("Cart cleared and new order created");
-    } catch (error) {
-      console.error("Failed to clear cart:", error);
-      alert("Failed to clear cart");
-    }
-  };
-
-  // In SalesInvoice component - update the processOrder function
-  const processOrder = async (orderData) => {
-    console.log("Processing order:", orderData);
-
-    try {
-      // Update order with final details
-      await orderAPI.updateOrder(currentOrderId, {
-        status: "completed",
-        total_amount: orderData.total.toFixed(2),
-        payment_method: orderData.paymentMethod || "cash",
-        payment_status: "paid",
+    
+    // Filter by search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(item => {
+        const productName = item.name || (item.product && item.product.name) || '';
+        const productSku = (item.product && item.product.sku) || '';
+        const storeName = (item.store && item.store.name) || '';
+        
+        return (
+          productName.toLowerCase().includes(term) ||
+          productSku.toLowerCase().includes(term) ||
+          storeName.toLowerCase().includes(term) ||
+          (item.id && item.id.toString().includes(term)) ||
+          (item._id && item._id.toString().includes(term))
+        );
       });
-
-      alert(
-        `Order #${currentOrderId} processed successfully! Total: ₦${orderData.total.toFixed(
-          2
-        )}`
-      );
-
-      // Clear cart and create new order
-      setCart([]);
-      await createNewOrder();
-    } catch (error) {
-      console.error("Failed to process order:", error);
-      alert(`Failed to process order: ${error.message}`);
     }
+    
+    setFilteredInventory(filtered);
+  }, [selectedStore, searchTerm, inventory]);
+
+  // Handle store filter change
+  const handleStoreChange = (e) => {
+    setSelectedStore(e.target.value);
   };
+
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  // Handle search form submission
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+  };
+
+  // Helper function to determine stock status
+  const getStockStatus = (stock) => {
+    const stockNum = parseInt(stock) || 0;
+    if (stockNum === 0) return 'out-of-stock';
+    if (stockNum <= 10) return 'low-stock';
+    return 'in-stock';
+  };
+
+  // Get stock status badge
+  const getStockBadge = (stockStatus, stock) => {
+    const styles = {
+      'in-stock': 'bg-green-100 text-green-800',
+      'low-stock': 'bg-yellow-100 text-yellow-800',
+      'out-of-stock': 'bg-red-100 text-red-800'
+    };
+    
+    const labels = {
+      'in-stock': 'In Stock',
+      'low-stock': `Low Stock (${stock})`,
+      'out-of-stock': 'Out of Stock'
+    };
+    
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${styles[stockStatus]}`}>
+        {labels[stockStatus]}
+      </span>
+    );
+  };
+
   return (
     <div className="pt-0 mt-0 font-raleway">
       <h1 className="text-xl font-normal text-gray-800 mb-2 hidden md:block">
@@ -156,88 +128,175 @@ export default function SalesInvoice() {
       </h1>
       <TransactionNav />
 
-      {/* Order Info Banner */}
-      <div
-        className={`rounded-md p-3 mb-4 ${
-          currentOrderId
-            ? "bg-blue-50 border border-blue-200"
-            : "bg-yellow-50 border border-yellow-200"
-        }`}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            {creatingOrder ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                <span className="text-blue-700 text-sm">
-                  Creating new order...
-                </span>
-              </>
-            ) : currentOrderId ? (
-              <>
-                <svg
-                  className="w-5 h-5 text-blue-400 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+      <div className="flex flex-col lg:flex-row gap-6 mt-6">
+        {/* Products Section */}
+        <div className="flex-1 bg-white rounded-lg shadow-md p-4">
+          {/* Search Header */}
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">Products</h2>
+            
+            <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row gap-3 mb-4 w-full">
+              <div className="flex-1 min-w-0">
+                <select 
+                  value={selectedStore}
+                  onChange={handleStoreChange}
+                  className="w-full px-4 py-3 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
+                  <option value="">All Stores</option>
+                  {stores.map(store => (
+                    <option key={store} value={store}>
+                      {store}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="flex-1 min-w-0 flex">
+                <input
+                  type="text"
+                  placeholder="Search products by name, SKU, store, or ID..."
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  className="flex-1 min-w-0 px-4 py-3 border border-gray-300 rounded-l-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                />
+                <button 
+                  type="submit"
+                  className="px-4 py-3 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 transition-colors outline-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Products List */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 border-b pb-2">
+              Available Products ({loading ? '...' : filteredInventory.length})
+              {selectedStore && ` - Filtered by: ${selectedStore}`}
+              {searchTerm && ` - Search: "${searchTerm}"`}
+            </h3>
+            
+            {loading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <span className="ml-3 text-gray-600">Loading inventory...</span>
+              </div>
+            ) : error ? (
+              <div className="text-center text-red-500 py-6">
+                <svg className="w-8 h-8 mx-auto mb-2 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="text-blue-700 text-sm">
-                  Current Order: <strong>#{currentOrderId}</strong>
-                </span>
-              </>
+                <p className="text-sm">Error loading products</p>
+                <p className="text-xs mt-1">{error}</p>
+              </div>
+            ) : filteredInventory.length === 0 ? (
+              <div className="text-center text-gray-500 py-6">
+                <svg className="w-8 h-8 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p className="text-sm">No products found</p>
+                <p className="text-xs mt-1">
+                  {selectedStore || searchTerm 
+                    ? 'Try changing your filters or search term' 
+                    : 'Add products to your inventory to see them here'
+                  }
+                </p>
+              </div>
             ) : (
-              <>
-                <svg
-                  className="w-5 h-5 text-yellow-400 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"
-                  />
-                </svg>
-                <span className="text-yellow-700 text-sm">No active order</span>
-              </>
+              <div className="space-y-2">
+                {filteredInventory.map((item) => {
+                  const stockStatus = getStockStatus(item.quantity || item.stockQuantity);
+
+                  return (
+                    <div 
+                      key={item.id || item._id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-800 truncate">
+                          {item.name || (item.product && item.product.name) || 'Unknown Product'}
+                        </div>
+                        <div className="text-xs text-gray-500 flex flex-wrap gap-2 mt-1">
+                          <span>ID: {item.id || item._id}</span>
+                          {item.product?.sku && <span>SKU: {item.product.sku}</span>}
+                          {item.store?.name && <span>Store: {item.store.name}</span>}
+                        </div>
+                        <div className="flex items-center mt-1 space-x-2">
+                          {getStockBadge(stockStatus, item.quantity || item.stockQuantity)}
+                          {item.category && (
+                            <span className="text-xs text-gray-500 capitalize">
+                              {item.category}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-2">
+                        <div className="font-semibold text-gray-800">
+                          ₦{(parseFloat(item.product?.price) || 0).toFixed(2)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Stock: {item.quantity || item.stockQuantity || 0}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
-          <button
-            onClick={clearCart}
-            disabled={creatingOrder}
-            className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors disabled:opacity-50"
-          >
-            {cart.length > 0 ? "New Order" : "Refresh Order"}
-          </button>
         </div>
-      </div>
 
-      <div className="flex flex-col lg:flex-row gap-6 mt-6">
-        <ProductList
-          inventory={inventory}
-          loading={loading}
-          error={error}
-          onAddToCart={addToCart}
-          stores={stores}
-          currentOrderId={currentOrderId}
-        />
+        {/* Order Preview Section */}
+        <div className="lg:w-1/3 bg-white rounded-lg shadow-md p-4">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">Order Preview</h2>
+          
+          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <div className="text-center text-gray-500 py-8">
+              <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              <p className="text-sm">No items in order</p>
+              <p className="text-xs mt-1">Select products to add to your order</p>
+            </div>
+          </div>
 
-        <OrderPreview
-          cart={cart}
-          onUpdateCart={updateCart}
-          onClearCart={clearCart}
-          onProcessOrder={processOrder}
-          currentOrderId={currentOrderId}
-        />
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Subtotal:</span>
+              <span className="font-medium">₦0.00</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Tax:</span>
+              <span className="font-medium">₦0.00</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Discount:</span>
+              <span className="font-medium">₦0.00</span>
+            </div>
+            <div className="flex justify-between text-lg font-semibold border-t pt-2">
+              <span>Total:</span>
+              <span>₦0.00</span>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            <button
+              disabled
+              className="w-full bg-gray-300 text-gray-500 py-3 px-4 rounded-md font-medium cursor-not-allowed"
+            >
+              Process Order
+            </button>
+            <button
+              disabled
+              className="w-full bg-gray-100 text-gray-400 py-2 px-4 rounded-md font-medium cursor-not-allowed"
+            >
+              Clear Order
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
