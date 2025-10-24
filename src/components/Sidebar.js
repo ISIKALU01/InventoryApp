@@ -162,7 +162,8 @@ export default function Sidebar({ onToggle }) {
       roles: ['admin', 'staff'],
       submenu: [
         { name: 'Bank Management', path: '/folio/bank-management', icon: <FaUniversity className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Manage Customer', path: '/folio/customer-management', icon: <FaUsers className="w-4 h-4" />, roles: ['admin', 'staff'] },
+        { name: 'Manage Customer', path: '/folio/customer-management', icon: <FaUsers className="w-4 h-4" />, roles: ['admin'] },
+        { name: 'Manage Supplier', path: '/folio/supply-management', icon: <FaUsers className="w-4 h-4" />, roles: ['admin', 'staff'] },
       ]
     },
   ];

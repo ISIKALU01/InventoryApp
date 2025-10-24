@@ -18,6 +18,10 @@ export default function CustomerNav() {
       name: "Manage Customer",
       path: "/folio/customer-management",
     },
+    {
+      name: "Manage Supplier",
+      path: "/folio/supply-management",
+    }
   ];
 
   // Check screen size on mount and resize
