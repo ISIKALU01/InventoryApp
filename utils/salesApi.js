@@ -568,6 +568,27 @@ export const orderAPI = {
     }
   },
 
+  // Add this to your orderAPI service
+  async getAllOrders() {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/orders`, {
+        method: "GET",
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch orders: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Order API Error:", error);
+      throw error;
+    }
+  },
+
   // Update order
   async updateOrder(id, orderData) {
     try {
