@@ -127,7 +127,7 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
 		sku: "",
 		description: "",
 		price: "", // Selling price
-		stock: "", // Stock quantity
+		cost_price: "", // cost_price quantity
 	});
 
 	const handleSubmit = async (e) => {
@@ -137,32 +137,22 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
 		const processedData = {
 			...formData,
 			price: parseFloat(formData.price) || 0,
-			stock: parseInt(formData.stock) || 0,
+			cost_price: parseInt(formData.cost_price) || 0,
 		};
 
+		console.log("Data being sent:", processedData);
 		await onAdd(processedData);
 	};
 
-	const handleChange = (e) => {
-		const { name, value } = e.target;
+const handleChange = (e) => {
+	const { name, value } = e.target;
 
-		if (name === "price") {
-			setFormData({
-				...formData,
-				[name]: value === "" ? "" : value,
-			});
-		} else if (name === "stock") {
-			setFormData({
-				...formData,
-				[name]: value === "" ? "" : value,
-			});
-		} else {
-			setFormData({
-				...formData,
-				[name]: value,
-			});
-		}
-	};
+	setFormData((prev) => ({
+		...prev,
+		[name]: value === "" ? "" : value,
+	}));
+};
+
 
 	useEffect(() => {
 		if (!isOpen) {
@@ -171,7 +161,7 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
 				sku: "",
 				description: "",
 				price: "",
-				stock: "",
+				cost_price: "",
 			});
 		}
 	}, [isOpen]);
@@ -262,14 +252,14 @@ const AddProductModal = ({ isOpen, onClose, onAdd, isLoading }) => {
 						</div>
 						<div>
 							<label className="block mb-1 text-sm font-medium text-gray-700">
-								Stock Quantity *
+								Cost price *
 							</label>
 							<input
 								type="number"
 								min="0"
 								step="1"
-								name="stock"
-								value={formData.stock}
+								name="cost_price"
+								value={formData.cost_price}
 								onChange={handleChange}
 								required
 								disabled={isLoading}
@@ -558,7 +548,7 @@ const productAPI = {
 				name: productData.name,
 				description: productData.description || "",
 				price: productData.price,
-				stock: productData.stock,
+				cost_price: productData.cost_price,
 			};
 
 			console.log("Sending product data to API:", apiProductData);
