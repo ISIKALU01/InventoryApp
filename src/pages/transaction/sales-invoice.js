@@ -19,30 +19,42 @@ export default function SalesInvoice() {
 	const [cartLoading, setCartLoading] = useState(false);
 	const [cart, setCart] = useState([]);
 	const [showOrderModal, setShowOrderModal] = useState(false);
-const [paymentMethod, setPaymentMethod] = useState("");
-const [selectedCustomer, setSelectedCustomer] = useState("");
-const [customers, setCustomers] = useState([]);
+	const [paymentMethod, setPaymentMethod] = useState("");
+	const [selectedCustomer, setSelectedCustomer] = useState("");
+	const [customers, setCustomers] = useState([]);
 
 	const token = localStorage.getItem("token");
 
-  useEffect(() => {
-		if (paymentMethod === "customer_balance") {
-			const fetchCustomers = async () => {
-				try {
-					const token = localStorage.getItem("token");
-					const response = await axios.get(`${BASE_URL}/customers`, {
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					});
-					setCustomers(response.data);
-				} catch (error) {
-					console.error("Error fetching customers:", error);
-				}
-			};
-			fetchCustomers();
+useEffect(() => {
+	const fetchCustomers = async () => {
+		try {
+			const token = localStorage.getItem("token");
+			let url = "";
+
+			// Choose endpoint based on payment method
+			if (paymentMethod === "customer_balance") {
+				url = `${BASE_URL}/customers`;
+			} else if (paymentMethod === "credit_limit") {
+				url = `${BASE_URL}/reports/customer-credit`;
+			} else {
+				return; // no fetch needed
+			}
+
+			const response = await axios.get(url, {
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			});
+
+			setCustomers(response.data);
+		} catch (error) {
+			console.error("Error fetching customers:", error);
 		}
-	}, [paymentMethod]);
+	};
+
+	fetchCustomers();
+}, [paymentMethod]);
+
 
 	// Fetch inventory data
 	useEffect(() => {
@@ -256,32 +268,45 @@ const [customers, setCustomers] = useState([]);
 	// Process the order
 	const handleProcessOrder = async () => {
 		try {
-			const orderItems = cart.map(item => ({
+			const orderItems = cart.map((item) => ({
 				product_id: item.product_id,
-				quantity: item.default_quantity_added
+				quantity: item.default_quantity_added,
 			}));
 
 			const orderData = {
 				customer_id: selectedCustomer || null,
 				items: orderItems,
-				payment_method: paymentMethod
+				payment_method: paymentMethod,
 			};
 
 			const response = await axios.post(`${BASE_URL}/orders`, orderData, {
 				headers: {
 					Authorization: `Bearer ${token}`,
-					'Content-Type': 'application/json'
-				}
+					"Content-Type": "application/json",
+				},
 			});
 
 			if (response.data) {
-				alert('Order processed successfully!');
+				alert("Order processed successfully!");
 				setCart([]);
 				setShowOrderModal(false);
 			}
 		} catch (error) {
-			console.error('Error processing order:', error);
-			alert('Failed to process order. Please try again.');
+			console.error("Error processing order:", error);
+
+			if (error.response && error.response.data) {
+				// You can inspect what Laravel sent back
+				console.log("Error details:", error.response.data);
+
+				// Example: show a specific message from backend
+				const message =
+					error.response.data.message ||
+					"Failed to process order. Please try again.";
+				alert(message);
+			} else {
+				// Network or unexpected error
+				alert("Something went wrong. Please try again later.");
+			}
 		}
 	};
 
@@ -356,31 +381,49 @@ const [customers, setCustomers] = useState([]);
 								<option value="card">Card</option>
 								<option value="bank_transfer">Bank Transfer</option>
 								<option value="customer_balance">Customer Balance</option>
+								<option value="credit_limit">Credit Limit</option>
 								<option value="complimentary">Complimentary</option>
 								<option value="loyalty">Loyalty</option>
 							</select>
 						</div>
 
-						{/* Customer Select - Appears only when "Customer Balance" is chosen */}
-						<div className="mb-6">
-							<label className="block text-gray-700 font-medium mb-2">
-								Select Customer
-							</label>
-							<select
-								className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-600 text-black outline-none"
-								value={selectedCustomer}
-								onChange={(e) => setSelectedCustomer(e.target.value)}
-							>
-								<option value="">-- Select Customer --</option>
-								{customers.map((cust) => (
-									<option key={cust.id} value={cust.id}>
-										{cust.name}{" "}
-										{paymentMethod === "customer_balance" &&
-											`— ₦${Number(cust.balance).toLocaleString()}`}
-									</option>
-								))}
-							</select>
-						</div>
+						{(paymentMethod === "customer_balance" ||
+							paymentMethod === "credit_limit") && (
+							<div className="mb-6">
+								<label
+									htmlFor="customer"
+									className="block text-gray-700 font-medium mb-2"
+								>
+									Select Customer
+								</label>
+								<select
+									id="customer"
+									className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-600 text-black outline-none"
+									value={selectedCustomer}
+									onChange={(e) => setSelectedCustomer(e.target.value)}
+								>
+									<option value="">-- Select Customer --</option>
+									{customers.map((cust) => (
+										<option
+											key={cust.id}
+											value={cust.id}
+											disabled={
+												paymentMethod === "credit_limit" &&
+												Number(cust.credit_limit) === 0
+											} // 🔒 Disable customers with no credit limit
+										>
+											{cust.name} —{" "}
+											{paymentMethod === "customer_balance" &&
+												` ₦ ${Number(cust.balance).toLocaleString()}`}{" "}
+											{paymentMethod === "credit_limit" &&
+												` (Credit Limit: ₦${Number(
+													cust.credit_limit
+												).toLocaleString()})`}
+										</option>
+									))}
+								</select>
+							</div>
+						)}
 
 						<div className="flex justify-end gap-2">
 							<button
