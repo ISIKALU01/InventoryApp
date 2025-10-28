@@ -35,10 +35,6 @@ export default function InventoryNav() {
       name: "Purchase Log",
       path: "/inventory/purchase-log",
     },
-    {
-      name: "Cost of Goods Sold",
-      path: "/inventory/cost-of-goods-sold",
-    },
   ];
 
   // Check screen size on mount and resize

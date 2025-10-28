@@ -786,3 +786,15 @@ export default function SalesInvoice() {
     </div>
   );
 }
+
+
+   const accountsMenu = { 
+      name: 'Accounts', 
+      icon: <FaUsers className="w-5 h-5" />,
+      roles: ['admin'],
+      submenu: [
+        { name: 'Cash', path: '/accounts/cash', icon: <FaWallet className="w-4 h-4" />, roles: ['admin'] },
+        { name: 'Float Disbursement', path: '/accounts/float-disbursement', icon: <FaCreditCard className="w-4 h-4" />, roles: ['admin'] },
+        { name: 'Float', path: '/accounts/float', icon: <FaMoneyCheck className="w-4 h-4" />, roles: ['admin'] },
+      ]
+    }

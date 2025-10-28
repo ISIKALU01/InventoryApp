@@ -22,10 +22,6 @@ export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrde
       path: '/transaction/expenses'
     },
     { 
-      name: 'Payment', 
-      path: '/transaction/payments'
-    },
-    { 
       name: 'Sales List', 
       path: '/transaction/sales-list'
     },
