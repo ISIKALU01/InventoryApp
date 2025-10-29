@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Image from "next/image";
+import { FaShieldAlt, FaChartBar, FaUsers, FaBox, FaEnvelope, FaLock } from "react-icons/fa";
 import BASE_URL from "../../config";
 import {
   setLocalStorage,
@@ -192,63 +193,31 @@ export default function Login() {
 
           <div className="mt-12 space-y-4">
             <div className="flex items-center">
-              <div className="bg-white bg-opacity-20 rounded-full p-2 mr-4">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                  />
-                </svg>
+              <div className="bg-blue bg-opacity-20 rounded-full p-2 mr-4">
+                <FaShieldAlt className="h-6 w-6" />
               </div>
               <span>Secure authentication</span>
             </div>
 
             <div className="flex items-center">
-              <div className="bg-white bg-opacity-20 rounded-full p-2 mr-4">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z"
-                  />
-                </svg>
+              <div className="bg-blue bg-opacity-20 rounded-full p-2 mr-4">
+                <FaChartBar className="h-6 w-6" />
               </div>
               <span>Advanced reporting</span>
             </div>
 
             <div className="flex items-center">
-              <div className="bg-white bg-opacity-20 rounded-full p-2 mr-4">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
+              <div className="bg-blue bg-opacity-20 rounded-full p-2 mr-4">
+                <FaUsers className="h-6 w-6" />
               </div>
               <span>User management</span>
+            </div>
+
+            <div className="flex items-center">
+              <div className="bg-blue bg-opacity-20 rounded-full p-2 mr-4">
+                <FaBox className="h-6 w-6" />
+              </div>
+              <span>Inventory tracking</span>
             </div>
           </div>
         </div>
@@ -278,7 +247,7 @@ export default function Login() {
             </div>
 
             <div className="text-center mb-6">
-              <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
+              <h2 className="text-3xl font-bold text-gray-900">Welcome</h2>
               <p className="mt-2 text-gray-600">Sign in to your account</p>
             </div>
 
@@ -302,20 +271,7 @@ export default function Login() {
                 </label>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
-                      />
-                    </svg>
+                    <FaEnvelope className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
                     id="email"
@@ -341,20 +297,7 @@ export default function Login() {
                 </label>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                      />
-                    </svg>
+                    <FaLock className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
                     id="password"
