@@ -22,39 +22,56 @@ export default function SalesInvoice() {
 	const [paymentMethod, setPaymentMethod] = useState("");
 	const [selectedCustomer, setSelectedCustomer] = useState("");
 	const [customers, setCustomers] = useState([]);
+	
+	// Success pop-up state
+	const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+	const [successMessage, setSuccessMessage] = useState("");
 
 	const token = localStorage.getItem("token");
 
-useEffect(() => {
-	const fetchCustomers = async () => {
-		try {
-			const token = localStorage.getItem("token");
-			let url = "";
-
-			// Choose endpoint based on payment method
-			if (paymentMethod === "customer_balance") {
-				url = `${BASE_URL}/customers`;
-			} else if (paymentMethod === "credit_limit") {
-				url = `${BASE_URL}/reports/customer-credit`;
-			} else {
-				return; // no fetch needed
-			}
-
-			const response = await axios.get(url, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
-
-			setCustomers(response.data);
-		} catch (error) {
-			console.error("Error fetching customers:", error);
-		}
+	// Show success pop-up
+	const showSuccess = (message) => {
+		setSuccessMessage(message);
+		setShowSuccessPopup(true);
+		setTimeout(() => {
+			setShowSuccessPopup(false);
+		}, 3000); // Auto hide after 3 seconds
 	};
 
-	fetchCustomers();
-}, [paymentMethod]);
+	// Manual close success pop-up
+	const closeSuccessPopup = () => {
+		setShowSuccessPopup(false);
+	};
 
+	useEffect(() => {
+		const fetchCustomers = async () => {
+			try {
+				const token = localStorage.getItem("token");
+				let url = "";
+
+				// Choose endpoint based on payment method
+				if (paymentMethod === "customer_balance") {
+					url = `${BASE_URL}/customers`;
+				} else if (paymentMethod === "credit_limit") {
+					url = `${BASE_URL}/reports/customer-credit`;
+				} else {
+					return; // no fetch needed
+				}
+
+				const response = await axios.get(url, {
+					headers: {
+						Authorization: `Bearer ${token}`,
+					},
+				});
+
+				setCustomers(response.data);
+			} catch (error) {
+				console.error("Error fetching customers:", error);
+			}
+		};
+
+		fetchCustomers();
+	}, [paymentMethod]);
 
 	// Fetch inventory data
 	useEffect(() => {
@@ -207,11 +224,16 @@ useEffect(() => {
 			);
 			setSelectedItem(response.data);
 			console.log("Cart item details:", response.data);
-			alert(`${response.data.message}`);
+			
+			// ✅ Show success pop-up instead of alert
+			showSuccess("Item added to cart successfully!");
+			
 			// ✅ Immediately refresh cart to show update
 			await fetchCart();
 		} catch (error) {
 			console.error("Error fetching cart item:", error);
+			// You might want to add error pop-ups too
+			alert("Failed to add item to cart");
 		} finally {
 			setCartLoading(false);
 		}
@@ -225,6 +247,9 @@ useEffect(() => {
 				headers: { Authorization: `Bearer ${token}` },
 			});
 			setCart((prev) => prev.filter((item) => item.id !== id));
+			
+			// ✅ Show success pop-up
+			showSuccess("Item removed from cart successfully!");
 		} catch (err) {
 			console.error("Error deleting cart item:", err);
 			alert("Failed to remove item from cart");
@@ -287,7 +312,8 @@ useEffect(() => {
 			});
 
 			if (response.data) {
-				alert("Order processed successfully!");
+				// ✅ Show success pop-up instead of alert
+				showSuccess("Order processed successfully!");
 				setCart([]);
 				setShowOrderModal(false);
 			}
@@ -324,6 +350,9 @@ useEffect(() => {
 				},
 			});
 			setCart([]);
+			
+			// ✅ Show success pop-up
+			showSuccess("Cart cleared successfully!");
 		} catch (err) {
 			console.error("Error clearing cart:", err);
 			alert("Failed to clear cart");
@@ -346,9 +375,39 @@ useEffect(() => {
 
 	return (
 		<div className="pt-0 mt-0 font-raleway">
+			{/* Success Pop-up */}
+			{showSuccessPopup && (
+				<div className="fixed top-4 right-4 z-50 max-w-sm w-full">
+					<div className="bg-green-50 border border-green-200 rounded-lg shadow-lg p-4 animate-fade-in">
+						<div className="flex items-center justify-between">
+							<div className="flex items-center">
+								<div className="flex-shrink-0">
+									<svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+										<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+									</svg>
+								</div>
+								<div className="ml-3">
+									<p className="text-sm font-medium text-green-800">
+										{successMessage}
+									</p>
+								</div>
+							</div>
+							<button
+								onClick={closeSuccessPopup}
+								className="ml-auto pl-3 flex-shrink-0"
+							>
+								<svg className="w-4 h-4 text-green-400 hover:text-green-600" fill="currentColor" viewBox="0 0 20 20">
+									<path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+								</svg>
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Order Modal */}
 			{showOrderModal && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 bg-opacity-50">
+				<div className="fixed inset-0 z-40 flex items-center justify-center bg-opacity-50">
 					<div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
 						<div className="flex items-center justify-between border-b pb-2 mb-4">
 							<h2 className="text-lg font-semibold text-gray-800">
@@ -752,6 +811,23 @@ useEffect(() => {
 					</div>
 				</div>
 			</div>
+
+			{/* Add CSS for animation */}
+			<style jsx>{`
+				@keyframes fade-in {
+					from {
+						opacity: 0;
+						transform: translateY(-10px);
+					}
+					to {
+						opacity: 1;
+						transform: translateY(0);
+					}
+				}
+				.animate-fade-in {
+					animation: fade-in 0.3s ease-out;
+				}
+			`}</style>
 		</div>
 	);
 }
