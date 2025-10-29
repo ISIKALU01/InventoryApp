@@ -99,9 +99,9 @@ export default function Sidebar({ onToggle }) {
   // Get the correct dashboard path based on user role
   const getDashboardPath = () => {
     if (userRole === 'admin') {
-      return '/admin-dashboard';
+      return '/dashboard';
     } else {
-      return '/staff-dashboard';
+      return '/dashboard';
     }
   };
 
@@ -124,7 +124,6 @@ export default function Sidebar({ onToggle }) {
       submenu: [
           { name: 'sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'payment', path: '/transaction/payments', icon: <FaCreditCard className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, roles: ['admin', 'staff'] }
@@ -141,17 +140,6 @@ export default function Sidebar({ onToggle }) {
         { name: 'Manage Product/Service', path: '/inventory/manage-products', icon: <FaCube className="w-4 h-4" />, roles: ['admin'] },
         { name: 'Inventory', path: '/inventory/inventory', icon: <FaBoxes className="w-4 h-4" />, roles: ['admin'] },
         { name: 'Purchase Log', path: '/inventory/purchase-log', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Cost of Goods Sold', path: '/inventory/cost-of-goods', icon: <FaCalculator className="w-4 h-4" />, roles: ['admin'] },
-      ]
-    },
-    { 
-      name: 'Accounts', 
-      icon: <FaUsers className="w-5 h-5" />,
-      roles: ['admin'],
-      submenu: [
-        { name: 'Cash', path: '/accounts/cash', icon: <FaWallet className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Float Disbursement', path: '/accounts/float-disbursement', icon: <FaCreditCard className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Float', path: '/accounts/float', icon: <FaMoneyCheck className="w-4 h-4" />, roles: ['admin'] },
       ]
     },
     { name: 'Deleted Transactions', path: '/deleted-transactions', icon: <FaTrash className="w-5 h-5" />, roles: ['admin'] },

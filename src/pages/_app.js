@@ -15,7 +15,7 @@ export default function MyApp({
   
   useEffect(() => {
     const checkAuth = () => {
-      const protectedRoutes = ['/admin-dashboard', '/staff-dashboard'];
+      const protectedRoutes = ['/dashboard'];
       const currentPath = router.pathname;
 
       // Don't check auth for login page

@@ -32,8 +32,9 @@ export default function SalesList() {
         });
         
         const ordersData = response.data;
-        console.log(ordersData)
-        console.log('Fetched orders data:', {fetchOrders});
+        // Log all orders data to console
+        console.log('All orders data:', ordersData);
+        
         setOrders(ordersData);
 
         // Extract unique locations and users
@@ -53,6 +54,31 @@ export default function SalesList() {
 
     fetchOrders();
   }, [token]);
+
+  // Delete order method
+  const deleteOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to delete this order?')) {
+      return;
+    }
+
+    try {
+      const response = await axios.delete(`${BASE_URL}/orders/${orderId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      if (response.status === 200 || response.status === 204) {
+        // Remove the deleted order from state
+        setOrders(orders.filter(order => order.id !== orderId));
+        console.log(`Order ${orderId} deleted successfully`);
+        alert('Order deleted successfully');
+      }
+    } catch (err) {
+      console.error('Failed to delete order:', err);
+      alert('Failed to delete order: ' + err.message);
+    }
+  };
 
   // Handle mobile view detection
   useEffect(() => {
@@ -425,7 +451,7 @@ export default function SalesList() {
                     Transaction ID
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
+                    Customer Name
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Payment Method
@@ -461,7 +487,7 @@ export default function SalesList() {
                         {order.transaction_id || order.id}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-900">
-                        {order.customer_name || 'Walk-in Customer'}
+                        {order.customer.name || 'Walk-in Customer'}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-900 capitalize">
                         {order.payment_method || 'N/A'}
@@ -490,6 +516,13 @@ export default function SalesList() {
                             title="Print Receipt"
                           >
                             <FaPrint size={14} />
+                          </button>
+                          <button
+                            onClick={() => deleteOrder(order.id)}
+                            className="p-1 text-red-600 hover:text-red-800 transition-colors"
+                            title="Delete Order"
+                          >
+                            <FaTrash size={14} />
                           </button>
                         </div>
                       </td>
@@ -528,7 +561,7 @@ export default function SalesList() {
                     
                     <div className="grid grid-cols-2 gap-1 text-xs text-gray-600 mb-2">
                       <div>
-                        <p><strong>Customer:</strong> {order.customer_name || 'Walk-in'}</p>
+                        <p><strong>Customer Name:</strong> {order.customer_name || 'Walk-in'}</p>
                         <p><strong>Payment:</strong> {order.payment_method || 'N/A'}</p>
                       </div>
                       <div>
@@ -551,6 +584,13 @@ export default function SalesList() {
                       >
                         <FaPrint className="mr-1" size={10} />
                         Print
+                      </button>
+                      <button
+                        onClick={() => deleteOrder(order.id)}
+                        className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs flex items-center"
+                      >
+                        <FaTrash className="mr-1" size={10} />
+                        Delete
                       </button>
                     </div>
                   </div>

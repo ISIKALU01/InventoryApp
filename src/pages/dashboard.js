@@ -16,10 +16,11 @@ import {
 } from "../../utils/auth";
 import BASE_URL from "../../config";
 
-export default function AdminDashboard() {
+export default function Dashboard() {
 	const [user, setUser] = useState(null);
 	const [loading, setLoading] = useState(true);
-	const [cards, setCards] = useState(null); // 👈 For dashboard data
+	const [cards, setCards] = useState(null);
+	const [authChecked, setAuthChecked] = useState(false);
 	const router = useRouter();
 
 	useEffect(() => {
@@ -54,32 +55,28 @@ export default function AdminDashboard() {
 				const userData = session.user;
 				console.log("✅ User verified:", userData.role);
 
-				if (userData.role !== "admin") {
-					console.log("🔀 Redirecting non-admin:", userData.role);
-					if (userData.role === "staff") {
-						router.push("/staff-dashboard");
-					} else {
-						router.push("/unauthorized");
-					}
-					return;
-				}
-
+				// ✅ REMOVED ROLE-BASED REDIRECTION - Both admin and staff can access
 				setUser(userData);
-				console.log("🎉 Admin user authenticated successfully");
+				console.log("🎉 User authenticated successfully:", userData.role);
 
-				// ✅ Fetch dashboard cards data
+				// ✅ Fetch dashboard cards data for both roles
 				await fetchDashboardData(token);
+				
 			} catch (error) {
 				console.error("❌ Authentication check failed:", error);
 				removeLocalStorage("token");
 				router.push("/");
 			} finally {
 				setLoading(false);
+				setAuthChecked(true);
 			}
 		};
 
-		checkAuthAndFetchData();
-	}, [router]);
+		// Only run auth check once
+		if (!authChecked) {
+			checkAuthAndFetchData();
+		}
+	}, [router, authChecked]);
 
 	const fetchDashboardData = async (token) => {
 		try {
@@ -99,6 +96,7 @@ export default function AdminDashboard() {
 	const handleLogout = () => {
 		console.log("🚪 Logging out...");
 		removeLocalStorage("token");
+		removeLocalStorage("user");
 		router.push("/");
 	};
 
@@ -127,7 +125,7 @@ export default function AdminDashboard() {
 	return (
 		<div className="min-h-screen bg-gray-50">
 			<Head>
-				<title>Admin Dashboard - PGIMS</title>
+				<title>{user.role === 'admin' ? 'Admin' : 'Staff'} Dashboard - PGIMS</title>
 			</Head>
 
 			{/* HEADER */}
@@ -135,13 +133,13 @@ export default function AdminDashboard() {
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 font-raleway">
 					<div className="flex flex-col sm:flex-row justify-between items-center py-4 sm:py-0 sm:h-16">
 						<div className="mb-4 sm:mb-0 text-center sm:text-left">
-							<p className="text-xl text-gray-600">Welcome back, {user.name}</p>
+							<p className="text-xl text-gray-600">Welcome, {user.name}</p>
 						</div>
 						<div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
 							<div className="text-center sm:text-right">
 								<p className="text-sm font-medium text-gray-900">{user.name}</p>
-								<p className="text-xs text-gray-600">
-									{user.department || "Administration"} • Admin
+								<p className="text-xs text-gray-600 capitalize">
+									{user.department || (user.role === 'admin' ? 'Administration' : 'Operations')} • {user.role}
 								</p>
 							</div>
 							<button
@@ -159,13 +157,14 @@ export default function AdminDashboard() {
 			{/* MAIN CONTENT */}
 			<main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
 				<div className="px-4 py-6 sm:px-0">
+					{/* Role-specific header */}
 					<div className="bg-white overflow-hidden shadow mb-8">
 						<div className="px-4 py-5 sm:p-6">
 							<h2 className="text-2xl font-bold text-gray-900 mb-6">
-								Administrative Controls
+								{user.role === 'admin' ? 'Administrative Controls' : 'Sales Dashboard'}
 							</h2>
 
-							{/* DASHBOARD CARDS */}
+							{/* DASHBOARD CARDS - Show for both roles */}
 							<div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
 								<div className="bg-gradient-to-r from-indigo-500 to-indigo-700 overflow-hidden shadow rounded-lg p-5 text-white">
 									<h3 className="text-sm font-medium">Sales for today</h3>
@@ -209,7 +208,7 @@ export default function AdminDashboard() {
 						</div>
 					</div>
 
-					{/* REMAINING SECTIONS */}
+					{/* REMAINING SECTIONS - Show for both roles */}
 					<div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4 mb-8">
 						<SalesAnalysis />
 						<InventorySummary />
@@ -227,6 +226,8 @@ export default function AdminDashboard() {
 							<DebtorCreditor />
 						</div>
 					</div>
+
+		
 				</div>
 			</main>
 		</div>

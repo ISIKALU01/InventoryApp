@@ -13,10 +13,10 @@ import {
 const redirectBasedOnRole = (role, router) => {
   switch (role) {
     case "admin":
-      router.push("/admin-dashboard");
+      router.push("/dashboard");
       break;
     case "staff":
-      router.push("/staff-dashboard"); // Changed from "/sales-dashboard"
+      router.push("/dashboard"); // Changed from "/sales-dashboard"
       break;
     default:
       console.error("Unknown role:", role);
