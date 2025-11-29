@@ -63,6 +63,8 @@ export default function UserApproval() {
 					Authorization: `Bearer ${token}`,
 				},
 			});
+
+			console.log("Approved staff response:", response.data);
 			
 			const staffData = Array.isArray(response.data) 
 				? response.data 
@@ -674,9 +676,9 @@ export default function UserApproval() {
 													)}
 												</td>
 												<td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-													<div>{staff.approved_at ? formatDate(staff.approved_at) : "Today"}</div>
+													<div>{staff.approved_at ? formatDate(staff.login_approved_at) : ""}</div>
 													<div className="text-xs text-gray-400">
-														{getTimeSinceApproval(staff.approved_at)}
+														{getTimeSinceApproval(staff.login_approved_at)}
 													</div>
 												</td>
 												<td className="px-4 py-4 whitespace-nowrap">
@@ -735,12 +737,12 @@ export default function UserApproval() {
 											<div className="flex justify-between">
 												<span className="text-gray-500">Approved</span>
 												<span className="font-medium text-right">
-													{staff.approved_at ? formatDateMobile(staff.approved_at) : "Today"}
+													{staff.approved_at ? formatDateMobile(staff.login_approved_at) : ""}
 												</span>
 											</div>
 											<div className="flex justify-between">
 												<span className="text-gray-500">Time Since</span>
-												<span className="font-medium">{getTimeSinceApproval(staff.approved_at)}</span>
+												<span className="font-medium">{getTimeSinceApproval(staff.login_approved_at)}</span>
 											</div>
 										</div>
 									</div>

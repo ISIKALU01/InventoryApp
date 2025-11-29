@@ -256,20 +256,19 @@ export default function SalesInvoice() {
 		}
 	};
 
-	// ➕ Increase quantity (with stock limit)
 	const handleIncrease = (id) => {
 		setCart((prev) =>
-			prev.map((item) =>
-				item.id === id
-					? {
-							...item,
-							default_quantity_added:
-								item.default_quantity_added < item.product_stock
-									? item.default_quantity_added + 1
-									: item.default_quantity_added,
-					  }
-					: item
-			)
+			prev.map((item) => {
+				if (item.id === id) {
+					const currentQty = Number(item.default_quantity_added);
+					const maxStock = Number(item.product_stock);
+					return {
+						...item,
+						default_quantity_added: currentQty < maxStock ? currentQty + 1 : currentQty,
+					};
+				}
+				return item;
+			})
 		);
 	};
 
