@@ -1305,7 +1305,7 @@ export default function Inventory() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredInventory.map((item) => {
                   const product = item.product;
-				  console.log(product)
+                  console.log(product);
                   const store = item.store;
                   // Stock Value: cost_price * quantity
                   console.log(item);
@@ -1406,9 +1406,11 @@ export default function Inventory() {
           {/* Mobile Cards */}
           <div className="text-black md:hidden">
             {filteredInventory.map((item) => {
-              const product = getProductDetails(item.product_id);
-              const store = getStoreDetails(item.store_id);
+              const product = item.product;
+              console.log(product);
+              const store = item.store;
               // Stock Value: cost_price * quantity
+              console.log(item);
               const stockValue =
                 (product.cost_price || 0) * (item.quantity || 0);
               const isLowStock =
@@ -1419,9 +1421,11 @@ export default function Inventory() {
                 <div key={item.id} className="p-4 border-b border-gray-200">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
+                      {/* FIXED: Use product.name instead of item.name */}
                       <div className="font-medium text-black">
                         {product.name || "N/A"}
                       </div>
+                      {/* FIXED: Use product.sku instead of item.sku */}
                       <div className="text-xs text-gray-500">
                         SKU: {product.sku || "No SKU"}
                       </div>
@@ -1464,12 +1468,14 @@ export default function Inventory() {
                     </div>
                     <div>
                       <div className="text-gray-600">Unit Price</div>
+                      {/* FIXED: Use product.price instead of item.price */}
                       <div className="font-medium">
                         {formatCurrency(product.price)}
                       </div>
                     </div>
                     <div>
                       <div className="text-gray-600">Cost Price</div>
+                      {/* FIXED: Use product.cost_price instead of item.cost_price */}
                       <div className="font-medium">
                         {product.cost_price
                           ? formatCurrency(product.cost_price)
