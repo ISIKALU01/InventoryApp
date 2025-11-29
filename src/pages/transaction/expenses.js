@@ -14,7 +14,7 @@ import {
   FaUser,
 } from "react-icons/fa";
 
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app/api";
+const API_BASE_URL = "https://testing.osharaofficial.com/api";
 
 export default function Expenses() {
   const [transactions, setTransactions] = useState([]);
@@ -61,6 +61,67 @@ export default function Expenses() {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
     };
+  };
+
+  // Format date to a more readable format
+  const formatDisplayDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString; // Return original if invalid date
+      
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return dateString; // Return original if formatting fails
+    }
+  };
+
+  // Format time to 12-hour format with AM/PM
+  const formatDisplayTime = (timeString) => {
+    if (!timeString) return 'N/A';
+    
+    try {
+      // Handle both "HH:MM" and "HH:MM:SS" formats
+      const timeParts = timeString.split(':');
+      if (timeParts.length < 2) return timeString;
+      
+      let hours = parseInt(timeParts[0]);
+      const minutes = timeParts[1];
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      
+      hours = hours % 12;
+      hours = hours ? hours : 12; // Convert 0 to 12
+      
+      return `${hours}:${minutes} ${ampm}`;
+    } catch (error) {
+      return timeString; // Return original if formatting fails
+    }
+  };
+
+  // Format date and time together for a clean display
+  const formatDateTime = (dateString, timeString) => {
+    const formattedDate = formatDisplayDate(dateString);
+    const formattedTime = formatDisplayTime(timeString);
+    
+    return (
+      <div className="flex flex-col">
+        <span className="text-sm font-medium text-gray-900">{formattedDate}</span>
+        <span className="text-xs text-gray-500">{formattedTime}</span>
+      </div>
+    );
+  };
+
+  // Format date for mobile view (more compact)
+  const formatMobileDateTime = (dateString, timeString) => {
+    const formattedDate = formatDisplayDate(dateString);
+    const formattedTime = formatDisplayTime(timeString);
+    
+    return `${formattedDate} • ${formattedTime}`;
   };
 
   // Extract username from email (everything before @)
@@ -261,8 +322,8 @@ export default function Expenses() {
       transaction.description,
       transaction.category,
       `N${(parseFloat(transaction.amount) || 0).toFixed(2)}`,
-      transaction.date,
-      transaction.time,
+      formatDisplayDate(transaction.date),
+      formatDisplayTime(transaction.time),
       transaction.posted_by,
       transaction.location
     ]);
@@ -672,7 +733,7 @@ export default function Expenses() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Date & time
+                      Date & Time
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
                       Description
@@ -697,14 +758,16 @@ export default function Expenses() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredTransactions.map((transaction) => (
                     <tr key={transaction.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-black">
-                        {transaction.date} {transaction.time}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {formatDateTime(transaction.date, transaction.time)}
                       </td>
                       <td className="px-4 py-3 text-sm text-black">
                         {transaction.description}
                       </td>
                       <td className="px-4 py-3 text-sm text-black">
-                        {transaction.category}
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {transaction.category}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-black">
                         {transaction.posted_by}
@@ -713,7 +776,9 @@ export default function Expenses() {
                         {transaction.location}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-black">
-                        N{(parseFloat(transaction.amount) || 0).toFixed(2)}
+                        <span className="font-semibold text-green-600">
+                          N{(parseFloat(transaction.amount) || 0).toFixed(2)}
+                        </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
@@ -757,30 +822,31 @@ export default function Expenses() {
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-black">
+                      <div className="flex justify-between items-start">
+                        <span className="font-semibold text-green-600 text-base">
                           N{(parseFloat(transaction.amount) || 0).toFixed(2)}
                         </span>
-                        <span className="text-xs text-black">
-                          {transaction.time}
-                        </span>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-500">
+                            {formatMobileDateTime(transaction.date, transaction.time)}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-sm text-black mt-1">
+                      <div className="text-sm font-medium text-gray-900 mt-1">
                         {transaction.description}
                       </div>
-                      <div className="text-sm text-black mt-1">
-                        {transaction.category}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                          {transaction.category}
+                        </span>
+                        <span className="text-xs text-gray-600">
+                          {transaction.location}
+                        </span>
                       </div>
-                      <div className="text-xs text-black mt-1">
-                        {transaction.date}
+                      <div className="text-xs text-gray-500 mt-2">
+                        Posted by: {transaction.posted_by}
                       </div>
-                      <div className="text-xs text-black mt-1">
-                        {transaction.posted_by}
-                      </div>
-                      <div className="text-xs text-black mt-1">
-                        {transaction.location}
-                      </div>
-                      <div className="flex space-x-3 mt-2">
+                      <div className="flex space-x-3 mt-3">
                         <button
                           onClick={() => handleViewExpense(transaction)}
                           className="text-blue-600 hover:text-blue-800 transition-colors text-xs flex items-center"

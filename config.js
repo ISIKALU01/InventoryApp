@@ -1,4 +1,4 @@
-const BASE_URL = 'https://pgimsapp-production.up.railway.app/api';
+const BASE_URL = 'https://testing.osharaofficial.com/api';
 
 export default BASE_URL;
 

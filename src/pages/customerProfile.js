@@ -15,7 +15,7 @@ import {
   FaStickyNote
 } from "react-icons/fa";
 
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app/api";
+const API_BASE_URL = "https://testing.osharaofficial.com/api";
 
 // Customer API Service functions
 const customerAPI = {

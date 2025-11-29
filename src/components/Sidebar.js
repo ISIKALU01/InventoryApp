@@ -118,6 +118,12 @@ export default function Sidebar({ onToggle }) {
       roles: ['admin', 'staff'] 
     },
     { 
+      name: 'Authorize users', 
+      path: '/authorizeUser' , // This will be dynamically set
+      icon: <FaChartPie className="w-5 h-5" />, 
+      roles: ['admin'] 
+    },
+    { 
       name: 'Transaction', 
       icon: <FaMoneyBill className="w-5 h-5" />,
       roles: ['admin', 'staff'],
@@ -125,8 +131,8 @@ export default function Sidebar({ onToggle }) {
           { name: 'sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" />, roles: ['admin', 'staff'] },
           { name: 'sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, roles: ['admin', 'staff'] }
+          { name: 'sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, roles: [] },
+          { name: 'payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, roles: [] }
       ]
     },
     { 
@@ -135,14 +141,14 @@ export default function Sidebar({ onToggle }) {
       roles: ['admin'],
       submenu: [
         { name: 'Product Category', path: '/inventory/product-category', icon: <FaTag className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'View Adjustment', path: '/inventory/view-adjustment', icon: <FaSlidersH className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Stock Requisition', path: '/inventory/stock-requisition', icon: <FaTruck className="w-4 h-4" />, roles: ['admin'] },
+        { name: 'View Adjustment', path: '/inventory/view-adjustment', icon: <FaSlidersH className="w-4 h-4" />, roles: [''] },
+        { name: 'Stock Requisition', path: '/inventory/stock-requisition', icon: <FaTruck className="w-4 h-4" />, roles: [''] },
         { name: 'Manage Product/Service', path: '/inventory/manage-products', icon: <FaCube className="w-4 h-4" />, roles: ['admin'] },
         { name: 'Inventory', path: '/inventory/inventory', icon: <FaBoxes className="w-4 h-4" />, roles: ['admin'] },
         { name: 'Purchase Log', path: '/inventory/purchase-log', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin'] },
       ]
     },
-    { name: 'Deleted Transactions', path: '/deleted-transactions', icon: <FaTrash className="w-5 h-5" />, roles: ['admin'] },
+    { name: 'Deleted Transactions', path: '/deletedTransactions', icon: <FaTrash className="w-5 h-5" />, roles: ['admin'] },
     { name: 'Settings', path: '/settings', icon: <FaCog className="w-5 h-5" />, roles: ['admin', 'staff'] },
     { 
       name: 'Folio', 

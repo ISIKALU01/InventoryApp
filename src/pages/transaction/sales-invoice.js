@@ -365,9 +365,8 @@ export default function SalesInvoice() {
 			sum + item.default_quantity_added * parseFloat(item.product_price),
 		0
 	);
-	const tax = subtotal * 0.05; // optional tax (5%)
 	const discount = 0; // or calculate dynamically
-	const total = subtotal + tax - discount;
+	const total = subtotal - discount;
 
 	useEffect(() => {
 		fetchCart();
@@ -764,12 +763,6 @@ export default function SalesInvoice() {
 							<span className="text-gray-600">Subtotal:</span>
 							<span className="font-medium text-gray-900">
 								₦{subtotal.toFixed(2)}
-							</span>
-						</div>
-						<div className="flex justify-between text-sm">
-							<span className="text-gray-600">Tax:</span>
-							<span className="font-medium text-blue-600">
-								₦{tax.toFixed(2)}
 							</span>
 						</div>
 						<div className="flex justify-between text-sm">

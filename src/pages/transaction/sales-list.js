@@ -116,19 +116,74 @@ export default function SalesList() {
     return matchesSearch && matchesDate && matchesLocation && matchesUser;
   });
 
-  // Calculate totals for today
+  // FIXED: Calculate totals for today - ROBUST VERSION
   const today = new Date().toISOString().split('T')[0];
-  const todayTransactions = orders.filter(order => 
-    order.created_at && order.created_at.includes(today)
-  );
+  console.log('Today date:', today);
 
+  const todayTransactions = orders.filter(order => {
+    if (!order.created_at) return false;
+    
+    const orderDate = order.created_at.split('T')[0];
+    const isToday = orderDate === today;
+    
+    if (isToday) {
+      console.log('Today order found:', order);
+    }
+    
+    return isToday;
+  });
+
+  console.log('Today transactions count:', todayTransactions.length);
+
+  // FIXED: Comprehensive Products Sold Today calculation
   const totalProductsSold = todayTransactions.reduce((total, order) => {
-    return total + (order.items ? order.items.reduce((sum, item) => sum + (item.quantity || 0), 0) : 0);
+    console.log(`Processing order ${order.id}:`, order);
+    
+    let orderItemCount = 0;
+    
+    // Method 1: Check if items array exists
+    if (order.items && Array.isArray(order.items)) {
+      orderItemCount = order.items.reduce((sum, item) => {
+        const quantity = Number(item.quantity) || 
+                        Number(item.quantity_sold) || 
+                        Number(item.qty) || 
+                        0;
+        console.log(`  Item: ${item.product_name || item.name || 'Unknown'}, Quantity: ${quantity}`);
+        return sum + quantity;
+      }, 0);
+    }
+    // Method 2: Check for direct quantity properties
+    else if (order.total_quantity) {
+      orderItemCount = Number(order.total_quantity);
+    }
+    // Method 3: Check for items_count or similar
+    else if (order.items_count) {
+      orderItemCount = Number(order.items_count);
+    }
+    // Method 4: If order has a single item directly
+    else if (order.quantity) {
+      orderItemCount = Number(order.quantity);
+    }
+    
+    console.log(`  Order ${order.id} total items: ${orderItemCount}`);
+    return total + orderItemCount;
   }, 0);
 
+  // FIXED: Comprehensive Total Sales Amount calculation
   const totalSalesAmount = todayTransactions.reduce((total, order) => {
-    return total + (parseFloat(order.total_amount) || 0);
+    const amount = Number(order.total_amount) || 
+                  Number(order.amount) || 
+                  Number(order.total) || 
+                  Number(order.grand_total) || 
+                  0;
+    
+    console.log(`Order ${order.id} amount: ${amount}`);
+    return total + amount;
   }, 0);
+
+  console.log('FINAL CALCULATIONS:');
+  console.log('Total Products Sold:', totalProductsSold);
+  console.log('Total Sales Amount:', totalSalesAmount);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -148,9 +203,9 @@ export default function SalesList() {
     const csvData = filteredTransactions.map(order => [
       order.created_at || '',
       order.transaction_id || order.id || '',
-      order.customer_name || 'Walk-in Customer',
+      order.customer_name || order.customer?.name || 'Walk-in Customer',
       order.payment_method || '',
-      order.items ? order.items.map(item => `${item.product_name} (${item.quantity})`).join('; ') : '',
+      order.items ? order.items.map(item => `${item.product_name || item.name} (${item.quantity || item.quantity_sold || 0})`).join('; ') : '',
       order.subtotal || '',
       order.tax_amount || '',
       order.discount_amount || '',
@@ -195,13 +250,13 @@ export default function SalesList() {
             <p>Date: ${order.created_at || new Date().toLocaleString()}</p>
           </div>
           <div>
-            <p><strong>Customer:</strong> ${order.customer_name || 'Walk-in Customer'}</p>
+            <p><strong>Customer:</strong> ${order.customer_name || order.customer?.name || 'Walk-in Customer'}</p>
             <p><strong>Payment Method:</strong> ${order.payment_method || 'N/A'}</p>
             <hr>
             <h3>Items:</h3>
             ${order.items ? order.items.map(item => `
               <div class="item">
-                ${item.product_name} - ${item.quantity} × ₦${parseFloat(item.unit_price || item.product_price).toFixed(2)} = ₦${(item.quantity * parseFloat(item.unit_price || item.product_price)).toFixed(2)}
+                ${item.product_name || item.name} - ${item.quantity || item.quantity_sold || 0} × ₦${parseFloat(item.unit_price || item.product_price).toFixed(2)} = ₦${((item.quantity || item.quantity_sold || 0) * parseFloat(item.unit_price || item.product_price)).toFixed(2)}
               </div>
             `).join('') : 'No items'}
             <div class="total">
@@ -221,7 +276,7 @@ export default function SalesList() {
 
   const handleViewDetails = (order) => {
     // You can implement a modal or redirect to detailed view
-    alert(`Order Details:\nTransaction ID: ${order.transaction_id || order.id}\nCustomer: ${order.customer_name || 'Walk-in'}\nTotal: ₦${parseFloat(order.total_amount).toFixed(2)}\nPayment: ${order.payment_method}\nItems: ${order.items ? order.items.length : 0}`);
+    alert(`Order Details:\nTransaction ID: ${order.transaction_id || order.id}\nCustomer: ${order.customer_name || order.customer?.name || 'Walk-in'}\nTotal: ₦${parseFloat(order.total_amount).toFixed(2)}\nPayment: ${order.payment_method}\nItems: ${order.items ? order.items.length : 0}`);
   };
 
   const formatDate = (dateString) => {
@@ -487,7 +542,7 @@ export default function SalesList() {
                         {order.transaction_id || order.id}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-900">
-                        {order.customer.name || 'Walk-in Customer'}
+                        {order.customer_name || order.customer?.name || 'Walk-in Customer'}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-900 capitalize">
                         {order.payment_method || 'N/A'}
@@ -561,7 +616,7 @@ export default function SalesList() {
                     
                     <div className="grid grid-cols-2 gap-1 text-xs text-gray-600 mb-2">
                       <div>
-                        <p><strong>Customer Name:</strong> {order.customer_name || 'Walk-in'}</p>
+                        <p><strong>Customer:</strong> {order.customer_name || order.customer?.name || 'Walk-in Customer'}</p>
                         <p><strong>Payment:</strong> {order.payment_method || 'N/A'}</p>
                       </div>
                       <div>
