@@ -82,6 +82,8 @@ const inventoryAPI = {
   async createInventory(inventoryData) {
     try {
       const headers = await this.getAuthHeaders();
+      console.log("Creating inventory with data:", inventoryData);
+      
       const response = await fetch(`${API_BASE_URL}/inventory`, {
         method: "POST",
         headers,
@@ -99,8 +101,10 @@ const inventoryAPI = {
       }
 
       const data = await response.json();
+      console.log("Create inventory response:", data);
       return data;
     } catch (error) {
+      console.error("Error in createInventory:", error);
       if (
         error.message.includes("No authentication token") ||
         error.message.includes("Authentication failed")
@@ -726,6 +730,31 @@ const formatCurrency = (value) => {
       })}`;
 };
 
+// Safe data access helper functions
+const safeGetProduct = (item, products = []) => {
+  // First try to get product from item.product
+  if (item?.product && typeof item.product === 'object') {
+    return item.product;
+  }
+  // Fallback to finding in products array
+  if (item?.product_id && Array.isArray(products)) {
+    return products.find((p) => p?.id === item.product_id) || {};
+  }
+  return {};
+};
+
+const safeGetStore = (item, stores = []) => {
+  // First try to get store from item.store
+  if (item?.store && typeof item.store === 'object') {
+    return item.store;
+  }
+  // Fallback to finding in stores array
+  if (item?.store_id && Array.isArray(stores)) {
+    return stores.find((s) => s?.id === item.store_id) || {};
+  }
+  return {};
+};
+
 // Main Inventory Component
 export default function Inventory() {
   const [inventory, setInventory] = useState([]);
@@ -742,14 +771,15 @@ export default function Inventory() {
   const [selectedInventoryItem, setSelectedInventoryItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [addingInventory, setAddingInventory] = useState(false);
 
   // Fetch data from API
   const fetchInventory = async () => {
     try {
       setError(null);
       const data = await inventoryAPI.getAllInventory();
-      setInventory(data);
-      setFilteredInventory(data);
+      setInventory(Array.isArray(data) ? data : []);
+      setFilteredInventory(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching inventory:", error);
       setError(error.message);
@@ -761,7 +791,7 @@ export default function Inventory() {
   const fetchStores = async () => {
     try {
       const data = await storeAPI.getAllStores();
-      setStores(data);
+      setStores(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching stores:", error);
       setError((prev) => prev || `Stores: ${error.message}`);
@@ -771,24 +801,59 @@ export default function Inventory() {
   const fetchProducts = async () => {
     try {
       const data = await productAPI.getAllProducts();
-      setProducts(data);
+      setProducts(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching products:", error);
       setError((prev) => prev || `Products: ${error.message}`);
     }
   };
 
-  // Add new inventory
+  // Add new inventory - FIXED VERSION
   const handleAddInventory = async (inventoryData) => {
+    if (addingInventory) return;
+    
+    setAddingInventory(true);
     try {
-      const newInventory = await inventoryAPI.createInventory(inventoryData);
-      setInventory((prev) => [...prev, newInventory]);
+      console.log("Adding inventory with data:", inventoryData);
+      const response = await inventoryAPI.createInventory(inventoryData);
+      
+      // Handle different response structures safely
+      let newItem;
+      if (response?.data) {
+        newItem = response.data;
+      } else if (response?.inventory) {
+        newItem = response.inventory;
+      } else {
+        newItem = response;
+      }
+
+      // Ensure the new item has all required properties
+      const processedItem = {
+        id: newItem?.id || Date.now(), // fallback ID
+        store_id: newItem?.store_id || inventoryData.store_id,
+        product_id: newItem?.product_id || inventoryData.product_id,
+        quantity: newItem?.quantity || inventoryData.quantity,
+        product: newItem?.product || safeGetProduct({ product_id: inventoryData.product_id }, products),
+        store: newItem?.store || safeGetStore({ store_id: inventoryData.store_id }, stores),
+        ...newItem
+      };
+
+      console.log("Processed new item:", processedItem);
+
+      // Update state safely
+      setInventory((prev) => {
+        const newInventory = Array.isArray(prev) ? [...prev] : [];
+        return [...newInventory, processedItem];
+      });
+
       setShowAddStockModal(false);
       alert("Inventory added successfully!");
     } catch (error) {
       console.error("Error adding inventory:", error);
       alert(error.message || "Failed to add inventory");
       throw error;
+    } finally {
+      setAddingInventory(false);
     }
   };
 
@@ -828,83 +893,33 @@ export default function Inventory() {
     }
   };
 
-  // Calculate summary metrics - FIXED: Use cost price for stock value and unit price for retail value
-  // Calculate summary metrics - FIXED: Handle data structure properly
+  // Calculate summary metrics
   const calculateSummary = () => {
     const totalItems = inventory.length;
 
-    // Debug: Check what data we actually have
-    console.log("Inventory items:", inventory);
-    console.log("Products:", products);
-    console.log("First inventory item:", inventory[0]);
-    console.log("First product:", products[0]);
-
     // Stock Value: Sum of (cost_price * quantity) for all inventory items
     const totalStockValue = inventory.reduce((sum, item) => {
-      // Try multiple ways to find the product data
-      let product;
-
-      // Check if product data is nested in the item
-      if (item.product) {
-        product = item.product;
-      }
-      // Check if we have product_id and can find it in products array
-      else if (item.product_id && products.length > 0) {
-        product = products.find((p) => p.id === item.product_id);
-      }
-
+      const product = safeGetProduct(item, products);
       const costPrice = product?.cost_price || 0;
       const quantity = item.quantity || 0;
       const itemValue = costPrice * quantity;
-
-      console.log(`Item ${item.id}:`, {
-        costPrice,
-        quantity,
-        itemValue,
-        product,
-      });
-
       return sum + itemValue;
     }, 0);
 
     // Retail Value: Sum of (price * quantity) for all inventory items
     const totalRetailValue = inventory.reduce((sum, item) => {
-      // Try multiple ways to find the product data
-      let product;
-
-      if (item.product) {
-        product = item.product;
-      } else if (item.product_id && products.length > 0) {
-        product = products.find((p) => p.id === item.product_id);
-      }
-
+      const product = safeGetProduct(item, products);
       const price = product?.price || 0;
       const quantity = item.quantity || 0;
       const itemValue = price * quantity;
-
       return sum + itemValue;
     }, 0);
 
     const lowStockItems = inventory.filter((item) => {
-      // Try multiple ways to find the product data
-      let product;
-
-      if (item.product) {
-        product = item.product;
-      } else if (item.product_id && products.length > 0) {
-        product = products.find((p) => p.id === item.product_id);
-      }
-
+      const product = safeGetProduct(item, products);
       const currentQuantity = item.quantity || 0;
       const threshold = product?.low_stock_threshold || 10;
       const isLowStock = currentQuantity <= threshold;
-
-      console.log(`Low stock check - Item ${item.id}:`, {
-        quantity: currentQuantity,
-        threshold,
-        isLowStock,
-      });
-
       return isLowStock;
     }).length;
 
@@ -914,8 +929,6 @@ export default function Inventory() {
       totalRetailValue,
       lowStockItems,
     };
-
-    console.log("Final Summary:", summary);
 
     return summary;
   };
@@ -954,15 +967,13 @@ export default function Inventory() {
 
     if (searchTerm) {
       filtered = filtered.filter((item) => {
-        const product = products.find((p) => p.id === item.product_id);
-        const store = stores.find((s) => s.id === item.store_id);
+        const product = safeGetProduct(item, products);
+        const store = safeGetStore(item, stores);
 
         return (
           product?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           product?.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product?.description
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
+          product?.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           store?.name?.toLowerCase().includes(searchTerm.toLowerCase())
         );
       });
@@ -970,7 +981,7 @@ export default function Inventory() {
 
     if (selectedStore) {
       filtered = filtered.filter(
-        (item) => item.store_id.toString() === selectedStore
+        (item) => item.store_id?.toString() === selectedStore
       );
     }
 
@@ -993,16 +1004,6 @@ export default function Inventory() {
 
   const handleImportCSV = (importData) => {
     console.log("Importing CSV data:", importData);
-  };
-
-  // Helper function to get product details
-  const getProductDetails = (productId) => {
-    return products.find((p) => p.id === productId) || {};
-  };
-
-  // Helper function to get store details
-  const getStoreDetails = (storeId) => {
-    return stores.find((s) => s.id === storeId) || {};
   };
 
   // Add a retry function
@@ -1304,16 +1305,10 @@ export default function Inventory() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredInventory.map((item) => {
-                  const product = item.product;
-                  console.log(product);
-                  const store = item.store;
-                  // Stock Value: cost_price * quantity
-                  console.log(item);
-                  const stockValue =
-                    (product.cost_price || 0) * (item.quantity || 0);
-                  const isLowStock =
-                    (item.quantity || 0) <=
-                    (product?.low_stock_threshold || 10);
+                  const product = safeGetProduct(item, products);
+                  const store = safeGetStore(item, stores);
+                  const stockValue = (product.cost_price || 0) * (item.quantity || 0);
+                  const isLowStock = (item.quantity || 0) <= (product?.low_stock_threshold || 10);
                   const isOutOfStock = (item.quantity || 0) === 0;
 
                   return (
@@ -1406,26 +1401,19 @@ export default function Inventory() {
           {/* Mobile Cards */}
           <div className="text-black md:hidden">
             {filteredInventory.map((item) => {
-              const product = item.product;
-              console.log(product);
-              const store = item.store;
-              // Stock Value: cost_price * quantity
-              console.log(item);
-              const stockValue =
-                (product.cost_price || 0) * (item.quantity || 0);
-              const isLowStock =
-                (item.quantity || 0) <= (product?.low_stock_threshold || 10);
+              const product = safeGetProduct(item, products);
+              const store = safeGetStore(item, stores);
+              const stockValue = (product.cost_price || 0) * (item.quantity || 0);
+              const isLowStock = (item.quantity || 0) <= (product?.low_stock_threshold || 10);
               const isOutOfStock = (item.quantity || 0) === 0;
 
               return (
                 <div key={item.id} className="p-4 border-b border-gray-200">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
-                      {/* FIXED: Use product.name instead of item.name */}
                       <div className="font-medium text-black">
                         {product.name || "N/A"}
                       </div>
-                      {/* FIXED: Use product.sku instead of item.sku */}
                       <div className="text-xs text-gray-500">
                         SKU: {product.sku || "No SKU"}
                       </div>
@@ -1468,14 +1456,12 @@ export default function Inventory() {
                     </div>
                     <div>
                       <div className="text-gray-600">Unit Price</div>
-                      {/* FIXED: Use product.price instead of item.price */}
                       <div className="font-medium">
                         {formatCurrency(product.price)}
                       </div>
                     </div>
                     <div>
                       <div className="text-gray-600">Cost Price</div>
-                      {/* FIXED: Use product.cost_price instead of item.cost_price */}
                       <div className="font-medium">
                         {product.cost_price
                           ? formatCurrency(product.cost_price)
