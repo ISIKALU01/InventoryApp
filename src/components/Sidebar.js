@@ -120,7 +120,7 @@ export default function Sidebar({ onToggle }) {
     { 
       name: 'Authorize users', 
       path: '/authorizeUser' , // This will be dynamically set
-      icon: <FaChartPie className="w-5 h-5" />, 
+      icon: <FaUsers className="w-5 h-5" />, 
       roles: ['admin'] 
     },
     { 

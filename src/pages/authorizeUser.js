@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import BASE_URL from "../../config";
-import { Check, X, Search, Filter, Clock, Users, Calendar, RefreshCw, Menu, Phone, Mail } from "lucide-react";
+import { Check, X, Search, Filter, Clock, Users, Calendar, RefreshCw, Menu, Phone, Mail, LogOut } from "lucide-react";
 
 export default function UserApproval() {
 	const [users, setUsers] = useState([]);
@@ -18,6 +18,7 @@ export default function UserApproval() {
 	const [successMessage, setSuccessMessage] = useState("");
 	const [activeTab, setActiveTab] = useState("pending");
 	const [showMobileFilters, setShowMobileFilters] = useState(false);
+	const [loggingOutId, setLoggingOutId] = useState(null); // Track which user is being logged out
 
 	const token = localStorage.getItem("token");
 
@@ -116,6 +117,49 @@ export default function UserApproval() {
 		}
 	};
 
+	// Logout user (force logout from all devices)
+	const handleLogoutUser = async (staffId, staffName) => {
+		if (!confirm(`Are you sure you want to force logout ${staffName || 'this user'}? This will log them out from all devices.`)) {
+			return;
+		}
+
+		try {
+			setLoggingOutId(staffId);
+			
+			const response = await axios.post(
+				`${BASE_URL}/staff/${staffId}/logout`,
+				{},
+				{
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"Content-Type": "application/json",
+					},
+				}
+			);
+
+			showSuccess(`User ${staffName} has been logged out successfully!`);
+			
+			// Update the staff list to reflect the change
+			setApprovedStaff(prevStaff => 
+				prevStaff.map(staff => 
+					staff.id === staffId 
+						? { 
+							...staff, 
+							is_logged_out: true,
+							logged_out_at: new Date().toISOString() 
+						}
+						: staff
+				)
+			);
+			
+		} catch (err) {
+			console.error("Failed to logout user:", err);
+			alert(err.response?.data?.message || "Failed to logout user");
+		} finally {
+			setLoggingOutId(null);
+		}
+	};
+
 	// Filter pending users based on search and status
 	const filteredPendingUsers = users.filter((user) => {
 		const matchesSearch = 
@@ -200,6 +244,24 @@ export default function UserApproval() {
 			<span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 flex items-center gap-1 w-fit">
 				<Clock size={12} />
 				Pending
+			</span>
+		);
+	};
+
+	// Get login status badge
+	const getLoginStatusBadge = (staff) => {
+		if (staff.is_logged_out) {
+			return (
+				<span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 flex items-center gap-1 w-fit">
+					<LogOut size={12} />
+					Logged Out
+				</span>
+			);
+		}
+		return (
+			<span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 flex items-center gap-1 w-fit">
+				<Check size={12} />
+				Logged In
 			</span>
 		);
 	};
@@ -637,7 +699,10 @@ export default function UserApproval() {
 												Approval Time
 											</th>
 											<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-												Status
+												Login Status
+											</th>
+											<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+												Actions
 											</th>
 										</tr>
 									</thead>
@@ -682,10 +747,37 @@ export default function UserApproval() {
 													</div>
 												</td>
 												<td className="px-4 py-4 whitespace-nowrap">
-													<span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 flex items-center gap-1 w-fit">
-														<Check size={12} />
-														Active
-													</span>
+													{getLoginStatusBadge(staff)}
+												</td>
+												<td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+													<button
+														onClick={() => handleLogoutUser(staff.id, staff.name)}
+														disabled={loggingOutId === staff.id || staff.is_logged_out}
+														className={`inline-flex items-center px-3 py-1.5 border text-xs font-medium rounded-md ${
+															loggingOutId === staff.id
+																? "bg-gray-300 text-gray-500 cursor-not-allowed border-gray-300"
+																: staff.is_logged_out
+																? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+																: "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
+														} transition-colors`}
+													>
+														{loggingOutId === staff.id ? (
+															<>
+																<div className="animate-spin rounded-full h-3 w-3 border-b-1 border-red-600 mr-1"></div>
+																Logging out...
+															</>
+														) : staff.is_logged_out ? (
+															<>
+																<LogOut className="w-3 h-3 mr-1" />
+																Already Logged Out
+															</>
+														) : (
+															<>
+																<LogOut className="w-3 h-3 mr-1" />
+																Force Logout
+															</>
+														)}
+													</button>
 												</td>
 											</tr>
 										))}
@@ -713,13 +805,10 @@ export default function UserApproval() {
 													</div>
 												</div>
 											</div>
-											<span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 flex items-center gap-1">
-												<Check size={12} />
-												Active
-											</span>
+											{getLoginStatusBadge(staff)}
 										</div>
 										
-										<div className="space-y-2 text-sm mb-3">
+										<div className="space-y-2 text-sm mb-4">
 											<div className="flex justify-between">
 												<span className="text-gray-500">Role</span>
 												<span className="font-medium capitalize">{staff.role || "staff"}</span>
@@ -737,13 +826,44 @@ export default function UserApproval() {
 											<div className="flex justify-between">
 												<span className="text-gray-500">Approved</span>
 												<span className="font-medium text-right">
-													{staff.approved_at ? formatDateMobile(staff.login_approved_at) : ""}
-												</span>
-											</div>
+														{staff.approved_at ? formatDateMobile(staff.login_approved_at) : ""}
+													</span>
+												</div>
 											<div className="flex justify-between">
 												<span className="text-gray-500">Time Since</span>
 												<span className="font-medium">{getTimeSinceApproval(staff.login_approved_at)}</span>
 											</div>
+										</div>
+
+										<div className="flex justify-end">
+											<button
+												onClick={() => handleLogoutUser(staff.id, staff.name)}
+												disabled={loggingOutId === staff.id || staff.is_logged_out}
+												className={`w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border text-sm font-medium rounded-md ${
+													loggingOutId === staff.id
+														? "bg-gray-300 text-gray-500 cursor-not-allowed border-gray-300"
+														: staff.is_logged_out
+														? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+														: "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
+												} transition-colors`}
+											>
+												{loggingOutId === staff.id ? (
+													<>
+														<div className="animate-spin rounded-full h-3 w-3 border-b-1 border-red-600 mr-2"></div>
+														Logging out...
+													</>
+												) : staff.is_logged_out ? (
+													<>
+														<LogOut className="w-4 h-4 mr-2" />
+														Already Logged Out
+													</>
+												) : (
+													<>
+														<LogOut className="w-4 h-4 mr-2" />
+														Force Logout
+													</>
+												)}
+											</button>
 										</div>
 									</div>
 								))}
