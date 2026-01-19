@@ -321,7 +321,7 @@ export default function Expenses() {
     const csvData = filteredTransactions.map((transaction) => [
       transaction.description,
       transaction.category,
-      `N${(parseFloat(transaction.amount) || 0).toFixed(2)}`,
+      `₦${(parseFloat(transaction.amount) || 0).toFixed(2)}`, // Changed to ₦
       formatDisplayDate(transaction.date),
       formatDisplayTime(transaction.time),
       transaction.posted_by,
@@ -527,7 +527,7 @@ export default function Expenses() {
                   Total Expenses
                 </h3>
                 <p className="text-lg font-bold text-gray-800">
-                  N{totalExpenses.toFixed(2)}
+                  ₦{totalExpenses.toFixed(2)} {/* Changed to ₦ */}
                 </p>
               </div>
             </div>
@@ -777,7 +777,7 @@ export default function Expenses() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-black">
                         <span className="font-semibold text-green-600">
-                          N{(parseFloat(transaction.amount) || 0).toFixed(2)}
+                          ₦{(parseFloat(transaction.amount) || 0).toFixed(2)} {/* Changed to ₦ */}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
@@ -824,7 +824,7 @@ export default function Expenses() {
                     <div className="flex-1">
                       <div className="flex justify-between items-start">
                         <span className="font-semibold text-green-600 text-base">
-                          N{(parseFloat(transaction.amount) || 0).toFixed(2)}
+                          ₦{(parseFloat(transaction.amount) || 0).toFixed(2)} {/* Changed to ₦ */}
                         </span>
                         <div className="text-right">
                           <div className="text-xs text-gray-500">
@@ -955,7 +955,7 @@ export default function Expenses() {
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                        N
+                        ₦ {/* Changed to ₦ */}
                       </span>
                       <input
                         type="number"

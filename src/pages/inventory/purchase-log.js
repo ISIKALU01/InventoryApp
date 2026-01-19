@@ -337,7 +337,7 @@ export default function Purchases() {
       order.supplier?.contact_person || 'N/A',
       order.supplier?.email || 'N/A',
       order.status,
-      `N${(parseFloat(order.total_amount) || 0).toFixed(2)}`,
+      `₦${(parseFloat(order.total_amount) || 0).toFixed(2)}`, // Changed to ₦
       order.order_date,
       order.expected_date,
       order.payment_method,
@@ -581,7 +581,7 @@ export default function Purchases() {
                   Total Amount
                 </h3>
                 <p className="text-lg font-bold text-gray-800">
-                  N{totalAmount.toFixed(2)}
+                  ₦{totalAmount.toFixed(2)} {/* Changed to ₦ */}
                 </p>
               </div>
             </div>
@@ -858,7 +858,7 @@ export default function Purchases() {
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-black">
-                        N{(parseFloat(order.total_amount) || 0).toFixed(2)}
+                        ₦{(parseFloat(order.total_amount) || 0).toFixed(2)} {/* Changed to ₦ */}
                       </td>
                       <td className="px-4 py-3 text-sm text-black">
                         {order.order_date}
@@ -918,7 +918,7 @@ export default function Purchases() {
                           </span>
                         </div>
                         <span className="text-sm font-medium text-black">
-                          N{(parseFloat(order.total_amount) || 0).toFixed(2)}
+                          ₦{(parseFloat(order.total_amount) || 0).toFixed(2)} {/* Changed to ₦ */}
                         </span>
                       </div>
                       <div className="text-sm text-black mt-1">
@@ -1138,7 +1138,7 @@ export default function Purchases() {
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                      N
+                      ₦ {/* Changed to ₦ */}
                     </span>
                     <input
                       type="number"

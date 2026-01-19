@@ -128,11 +128,11 @@ export default function Sidebar({ onToggle }) {
       icon: <FaMoneyBill className="w-5 h-5" />,
       roles: ['admin', 'staff'],
       submenu: [
-          { name: 'sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, roles: [] },
-          { name: 'payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, roles: [] }
+          { name: 'Sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'Expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'Sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" />, roles: ['admin', 'staff'] },
+          { name: 'Sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, roles: [] },
+          { name: 'Payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, roles: [] }
       ]
     },
     { 
@@ -207,7 +207,7 @@ export default function Sidebar({ onToggle }) {
       `}>
         {/* Logo and toggle button */}
         <div className="flex items-center justify-between p-4 border-b border-indigo-700 flex-shrink-0">
-          {isOpen && <h1 className="text-xl font-bold">PGIMS</h1>}
+          {isOpen && <h1 className="text-xl font-bold">SellaPad</h1>}
           <button 
             onClick={toggleSidebar}
             className="p-2 rounded-lg bg-indigo-900 hover:bg-indigo-700 transition-colors duration-200"

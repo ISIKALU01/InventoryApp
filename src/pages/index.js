@@ -9,8 +9,36 @@ import {
   verifyToken,
 } from "../../utils/auth";
 
-// Session verification function (same as in AdminDashboard and StaffDashboard)
+// Loading Component
+const LoadingScreen = () => {
+  return (
+    <div className="fixed inset-0 bg-indigo-900 flex items-center justify-center z-50">
+      <div className="text-center text-white">
+        <div className="animate-pulse">
+          <h1 className="text-5xl md:text-6xl font-bold mb-4">SellaPad</h1>
+          <p className="text-xl md:text-2xl font-light">
+            Own Your Inventory. Control Your Sales. Scale With Confidence.
+          </p>
+        </div>
+        <div className="mt-8">
+          <div className="w-64 h-2 bg-blue-400 rounded-full overflow-hidden mx-auto">
+            <div className="h-full bg-white animate-[progress_7s_linear]"></div>
+          </div>
+          <p className="mt-4 text-blue-200">Loading your experience...</p>
+        </div>
+        
+        <style jsx>{`
+          @keyframes progress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+};
 
+// Session verification function (same as in AdminDashboard and StaffDashboard)
 const redirectBasedOnRole = (role, router) => {
   switch (role) {
     case "admin":
@@ -31,16 +59,57 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isClient, setIsClient] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(true);
   const router = useRouter();
 
-  // Set client-side flag
+  // Check if this is the first app load (not a logout scenario)
+  const isFirstLoad = () => {
+    // Check if user has seen the loading screen before
+    if (typeof window !== 'undefined') {
+      const hasSeenLoadingScreen = sessionStorage.getItem('hasSeenLoadingScreen');
+      const isFromLogout = sessionStorage.getItem('isLogout');
+      
+      // If coming from logout, don't show loading screen
+      if (isFromLogout === 'true') {
+        sessionStorage.removeItem('isLogout');
+        return false;
+      }
+      
+      // If already seen loading screen in this session, don't show again
+      if (hasSeenLoadingScreen === 'true') {
+        return false;
+      }
+      
+      return true;
+    }
+    return true;
+  };
+
+  // Set client-side flag and handle loading screen
   useEffect(() => {
     setIsClient(true);
+    
+    // Check if we should show loading screen
+    if (isFirstLoad()) {
+      // Show loading screen for 7 seconds on first load
+      const loadingTimer = setTimeout(() => {
+        setShowLoadingScreen(false);
+        // Mark that user has seen loading screen in this session
+        sessionStorage.setItem('hasSeenLoadingScreen', 'true');
+      }, 7000);
+      
+      return () => clearTimeout(loadingTimer);
+    } else {
+      // Skip loading screen if not first load
+      setShowLoadingScreen(false);
+    }
   }, []);
 
-  // Check if user is already logged in on component mount
+
+
+  // Check if user is already logged in (after loading screen)
   useEffect(() => {
-    if (!isClient) return;
+    if (!isClient || showLoadingScreen) return;
 
     const checkExistingSession = async () => {
       console.log("Checking existing session...");
@@ -64,7 +133,7 @@ export default function Login() {
     };
 
     checkExistingSession();
-  }, [router, isClient]);
+  }, [router, isClient, showLoadingScreen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -157,6 +226,11 @@ export default function Login() {
     }
   };
 
+  // Show loading screen for 7 seconds (only on first app load)
+  if (showLoadingScreen) {
+    return <LoadingScreen />;
+  }
+
   // Show loading state while checking client-side
   if (!isClient) {
     return (
@@ -241,8 +315,16 @@ export default function Login() {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl z-10 md:shadow-none md:rounded-none md:bg-transparent">
           <div className="bg-white py-8 px-6 rounded-2xl shadow-lg md:shadow-xl md:px-8">
             <div className="flex justify-center mb-6">
-              <div className="flex items-center justify-center bg-indigo-900 text-white rounded-full w-20 h-20 shadow-lg">
-                <span className="text-2xl font-bold">PGIMS</span>
+              <div className="flex items-center justify-center w-48 h-16">
+                {/* Updated: Using sellapadblue.png from public folder */}
+                <Image
+                  src="/sellapadblue.png"
+                  alt="SellaPad Logo"
+                  width={100}
+                  height={100}
+                  className="object-contain"
+                  priority
+                />
               </div>
             </div>
 
