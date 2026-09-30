@@ -14,7 +14,7 @@ import {
   FaUser,
 } from "react-icons/fa";
 
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
+import API_BASE_URL from "../../../config";
 
 export default function Expenses() {
   const [transactions, setTransactions] = useState([]);

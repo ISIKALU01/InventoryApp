@@ -16,7 +16,7 @@ import {
 } from "react-icons/fa";
 import { useRouter } from "next/router";
 
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
+import API_BASE_URL from "../../../config";
 
 // Modal Components
 const ImportCSVModal = ({ isOpen, onClose, onImport }) => {

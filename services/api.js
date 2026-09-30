@@ -1,5 +1,5 @@
 // lib/api.js
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
+import API_BASE_URL from "../config";
 
 // Common function to get auth headers
 const getAuthHeaders = async () => {
