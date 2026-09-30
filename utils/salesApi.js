@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://testing.osharaofficial.com/api/";
+const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
 
 // API Service functions with authentication
 export const inventoryAPI = {
