@@ -13,7 +13,7 @@ import {
 } from "react-icons/fa";
 import { FaEdit, FaTrash } from "react-icons/fa";
 
-const API_BASE_URL = "https://testing.osharaofficial.com/api";
+const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
 
 // Supplier API Service
 export const supplierAPI = {

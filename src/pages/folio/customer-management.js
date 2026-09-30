@@ -22,7 +22,7 @@ import CustomerProfile from "../customerProfile"; // Adjust the path as needed
 import { useState, useEffect } from "react";
 
 
-const API_BASE_URL = "https://testing.osharaofficial.com/api";
+const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
 
 // Customer API Service
 export const customerAPI = {
