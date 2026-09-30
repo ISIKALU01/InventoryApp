@@ -16,7 +16,7 @@ import {
 } from "react-icons/fa";
 import { useRouter } from "next/router";
 
-const API_BASE_URL = "https://testing.osharaofficial.com/api";
+const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
 
 // Modal Components
 const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
