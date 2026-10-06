@@ -1,0 +1,101 @@
+﻿sku,name,description,store,quantity,unit_price,cost_price,stock_value,status
+GRN-001,Rice 50kg,Long grain parboiled rice,Main Store,230,78000.00,62780.00,14439400.00,In Stock
+GRN-002,Rice 25kg,Long grain parboiled rice,Lekki Branch,176,40500.00,33440.00,5885440.00,In Stock
+GRN-003,Rice 10kg,Long grain parboiled rice,Ikeja Branch,22,17000.00,13490.00,296780.00,In Stock
+GRN-004,Beans 50kg,Brown honey beans,Main Store,250,85000.00,62960.00,15740000.00,In Stock
+GRN-005,Beans 5kg,Brown honey beans,Lekki Branch,97,9500.00,7860.00,762420.00,In Stock
+GRN-006,Garri White 10kg,Ijebu white garri,Ikeja Branch,0,12000.00,8950.00,0.00,Out of Stock
+GRN-007,Garri Yellow 10kg,Yellow garri,Main Store,212,13000.00,11200.00,2374400.00,In Stock
+GRN-008,Semovita 10kg,Wheat semolina,Lekki Branch,212,14500.00,11330.00,2401960.00,In Stock
+GRN-009,Semovita 2kg,Wheat semolina,Ikeja Branch,242,3200.00,2270.00,549340.00,In Stock
+GRN-010,Golden Penny Flour 2kg,All-purpose flour,Main Store,4,3500.00,2960.00,11840.00,Low Stock
+PST-001,Spaghetti 500g,"Pasta, single pack",Lekki Branch,3,1100.00,900.00,2700.00,Low Stock
+PST-002,Spaghetti Carton (20),"Pasta, carton of 20",Ikeja Branch,76,21000.00,16610.00,1262360.00,In Stock
+PST-003,Macaroni 500g,Elbow macaroni,Main Store,6,1050.00,830.00,4980.00,Low Stock
+PST-004,Indomie Chicken 70g,Instant noodles,Lekki Branch,179,250.00,200.00,35800.00,In Stock
+PST-005,Indomie Carton (40),"Instant noodles, carton of 40",Ikeja Branch,66,9800.00,8370.00,552420.00,In Stock
+OIL-001,Vegetable Oil 5L,Refined vegetable oil,Main Store,231,16500.00,14030.00,3240930.00,In Stock
+OIL-002,Vegetable Oil 3L,Refined vegetable oil,Lekki Branch,80,10200.00,7400.00,592000.00,In Stock
+OIL-003,Vegetable Oil 1L,Refined vegetable oil,Ikeja Branch,17,3600.00,2530.00,43010.00,In Stock
+OIL-004,Palm Oil 5L,Red palm oil,Main Store,68,14000.00,10190.00,692920.00,In Stock
+OIL-005,Palm Oil 1L,Red palm oil,Lekki Branch,186,3000.00,2280.00,424080.00,In Stock
+OIL-006,Groundnut Oil 3L,Pure groundnut oil,Ikeja Branch,156,11500.00,9260.00,1444560.00,In Stock
+SGR-001,Sugar 1kg,Granulated white sugar,Main Store,3,1800.00,1460.00,4380.00,Low Stock
+SGR-002,Sugar Cubes 500g,St. Louis sugar cubes,Lekki Branch,0,1500.00,1070.00,0.00,Out of Stock
+SPC-001,Salt 500g,Iodized table salt,Ikeja Branch,206,400.00,350.00,72100.00,In Stock
+SPC-002,Maggi Cubes (100),"Seasoning cubes, pack of 100",Main Store,28,2200.00,1630.00,45640.00,In Stock
+SPC-003,Knorr Cubes (50),"Seasoning cubes, pack of 50",Lekki Branch,4,1300.00,920.00,3680.00,Low Stock
+SPC-004,Curry Powder 50g,Ground curry,Ikeja Branch,112,450.00,360.00,40320.00,In Stock
+SPC-005,Thyme 50g,Dried thyme leaves,Main Store,162,450.00,350.00,56700.00,In Stock
+CAN-001,Tomato Paste 400g,Tin tomato paste,Lekki Branch,8,1400.00,1080.00,8640.00,Low Stock
+CAN-002,Tomato Paste Sachet 70g,Sachet tomato paste,Ikeja Branch,52,200.00,160.00,8320.00,In Stock
+CAN-003,Sardines 125g,Sardines in vegetable oil,Main Store,194,950.00,780.00,151320.00,In Stock
+CAN-004,Corned Beef 340g,Canned corned beef,Lekki Branch,111,3800.00,3090.00,342990.00,In Stock
+CAN-005,Baked Beans 415g,Beans in tomato sauce,Ikeja Branch,4,1600.00,1190.00,4760.00,Low Stock
+CAN-006,Sweet Corn 340g,Canned sweet corn,Main Store,248,1450.00,1160.00,287680.00,In Stock
+DRY-001,Peak Milk Tin 400g,Evaporated milk powder tin,Lekki Branch,34,5600.00,4750.00,161500.00,In Stock
+DRY-002,Peak Milk Sachet 14g,Powdered milk sachet,Ikeja Branch,153,150.00,130.00,19890.00,In Stock
+DRY-003,Dano Milk 400g,Full cream milk powder,Main Store,9,4800.00,3470.00,31230.00,Low Stock
+BEV-001,Milo 500g,Chocolate malt drink refill,Lekki Branch,198,3900.00,3200.00,633600.00,In Stock
+BEV-002,Milo 1kg,Chocolate malt drink refill,Ikeja Branch,91,7200.00,5870.00,534170.00,In Stock
+BEV-003,Bournvita 500g,Chocolate malt drink refill,Main Store,0,3700.00,2680.00,0.00,Out of Stock
+BEV-004,Lipton Tea (100 bags),Yellow label tea,Lekki Branch,93,3200.00,2280.00,212040.00,In Stock
+BEV-005,Nescafe Classic 200g,Instant coffee,Ikeja Branch,27,6500.00,5380.00,145260.00,In Stock
+BEV-006,Coca-Cola 50cl,"Soft drink, PET bottle",Main Store,118,400.00,290.00,34220.00,In Stock
+BEV-007,Coca-Cola Pack (12),"Soft drink, pack of 12",Lekki Branch,10,4600.00,4010.00,40100.00,Low Stock
+BEV-008,Fanta 50cl,Orange soft drink,Ikeja Branch,160,400.00,350.00,56000.00,In Stock
+BEV-009,Sprite 50cl,Lemon-lime soft drink,Main Store,134,400.00,320.00,42880.00,In Stock
+BEV-010,Malt Drink 33cl,Non-alcoholic malt can,Lekki Branch,33,600.00,450.00,14850.00,In Stock
+BEV-011,Bottled Water 75cl,Table water,Ikeja Branch,163,200.00,150.00,24450.00,In Stock
+BEV-012,Bottled Water Pack (12),"Table water, pack of 12",Main Store,80,2200.00,1630.00,130400.00,In Stock
+BEV-013,Chi Exotic 1L,Fruit juice blend,Lekki Branch,72,1900.00,1570.00,113040.00,In Stock
+SNK-001,Cabin Biscuit,Cream crackers,Ikeja Branch,195,600.00,430.00,83850.00,In Stock
+SNK-002,Digestive Biscuits 400g,Wheat biscuits,Main Store,194,1700.00,1390.00,269660.00,In Stock
+SNK-003,Plantain Chips 150g,Salted plantain chips,Lekki Branch,18,700.00,610.00,10980.00,In Stock
+SNK-004,Gala Sausage Roll,Sausage roll snack,Ikeja Branch,119,300.00,220.00,26180.00,In Stock
+SNK-005,Chin Chin 500g,Crunchy fried snack,Main Store,73,1500.00,1120.00,81760.00,In Stock
+SNK-006,Groundnut 500g,Roasted peanuts,Lekki Branch,93,1200.00,850.00,79050.00,In Stock
+BAK-001,Bread Loaf,Sliced white bread,Ikeja Branch,0,1500.00,1060.00,0.00,Out of Stock
+FRS-001,Eggs Crate (30),Fresh eggs,Main Store,28,5500.00,3860.00,108080.00,In Stock
+FRS-002,Frozen Chicken 1kg,Whole frozen chicken,Lekki Branch,197,6500.00,5370.00,1057890.00,In Stock
+FRS-003,Frozen Fish (Titus) 1kg,Mackerel,Ikeja Branch,142,5000.00,3790.00,538180.00,In Stock
+FRS-004,Butter 250g,Salted butter,Main Store,184,2500.00,1940.00,356960.00,In Stock
+FRS-005,Yoghurt 1L,Sweetened yoghurt,Lekki Branch,85,2400.00,1970.00,167450.00,In Stock
+HSH-001,Omo Detergent 900g,Washing powder,Ikeja Branch,230,2800.00,2260.00,519800.00,In Stock
+HSH-002,Ariel Detergent 2kg,Washing powder,Main Store,1,6200.00,4780.00,4780.00,Low Stock
+HSH-003,Morning Fresh 500ml,Dishwashing liquid,Lekki Branch,148,1600.00,1380.00,204240.00,In Stock
+HSH-004,Hypo Bleach 1L,Household bleach,Ikeja Branch,211,1100.00,950.00,200450.00,In Stock
+HSH-005,Dettol 500ml,Antiseptic liquid,Main Store,4,3500.00,3000.00,12000.00,Low Stock
+HSH-006,Harpic 500ml,Toilet cleaner,Lekki Branch,5,2300.00,1780.00,8900.00,Low Stock
+HSH-007,Insecticide 300ml,Mosquito spray,Ikeja Branch,213,2600.00,2140.00,455820.00,In Stock
+HSH-008,Toilet Roll Pack (12),2-ply toilet tissue,Main Store,16,4500.00,3700.00,59200.00,In Stock
+HSH-009,Kitchen Towel (2 rolls),Paper towels,Lekki Branch,84,1800.00,1530.00,128520.00,In Stock
+HSH-010,Refuse Bags (20),Black bin bags,Ikeja Branch,15,1200.00,880.00,13200.00,In Stock
+HSH-011,Matches (10 boxes),Safety matches,Main Store,29,300.00,220.00,6380.00,In Stock
+HSH-012,Candle Pack (6),White candles,Lekki Branch,0,900.00,660.00,0.00,Out of Stock
+PRS-001,Lux Soap 175g,Beauty bar soap,Ikeja Branch,11,650.00,470.00,5170.00,In Stock
+PRS-002,Dettol Soap 175g,Antibacterial soap,Main Store,190,800.00,580.00,110200.00,In Stock
+PRS-003,Closeup Toothpaste 140g,Gel toothpaste,Lekki Branch,175,1300.00,990.00,173250.00,In Stock
+PRS-004,Pepsodent Toothpaste 140g,Fluoride toothpaste,Ikeja Branch,209,1150.00,880.00,183920.00,In Stock
+PRS-005,Toothbrush,Medium bristle,Main Store,12,400.00,330.00,3960.00,In Stock
+PRS-006,Vaseline 250ml,Petroleum jelly,Lekki Branch,4,2200.00,1560.00,6240.00,Low Stock
+PRS-007,Nivea Lotion 400ml,Body lotion,Ikeja Branch,190,4800.00,3810.00,723900.00,In Stock
+PRS-008,Shampoo 400ml,Hair shampoo,Main Store,33,3300.00,2720.00,89760.00,In Stock
+PRS-009,Sanitary Pads (8),Regular pads,Lekki Branch,184,1100.00,830.00,152720.00,In Stock
+BBY-001,Diapers Medium (40),Baby diapers,Ikeja Branch,215,9500.00,6930.00,1489950.00,In Stock
+BBY-002,Baby Wipes (80),Unscented wipes,Main Store,40,2100.00,1640.00,65600.00,In Stock
+BBY-003,Cerelac 400g,Infant cereal,Lekki Branch,10,4900.00,4050.00,40500.00,Low Stock
+BBY-004,SMA Gold 400g,Infant formula,Ikeja Branch,84,9800.00,7780.00,653520.00,In Stock
+ELC-001,AA Batteries (4),Alkaline batteries,Main Store,241,1500.00,1210.00,291610.00,In Stock
+ELC-002,Rechargeable Lantern,LED lantern,Lekki Branch,6,8500.00,6050.00,36300.00,Low Stock
+ELC-003,LED Bulb 15W,Energy saving bulb,Ikeja Branch,57,1200.00,910.00,51870.00,In Stock
+ELC-004,Extension Box 4-way,Power extension,Main Store,0,6000.00,4870.00,0.00,Out of Stock
+ELC-005,Phone Charger USB-C,Fast charger,Lekki Branch,112,4500.00,3360.00,376320.00,In Stock
+STN-001,Exercise Book (20 leaves),Pack of 12,Ikeja Branch,120,2400.00,1780.00,213600.00,In Stock
+STN-002,Biro Pen (Box of 50),Blue ballpoint pens,Main Store,186,3000.00,2160.00,401760.00,In Stock
+STN-003,A4 Paper Ream,"80gsm, 500 sheets",Lekki Branch,9,6500.00,5510.00,49590.00,Low Stock
+STN-004,Pencil (12),HB pencils,Ikeja Branch,169,900.00,770.00,130130.00,In Stock
+HME-001,Plastic Bucket 20L,With lid,Main Store,10,3500.00,2700.00,27000.00,Low Stock
+HME-002,Plastic Chair,Armless chair,Lekki Branch,71,7500.00,6090.00,432390.00,In Stock
+HME-003,Cooking Pot Set (3),Aluminium pots,Ikeja Branch,237,18000.00,14740.00,3493380.00,In Stock
+HME-004,Gas Lighter,Refillable lighter,Main Store,25,700.00,590.00,14750.00,In Stock

@@ -156,7 +156,7 @@ export default function Dashboard() {
 					<div className="bg-white overflow-hidden shadow mb-8">
 						<div className="px-4 py-5 sm:p-6">
 							<h2 className="text-2xl font-bold text-gray-900 mb-6">
-								{user.role === 'admin' ? 'Administrative Controls' : 'Sales Dashboard'}
+								{user.role === 'admin' ? 'Ops Center' : 'Sales Dashboard'}
 							</h2>
 
 							{/* DASHBOARD CARDS - Show for both roles */}

@@ -64,6 +64,17 @@ export const apiRequest = async (path, { method = "GET", body, errorLabel = "Req
 };
 
 // Products
+// `stock` is optional and left out of the body when not given, so an
+// update doesn't overwrite the product's current stock
+const toProductPayload = (productData) => ({
+  sku: productData.sku || "",
+  name: productData.name,
+  description: productData.description || "",
+  price: productData.price,
+  cost_price: productData.cost_price,
+  stock: productData.stock,
+});
+
 export const productAPI = {
   getAllProducts: () => apiRequest("/products", { errorLabel: "Failed to fetch products" }),
 
@@ -71,26 +82,14 @@ export const productAPI = {
     apiRequest("/products", {
       method: "POST",
       errorLabel: "Failed to create product",
-      body: {
-        sku: productData.sku || "",
-        name: productData.name,
-        description: productData.description || "",
-        price: productData.price,
-        cost_price: productData.cost_price,
-      },
+      body: toProductPayload(productData),
     }),
 
   updateProduct: (id, productData) =>
     apiRequest(`/products/${id}`, {
       method: "PUT",
       errorLabel: "Failed to update product",
-      body: {
-        sku: productData.sku || "",
-        name: productData.name,
-        description: productData.description || "",
-        price: productData.price,
-        stock: productData.stock,
-      },
+      body: toProductPayload(productData),
     }),
 
   deleteProduct: (id) =>
