@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import http from "../../services/http";
 import {
 	FaMoneyBillWave,
 	FaUniversity,
@@ -10,8 +10,6 @@ import {
 	FaArrowDown,
 	FaArrowUp,
 } from "react-icons/fa";
-import BASE_URL from "../../config";
-import { getLocalStorage } from "../../utils/auth";
 
 export default function CashFlow() {
 	const [dateRange, setDateRange] = useState("today");
@@ -22,13 +20,7 @@ export default function CashFlow() {
 	const fetchData = async (filter) => {
 		try {
 			setLoading(true);
-			const token = getLocalStorage("token");
-			const res = await axios.get(
-				`${BASE_URL}/show-method-amount?filter=${filter}`,
-				{
-					headers: { Authorization: `Bearer ${token}` },
-				}
-			);
+			const res = await http.get(`/show-method-amount?filter=${filter}`);
 			setData(res.data);
 		} catch (error) {
 			console.error("Error fetching cash flow data:", error);

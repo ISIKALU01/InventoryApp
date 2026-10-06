@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import http from "../../services/http";
 import {
 	Chart as ChartJS,
 	CategoryScale,
@@ -12,7 +12,6 @@ import {
 	Filler,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
-import BASE_URL from "../../config";
 import { getLocalStorage } from "../../utils/auth";
 
 // Register ChartJS components
@@ -42,8 +41,7 @@ export default function TrendChart() {
 			// Handle default mapping — empty means “today”
 			const finalFilter = filter === "today" ? "" : `this_${filter}`;
 
-			const response = await axios.get(`${BASE_URL}/sales-trend`, {
-				headers: { Authorization: `Bearer ${token}` },
+			const response = await http.get("/sales-trend", {
 				params: { filter: finalFilter },
 			});
 

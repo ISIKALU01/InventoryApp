@@ -19,8 +19,7 @@ import {
   FaMapMarkerAlt,
 } from "react-icons/fa";
 
-import BASE_URL from "../../../config";
-import { supplierAPI } from "../../../services/api";
+import { purchaseOrderAPI, supplierAPI } from "../../../services/api";
 
 export default function Purchases() {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
@@ -76,19 +75,6 @@ export default function Purchases() {
     return sum + (parseFloat(order.total_amount) || 0);
   }, 0);
 
-  // Get auth headers for purchase orders
-  const getAuthHeaders = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-    return {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    };
-  };
-
   // Generate order number
   const generateOrderNumber = () => {
     const timestamp = new Date().getTime();
@@ -135,23 +121,8 @@ export default function Purchases() {
       setLoading(true);
       setError("");
       
-      const headers = await getAuthHeaders();
-      
-      const response = await fetch(`${BASE_URL}/purchase-orders`, {
-        method: "GET",
-        headers,
-      });
+      const data = await purchaseOrderAPI.getAllPurchaseOrders();
 
-      if (response.status === 401) {
-        throw new Error("Authentication required. Please log in.");
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch purchase orders: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
       // Handle both array and object responses
       if (Array.isArray(data)) {
         setPurchaseOrders(data);
@@ -330,20 +301,7 @@ export default function Purchases() {
   const confirmDelete = async () => {
     try {
       setError("");
-      const headers = await getAuthHeaders();
-      
-      const response = await fetch(`${BASE_URL}/purchase-orders/${orderToDelete.id}`, {
-        method: "DELETE",
-        headers,
-      });
-
-      if (response.status === 401) {
-        throw new Error("Authentication required. Please log in.");
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to delete purchase order: ${response.status}`);
-      }
+      await purchaseOrderAPI.deletePurchaseOrder(orderToDelete.id);
 
       // Refresh the orders list
       await fetchPurchaseOrders();
@@ -383,30 +341,16 @@ export default function Purchases() {
     
     try {
       setError("");
-      const headers = await getAuthHeaders();
-      
-      const url = selectedOrder 
-        ? `${BASE_URL}/purchase-orders/${selectedOrder.id}`
-        : `${BASE_URL}/purchase-orders`;
-      
-      const method = selectedOrder ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: JSON.stringify({
-          ...orderFormData,
-          total_amount: orderFormData.total_amount ? parseFloat(orderFormData.total_amount) : null,
-          supplier_id: parseInt(orderFormData.supplier_id)
-        }),
-      });
+      const orderData = {
+        ...orderFormData,
+        total_amount: orderFormData.total_amount ? parseFloat(orderFormData.total_amount) : null,
+        supplier_id: parseInt(orderFormData.supplier_id)
+      };
 
-      if (response.status === 401) {
-        throw new Error("Authentication required. Please log in.");
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to ${selectedOrder ? 'update' : 'create'} purchase order: ${response.status}`);
+      if (selectedOrder) {
+        await purchaseOrderAPI.updatePurchaseOrder(selectedOrder.id, orderData);
+      } else {
+        await purchaseOrderAPI.createPurchaseOrder(orderData);
       }
 
       // Refresh the orders list

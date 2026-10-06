@@ -264,6 +264,61 @@ export const supplierAPI = {
     apiRequest(`/suppliers/${id}`, { method: "DELETE", errorLabel: "Failed to delete supplier" }),
 };
 
+// Purchase orders
+export const purchaseOrderAPI = {
+  getAllPurchaseOrders: () =>
+    apiRequest("/purchase-orders", { errorLabel: "Failed to fetch purchase orders" }),
+
+  createPurchaseOrder: (orderData) =>
+    apiRequest("/purchase-orders", {
+      method: "POST",
+      body: orderData,
+      errorLabel: "Failed to create purchase order",
+    }),
+
+  updatePurchaseOrder: (id, orderData) =>
+    apiRequest(`/purchase-orders/${id}`, {
+      method: "PUT",
+      body: orderData,
+      errorLabel: "Failed to update purchase order",
+    }),
+
+  deletePurchaseOrder: (id) =>
+    apiRequest(`/purchase-orders/${id}`, {
+      method: "DELETE",
+      errorLabel: "Failed to delete purchase order",
+    }),
+};
+
+// Expenses
+export const expenseAPI = {
+  getAllExpenses: () => apiRequest("/expenses", { errorLabel: "Failed to fetch expenses" }),
+
+  createExpense: (expenseData) =>
+    apiRequest("/expenses", {
+      method: "POST",
+      body: expenseData,
+      errorLabel: "Failed to create expense",
+    }),
+
+  updateExpense: (id, expenseData) =>
+    apiRequest(`/expenses/${id}`, {
+      method: "PUT",
+      body: expenseData,
+      errorLabel: "Failed to update expense",
+    }),
+
+  deleteExpense: (id) =>
+    apiRequest(`/expenses/${id}`, { method: "DELETE", errorLabel: "Failed to delete expense" }),
+};
+
+// Users
+export const userAPI = {
+  getCurrentUser: () => apiRequest("/user", { errorLabel: "Failed to fetch current user" }),
+
+  getAllUsers: () => apiRequest("/users", { errorLabel: "Failed to fetch users" }),
+};
+
 // Order items (sales cart)
 export const orderItemAPI = {
   createOrderItem: (orderItemData) =>

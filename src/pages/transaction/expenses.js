@@ -14,7 +14,7 @@ import {
   FaUser,
 } from "react-icons/fa";
 
-import BASE_URL from "../../../config";
+import { expenseAPI, userAPI } from "../../../services/api";
 
 export default function Expenses() {
   const [transactions, setTransactions] = useState([]);
@@ -49,19 +49,6 @@ export default function Expenses() {
   const totalExpenses = transactions.reduce((sum, transaction) => {
     return sum + (parseFloat(transaction.amount) || 0);
   }, 0);
-
-  // Get auth headers
-  const getAuthHeaders = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-    return {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    };
-  };
 
   // Format date to a more readable format
   const formatDisplayDate = (dateString) => {
@@ -139,25 +126,16 @@ export default function Expenses() {
   // Fetch current user data
   const fetchCurrentUser = async () => {
     try {
-      const headers = await getAuthHeaders();
-      
-      const response = await fetch(`${BASE_URL}/user`, {
-        method: "GET",
-        headers,
-      });
+      const userData = await userAPI.getCurrentUser();
+      setCurrentUser(userData);
 
-      if (response.ok) {
-        const userData = await response.json();
-        setCurrentUser(userData);
-        
-        // Auto-fill the posted_by field with formatted username
-        const username = extractUsernameFromEmail(userData.email);
-        const formattedUsername = formatUsername(username);
-        setExpenseFormData(prev => ({
-          ...prev,
-          posted_by: formattedUsername
-        }));
-      }
+      // Auto-fill the posted_by field with formatted username
+      const username = extractUsernameFromEmail(userData.email);
+      const formattedUsername = formatUsername(username);
+      setExpenseFormData(prev => ({
+        ...prev,
+        posted_by: formattedUsername
+      }));
     } catch (err) {
       console.error("Error fetching current user:", err);
       // If we can't get current user, try to get from users list
@@ -168,31 +146,18 @@ export default function Expenses() {
   // Fetch all users
   const fetchUsers = async () => {
     try {
-      const headers = await getAuthHeaders();
-      
-      const response = await fetch(`${BASE_URL}/users`, {
-        method: "GET",
-        headers,
-      });
+      const usersData = await userAPI.getAllUsers();
+      setUsers(usersData);
 
-      if (response.ok) {
-        const usersData = await response.json();
-        setUsers(usersData);
-        
-        // If we don't have current user yet, try to find it from the users list
-        if (!currentUser) {
-          const token = localStorage.getItem("token");
-          // You might need to decode the token to get user email, or use the first user as fallback
-          if (usersData.length > 0) {
-            const firstUser = usersData[0];
-            const username = extractUsernameFromEmail(firstUser.email);
-            const formattedUsername = formatUsername(username);
-            setExpenseFormData(prev => ({
-              ...prev,
-              posted_by: formattedUsername
-            }));
-          }
-        }
+      // If we don't have current user yet, fall back to the first user
+      if (!currentUser && usersData.length > 0) {
+        const firstUser = usersData[0];
+        const username = extractUsernameFromEmail(firstUser.email);
+        const formattedUsername = formatUsername(username);
+        setExpenseFormData(prev => ({
+          ...prev,
+          posted_by: formattedUsername
+        }));
       }
     } catch (err) {
       console.error("Error fetching users:", err);
@@ -216,23 +181,8 @@ export default function Expenses() {
       setLoading(true);
       setError("");
       
-      const headers = await getAuthHeaders();
-      
-      const response = await fetch(`${BASE_URL}/expenses`, {
-        method: "GET",
-        headers,
-      });
+      const data = await expenseAPI.getAllExpenses();
 
-      if (response.status === 401) {
-        throw new Error("Authentication required. Please log in.");
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch expenses: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
       // Handle both array and object responses
       if (Array.isArray(data)) {
         setTransactions(data);
@@ -405,20 +355,7 @@ export default function Expenses() {
   const confirmDelete = async () => {
     try {
       setError("");
-      const headers = await getAuthHeaders();
-      
-      const response = await fetch(`${BASE_URL}/expenses/${expenseToDelete.id}`, {
-        method: "DELETE",
-        headers,
-      });
-
-      if (response.status === 401) {
-        throw new Error("Authentication required. Please log in.");
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to delete expense: ${response.status}`);
-      }
+      await expenseAPI.deleteExpense(expenseToDelete.id);
 
       // Refresh the expenses list
       await fetchExpenses();
@@ -457,29 +394,15 @@ export default function Expenses() {
     
     try {
       setError("");
-      const headers = await getAuthHeaders();
-      
-      const url = selectedExpense 
-        ? `${BASE_URL}/expenses/${selectedExpense.id}`
-        : `${BASE_URL}/expenses`;
-      
-      const method = selectedExpense ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: JSON.stringify({
-          ...expenseFormData,
-          amount: parseFloat(expenseFormData.amount)
-        }),
-      });
+      const expenseData = {
+        ...expenseFormData,
+        amount: parseFloat(expenseFormData.amount)
+      };
 
-      if (response.status === 401) {
-        throw new Error("Authentication required. Please log in.");
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to ${selectedExpense ? 'update' : 'create'} expense: ${response.status}`);
+      if (selectedExpense) {
+        await expenseAPI.updateExpense(selectedExpense.id, expenseData);
+      } else {
+        await expenseAPI.createExpense(expenseData);
       }
 
       // Refresh the expenses list

@@ -1,8 +1,7 @@
 // pages/transaction/sales-invoice.js
 import TransactionNav from "../../components/TransactionNav";
 import { useState, useEffect } from "react";
-import BASE_URL from "../../../config";
-import axios from "axios";
+import http from "../../../services/http";
 import { Trash2 } from "lucide-react";
 import { FaTimes } from "react-icons/fa";
 
@@ -26,7 +25,6 @@ export default function SalesInvoice() {
 	const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 	const [successMessage, setSuccessMessage] = useState("");
 
-	const token = localStorage.getItem("token");
 
 	// Show success pop-up
 	const showSuccess = (message) => {
@@ -45,23 +43,18 @@ export default function SalesInvoice() {
 	useEffect(() => {
 		const fetchCustomers = async () => {
 			try {
-				const token = localStorage.getItem("token");
 				let url = "";
 
 				// Choose endpoint based on payment method
 				if (paymentMethod === "customer_balance") {
-					url = `${BASE_URL}/customers`;
+					url = "/customers";
 				} else if (paymentMethod === "credit_limit") {
-					url = `${BASE_URL}/reports/customer-credit`;
+					url = "/reports/customer-credit";
 				} else {
 					return; // no fetch needed
 				}
 
-				const response = await axios.get(url, {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				});
+				const response = await http.get(url);
 
 				setCustomers(response.data);
 			} catch (error) {
@@ -77,10 +70,7 @@ export default function SalesInvoice() {
 		const fetchInventory = async () => {
 			try {
 				setLoading(true);
-				const response = await axios.get(`${BASE_URL}/products`, {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
+				const response = await http.get("/products", {
 					params: {
 						store: selectedStore || undefined,
 						search: searchTerm || undefined,
@@ -194,11 +184,7 @@ export default function SalesInvoice() {
 	const fetchCart = async () => {
 		try {
 			setLoading(true);
-			const response = await axios.get(`${BASE_URL}/cart`, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
+			const response = await http.get("/cart");
 			setCart(response.data.data || []);
 		} catch (error) {
 			console.error("Error fetching cart:", error);
@@ -211,16 +197,7 @@ export default function SalesInvoice() {
 	const handleItemClick = async (id) => {
 		try {
 			setCartLoading(true);
-			const response = await axios.post(
-				`${BASE_URL}/cart/${id}`,
-				{}, // body (empty if not needed)
-				{
-					headers: {
-						Authorization: `Bearer ${token}`,
-						"Content-Type": "application/json",
-					},
-				}
-			);
+			const response = await http.post(`/cart/${id}`, {});
 			setSelectedItem(response.data);
 			console.log("Cart item details:", response.data);
 			
@@ -241,10 +218,7 @@ export default function SalesInvoice() {
 	// 🗑️ Delete cart item
 	const handleDelete = async (id) => {
 		try {
-			const token = localStorage.getItem("token");
-			await axios.delete(`${BASE_URL}/cart/${id}`, {
-				headers: { Authorization: `Bearer ${token}` },
-			});
+			await http.delete(`/cart/${id}`);
 			setCart((prev) => prev.filter((item) => item.id !== id));
 			
 			// ✅ Show success pop-up
@@ -302,12 +276,7 @@ export default function SalesInvoice() {
 				payment_method: paymentMethod,
 			};
 
-			const response = await axios.post(`${BASE_URL}/orders`, orderData, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-				},
-			});
+			const response = await http.post("/orders", orderData);
 
 			if (response.data) {
 				// ✅ Show success pop-up instead of alert
@@ -338,11 +307,7 @@ export default function SalesInvoice() {
 	const handleClearOrder = async () => {
 		try {
 			const cartIds = cart.map((item) => item.id);
-			await axios.delete(`${BASE_URL}/clear-selected-cart`, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-				},
+			await http.delete("/clear-selected-cart", {
 				data: {
 					cart_ids: cartIds,
 				},
