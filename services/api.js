@@ -1,11 +1,19 @@
-// lib/api.js
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
+import BASE_URL from "../config";
 
-// Common function to get auth headers
-const getAuthHeaders = async () => {
-  const token = localStorage.getItem("token");
+const NO_TOKEN_MESSAGE = "No authentication token found. Please log in again.";
+const AUTH_FAILED_MESSAGE = "Authentication failed. Please log in again.";
+
+const redirectToLogin = () => {
+  if (typeof window !== "undefined") {
+    window.location.href = "/";
+  }
+};
+
+export const getAuthHeaders = () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   if (!token) {
-    throw new Error("No authentication token found. Please log in again.");
+    redirectToLogin();
+    throw new Error(NO_TOKEN_MESSAGE);
   }
 
   return {
@@ -15,253 +23,266 @@ const getAuthHeaders = async () => {
   };
 };
 
-// Common error handler
-const handleApiError = (error) => {
-  if (
-    error.message.includes("No authentication token") ||
-    error.message.includes("Authentication failed")
-  ) {
-    window.location.href = "/";
+// Authenticated JSON request against the backend.
+// Redirects to login on a missing token or 401, and surfaces the server's
+// `message` (falling back to `${errorLabel}: <status>`) on other failures.
+export const apiRequest = async (path, { method = "GET", body, errorLabel = "Request failed" } = {}) => {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: getAuthHeaders(),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (response.status === 401) {
+    redirectToLogin();
+    throw new Error(AUTH_FAILED_MESSAGE);
   }
-  throw error;
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    let message = errorData?.message || `${errorLabel}: ${response.status}`;
+    if (errorData?.errors) {
+      message += ` - ${JSON.stringify(errorData.errors)}`;
+    }
+    throw new Error(message);
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return { success: true };
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    // Some DELETE endpoints reply with a non-JSON body
+    if (method === "DELETE") {
+      return { success: true };
+    }
+    throw error;
+  }
 };
 
-// Products API
+// Products
 export const productAPI = {
-  async getAllProducts() {
-    try {
-      const headers = await getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/products`, {
-        method: "GET",
-        headers,
-      });
+  getAllProducts: () => apiRequest("/products", { errorLabel: "Failed to fetch products" }),
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        throw new Error(`Failed to fetch products: ${response.status}`);
-      }
-
-      return response.json();
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-
-  async createProduct(productData) {
-    try {
-      const headers = await getAuthHeaders();
-
-      const apiProductData = {
-        sku: productData.sku,
+  createProduct: (productData) =>
+    apiRequest("/products", {
+      method: "POST",
+      errorLabel: "Failed to create product",
+      body: {
+        sku: productData.sku || "",
         name: productData.name,
-        description:
-          productData.description ||
-          `${productData.name} - ${productData.category}`,
-        price: productData.price.toString(),
-        stock: parseInt(productData.sold) || 0,
-      };
+        description: productData.description || "",
+        price: productData.price,
+        cost_price: productData.cost_price,
+      },
+    }),
 
-      const response = await fetch(`${API_BASE_URL}/products`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(apiProductData),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to create product: ${response.status}`
-        );
-      }
-
-      return response.json();
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-
-  async updateProduct(id, productData) {
-    try {
-      const headers = await getAuthHeaders();
-
-      const apiProductData = {
-        sku: productData.sku,
+  updateProduct: (id, productData) =>
+    apiRequest(`/products/${id}`, {
+      method: "PUT",
+      errorLabel: "Failed to update product",
+      body: {
+        sku: productData.sku || "",
         name: productData.name,
-        description:
-          productData.description ||
-          `${productData.name} - ${productData.category}`,
-        price: productData.price.toString(),
-        stock: parseInt(productData.sold) || 0,
-      };
+        description: productData.description || "",
+        price: productData.price,
+        stock: productData.stock,
+      },
+    }),
 
-      const response = await fetch(`${API_BASE_URL}/products/${id}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(apiProductData),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to update product: ${response.status}`
-        );
-      }
-
-      return response.json();
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-
-  async deleteProduct(id) {
-    try {
-      const headers = await getAuthHeaders();
-
-      const response = await fetch(`${API_BASE_URL}/products/${id}`, {
-        method: "DELETE",
-        headers,
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to delete product: ${response.status}`
-        );
-      }
-
-      if (response.status === 204) {
-        return { success: true };
-      }
-
-      return response.json();
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
+  deleteProduct: (id) =>
+    apiRequest(`/products/${id}`, { method: "DELETE", errorLabel: "Failed to delete product" }),
 };
 
-// Categories API
+// Product categories
 export const categoryAPI = {
-  async getAllCategories() {
-    try {
-      const headers = await getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/product-categories`, {
-        method: "GET",
-        headers,
-      });
+  getAllCategories: () =>
+    apiRequest("/product-categories", { errorLabel: "Failed to fetch categories" }),
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        throw new Error(`Failed to fetch categories: ${response.status}`);
-      }
-
-      return response.json();
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-
-  async createCategory(categoryData) {
-    try {
-      const headers = await getAuthHeaders();
-
-      const apiCategoryData = {
+  createCategory: (categoryData) =>
+    apiRequest("/product-categories", {
+      method: "POST",
+      errorLabel: "Failed to create category",
+      body: {
         name: categoryData.name,
         description: categoryData.description || `${categoryData.name} category`,
-      };
+      },
+    }),
 
-      const response = await fetch(`${API_BASE_URL}/product-categories`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(apiCategoryData),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to create category: ${response.status}`
-        );
-      }
-
-      return response.json();
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-
-  async updateCategory(id, categoryData) {
-    try {
-      const headers = await getAuthHeaders();
-
-      const apiCategoryData = {
+  updateCategory: (id, categoryData) =>
+    apiRequest(`/product-categories/${id}`, {
+      method: "PUT",
+      errorLabel: "Failed to update category",
+      body: {
         name: categoryData.name,
         description: categoryData.description || `${categoryData.name} category`,
-      };
+      },
+    }),
 
-      const response = await fetch(`${API_BASE_URL}/product-categories/${id}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(apiCategoryData),
-      });
+  deleteCategory: (id) =>
+    apiRequest(`/product-categories/${id}`, {
+      method: "DELETE",
+      errorLabel: "Failed to delete category",
+    }),
+};
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to update category: ${response.status}`
-        );
-      }
+// Inventory
+export const inventoryAPI = {
+  getAllInventory: () => apiRequest("/inventory", { errorLabel: "Failed to fetch inventory" }),
 
-      return response.json();
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
+  createInventory: (inventoryData) =>
+    apiRequest("/inventory", {
+      method: "POST",
+      body: inventoryData,
+      errorLabel: "Failed to create inventory",
+    }),
 
-  async deleteCategory(id) {
-    try {
-      const headers = await getAuthHeaders();
+  updateInventory: (id, inventoryData) =>
+    apiRequest(`/inventory/${id}`, {
+      method: "PUT",
+      body: inventoryData,
+      errorLabel: "Failed to update inventory",
+    }),
 
-      const response = await fetch(`${API_BASE_URL}/product-categories/${id}`, {
-        method: "DELETE",
-        headers,
-      });
+  deleteInventory: (id) =>
+    apiRequest(`/inventory/${id}`, { method: "DELETE", errorLabel: "Failed to delete inventory" }),
+};
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to delete category: ${response.status}`
-        );
-      }
+// Stores
+export const storeAPI = {
+  getAllStores: () => apiRequest("/stores", { errorLabel: "Failed to fetch stores" }),
 
-      if (response.status === 204) {
-        return { success: true };
-      }
+  createStore: (storeData) =>
+    apiRequest("/stores", { method: "POST", body: storeData, errorLabel: "Failed to create store" }),
 
-      return response.json();
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
+  updateStore: (id, storeData) =>
+    apiRequest(`/stores/${id}`, {
+      method: "PUT",
+      body: storeData,
+      errorLabel: "Failed to update store",
+    }),
+
+  deleteStore: (id) =>
+    apiRequest(`/stores/${id}`, { method: "DELETE", errorLabel: "Failed to delete store" }),
+};
+
+// Customers
+const toCustomerPayload = (customerData) => ({
+  name: customerData.name,
+  gender: customerData.gender,
+  phone: customerData.phone,
+  email: customerData.email,
+  address: customerData.address,
+  birthday: customerData.birthday,
+  balance: customerData.balance,
+  credit_limit: customerData.credit_limit,
+  notes: customerData.notes,
+});
+
+export const customerAPI = {
+  getAllCustomers: () => apiRequest("/customers", { errorLabel: "Failed to fetch customers" }),
+
+  getCustomerById: (id) =>
+    apiRequest(`/customers/${id}`, { errorLabel: "Failed to fetch customer" }),
+
+  createCustomer: (customerData) =>
+    apiRequest("/customers", {
+      method: "POST",
+      body: toCustomerPayload(customerData),
+      errorLabel: "Failed to create customer",
+    }),
+
+  updateCustomer: (id, customerData) =>
+    apiRequest(`/customers/${id}`, {
+      method: "PUT",
+      body: toCustomerPayload(customerData),
+      errorLabel: "Failed to update customer",
+    }),
+
+  deleteCustomer: (id) =>
+    apiRequest(`/customers/${id}`, { method: "DELETE", errorLabel: "Failed to delete customer" }),
+
+  getCustomerDeposits: (customerId) =>
+    apiRequest(`/customers/${customerId}/deposits`, { errorLabel: "Failed to fetch deposits" }),
+
+  addDeposit: (customerId, depositData) =>
+    apiRequest(`/customers/${customerId}/deposit`, {
+      method: "POST",
+      errorLabel: "Failed to add deposit",
+      body: {
+        amount: parseFloat(depositData.amount),
+        description: depositData.description || "",
+        customer_id: customerId,
+      },
+    }),
+};
+
+// Bank accounts
+export const bankAPI = {
+  getAllBanks: () => apiRequest("/bank-accounts", { errorLabel: "Failed to fetch banks" }),
+
+  createBank: (bankData) =>
+    apiRequest("/bank-accounts", {
+      method: "POST",
+      body: bankData,
+      errorLabel: "Failed to create bank",
+    }),
+
+  updateBank: (id, bankData) =>
+    apiRequest(`/bank-accounts/${id}`, {
+      method: "PUT",
+      body: bankData,
+      errorLabel: "Failed to update bank",
+    }),
+
+  deleteBank: (id) =>
+    apiRequest(`/bank-accounts/${id}`, { method: "DELETE", errorLabel: "Failed to delete bank" }),
+};
+
+// Suppliers
+export const supplierAPI = {
+  getAllSuppliers: () => apiRequest("/suppliers", { errorLabel: "Failed to fetch suppliers" }),
+
+  createSupplier: (supplierData) =>
+    apiRequest("/suppliers", {
+      method: "POST",
+      body: supplierData,
+      errorLabel: "Failed to create supplier",
+    }),
+
+  updateSupplier: (id, supplierData) =>
+    apiRequest(`/suppliers/${id}`, {
+      method: "PUT",
+      body: supplierData,
+      errorLabel: "Failed to update supplier",
+    }),
+
+  deleteSupplier: (id) =>
+    apiRequest(`/suppliers/${id}`, { method: "DELETE", errorLabel: "Failed to delete supplier" }),
+};
+
+// Order items (sales cart)
+export const orderItemAPI = {
+  createOrderItem: (orderItemData) =>
+    apiRequest("/order-items", {
+      method: "POST",
+      body: orderItemData,
+      errorLabel: "Failed to create order item",
+    }),
+
+  updateOrderItem: (id, orderItemData) =>
+    apiRequest(`/order-items/${id}`, {
+      method: "PUT",
+      body: orderItemData,
+      errorLabel: "Failed to update order item",
+    }),
+
+  deleteOrderItem: (id) =>
+    apiRequest(`/order-items/${id}`, {
+      method: "DELETE",
+      errorLabel: "Failed to delete order item",
+    }),
 };

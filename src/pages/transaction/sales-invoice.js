@@ -1,7 +1,6 @@
 // pages/transaction/sales-invoice.js
 import TransactionNav from "../../components/TransactionNav";
 import { useState, useEffect } from "react";
-import { inventoryAPI } from "../../../utils/salesApi";
 import BASE_URL from "../../../config";
 import axios from "axios";
 import { Trash2 } from "lucide-react";

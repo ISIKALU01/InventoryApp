@@ -18,146 +18,7 @@ import {
   FaDatabase
 } from "react-icons/fa";
 
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
-
-// API Service for Stores
-const storeAPI = {
-  async getAuthHeaders() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-
-    return {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    };
-  },
-
-  async createStore(storeData) {
-    try {
-      const headers = await this.getAuthHeaders();
-
-      const response = await fetch(`${API_BASE_URL}/stores`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(storeData),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to create store: ${response.status}`
-        );
-      }
-
-      return response.json();
-    } catch (error) {
-      if (
-        error.message.includes("No authentication token") ||
-        error.message.includes("Authentication failed")
-      ) {
-        window.location.href = "/";
-      }
-      throw error;
-    }
-  },
-
-  async getStores() {
-    try {
-      const headers = await this.getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/stores`, {
-        method: "GET",
-        headers,
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        throw new Error(`Failed to fetch stores: ${response.status}`);
-      }
-
-      return response.json();
-    } catch (error) {
-      if (error.message.includes("No authentication token")) {
-        window.location.href = "/";
-      }
-      throw error;
-    }
-  },
-
-  async updateStore(id, storeData) {
-    try {
-      const headers = await this.getAuthHeaders();
-
-      const response = await fetch(`${API_BASE_URL}/stores/${id}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(storeData),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to update store: ${response.status}`
-        );
-      }
-
-      return response.json();
-    } catch (error) {
-      if (
-        error.message.includes("No authentication token") ||
-        error.message.includes("Authentication failed")
-      ) {
-        window.location.href = "/";
-      }
-      throw error;
-    }
-  },
-
-  async deleteStore(id) {
-    try {
-      const headers = await this.getAuthHeaders();
-
-      const response = await fetch(`${API_BASE_URL}/stores/${id}`, {
-        method: "DELETE",
-        headers,
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Authentication failed. Please log in again.");
-        }
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `Failed to delete store: ${response.status}`
-        );
-      }
-
-      if (response.status === 204) {
-        return { success: true };
-      }
-
-      return response.json();
-    } catch (error) {
-      if (
-        error.message.includes("No authentication token") ||
-        error.message.includes("Authentication failed")
-      ) {
-        window.location.href = "/";
-      }
-      throw error;
-    }
-  },
-};
+import { storeAPI } from "../../services/api";
 
 // Store Form Modal Component
 const StoreFormModal = ({ isOpen, onClose, onSave, isLoading, store = null }) => {
@@ -503,7 +364,7 @@ export default function Settings() {
     setIsLoading(true);
     setError("");
     try {
-      const storesData = await storeAPI.getStores();
+      const storesData = await storeAPI.getAllStores();
       setStores(Array.isArray(storesData) ? storesData : []);
     } catch (err) {
       setError(err.message);

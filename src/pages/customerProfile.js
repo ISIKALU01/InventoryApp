@@ -15,76 +15,7 @@ import {
   FaStickyNote
 } from "react-icons/fa";
 
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
-
-// Customer API Service functions
-const customerAPI = {
-  async getAuthHeaders() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-
-    return {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    };
-  },
-
-  async getCustomerById(id) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
-      method: "GET",
-      headers: headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch customer: ${response.status}`);
-    }
-
-    return response.json();
-  },
-
-  async getCustomerDeposits(customerId) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/customers/${customerId}/deposits`, {
-      method: "GET",
-      headers: headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch deposits: ${response.status}`);
-    }
-
-    return response.json();
-  },
-
-  async addDeposit(customerId, depositData) {
-    const headers = await this.getAuthHeaders();
-    
-    const apiDepositData = {
-      amount: parseFloat(depositData.amount),
-      description: depositData.description || "",
-      customer_id: customerId
-    };
-
-    const response = await fetch(`${API_BASE_URL}/customers/${customerId}/deposit`, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify(apiDepositData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      throw new Error(
-        errorData?.message || `Failed to add deposit: ${response.status}`
-      );
-    }
-
-    return response.json();
-  }
-};
+import { customerAPI } from "../../services/api";
 
 // Helper function to format currency in Naira
 const formatCurrency = (amount) => {

@@ -19,102 +19,8 @@ import {
   FaMapMarkerAlt,
 } from "react-icons/fa";
 
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
-
-// Supplier API Service
-export const supplierAPI = {
-  async getAuthHeaders() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-
-    return {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    };
-  },
-
-  async getAllSuppliers() {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/suppliers`, {
-      method: "GET",
-      headers: headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch suppliers: ${response.status}`);
-    }
-
-    return response.json();
-  },
-
-  async createSupplier(supplierData) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/suppliers`, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify(supplierData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      throw new Error(
-        errorData?.message || `Failed to create supplier: ${response.status}`
-      );
-    }
-
-    return response.json();
-  },
-
-  async updateSupplier(id, supplierData) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/suppliers/${id}`, {
-      method: "PUT",
-      headers: headers,
-      body: JSON.stringify(supplierData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      throw new Error(
-        errorData?.message || `Failed to update supplier: ${response.status}`
-      );
-    }
-
-    return response.json();
-  },
-
-  async deleteSupplier(id) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/suppliers/${id}`, {
-      method: "DELETE",
-      headers: headers,
-    });
-
-    if (!response.ok) {
-      let errorMessage = `Failed to delete supplier: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData?.message || errorMessage;
-      } catch {
-        errorMessage = response.statusText || errorMessage;
-      }
-      throw new Error(errorMessage);
-    }
-
-    if (response.status === 204) {
-      return { success: true, message: "Supplier deleted successfully" };
-    }
-
-    try {
-      return await response.json();
-    } catch {
-      return { success: true, message: "Supplier deleted successfully" };
-    }
-  },
-};
+import BASE_URL from "../../../config";
+import { supplierAPI } from "../../../services/api";
 
 export default function Purchases() {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
@@ -231,7 +137,7 @@ export default function Purchases() {
       
       const headers = await getAuthHeaders();
       
-      const response = await fetch(`${API_BASE_URL}/purchase-orders`, {
+      const response = await fetch(`${BASE_URL}/purchase-orders`, {
         method: "GET",
         headers,
       });
@@ -426,7 +332,7 @@ export default function Purchases() {
       setError("");
       const headers = await getAuthHeaders();
       
-      const response = await fetch(`${API_BASE_URL}/purchase-orders/${orderToDelete.id}`, {
+      const response = await fetch(`${BASE_URL}/purchase-orders/${orderToDelete.id}`, {
         method: "DELETE",
         headers,
       });
@@ -480,8 +386,8 @@ export default function Purchases() {
       const headers = await getAuthHeaders();
       
       const url = selectedOrder 
-        ? `${API_BASE_URL}/purchase-orders/${selectedOrder.id}`
-        : `${API_BASE_URL}/purchase-orders`;
+        ? `${BASE_URL}/purchase-orders/${selectedOrder.id}`
+        : `${BASE_URL}/purchase-orders`;
       
       const method = selectedOrder ? 'PUT' : 'POST';
       

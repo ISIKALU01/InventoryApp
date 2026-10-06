@@ -16,7 +16,7 @@ import {
 } from "react-icons/fa";
 import { useRouter } from "next/router";
 
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
+import { productAPI } from "../../../services/api";
 
 // Modal Components
 const ImportCSVModal = ({ isOpen, onClose, onImport }) => {
@@ -152,7 +152,6 @@ const handleChange = (e) => {
 		[name]: value === "" ? "" : value,
 	}));
 };
-
 
 	useEffect(() => {
 		if (!isOpen) {
@@ -497,166 +496,6 @@ const formatNumber = (value) => {
 	if (value === null || value === undefined) return "0";
 	const num = typeof value === "string" ? parseInt(value) : value;
 	return isNaN(num) ? "0" : num.toLocaleString();
-};
-
-// API Service Functions
-const productAPI = {
-	async getAuthHeaders() {
-		const token = localStorage.getItem("token");
-		if (!token) {
-			throw new Error("No authentication token found. Please log in again.");
-		}
-
-		return {
-			"Content-Type": "application/json",
-			Accept: "application/json",
-			Authorization: `Bearer ${token}`,
-		};
-	},
-
-	async getAllProducts() {
-		try {
-			const headers = await this.getAuthHeaders();
-			const response = await fetch(`${API_BASE_URL}/products`, {
-				method: "GET",
-				headers,
-			});
-
-			if (!response.ok) {
-				if (response.status === 401) {
-					throw new Error("Authentication failed. Please log in again.");
-				}
-				throw new Error(`Failed to fetch products: ${response.status}`);
-			}
-
-			const data = await response.json();
-			return data;
-		} catch (error) {
-			if (error.message.includes("No authentication token")) {
-				window.location.href = "/";
-			}
-			throw error;
-		}
-	},
-
-	async createProduct(productData) {
-		try {
-			const headers = await this.getAuthHeaders();
-
-			const apiProductData = {
-				sku: productData.sku || "",
-				name: productData.name,
-				description: productData.description || "",
-				price: productData.price,
-				cost_price: productData.cost_price,
-			};
-
-			console.log("Sending product data to API:", apiProductData);
-
-			const response = await fetch(`${API_BASE_URL}/products`, {
-				method: "POST",
-				headers,
-				body: JSON.stringify(apiProductData),
-			});
-
-			if (!response.ok) {
-				if (response.status === 401) {
-					throw new Error("Authentication failed. Please log in again.");
-				}
-				const errorData = await response.json().catch(() => null);
-				throw new Error(
-					errorData?.message || `Failed to create product: ${response.status}`
-				);
-			}
-
-			const newProduct = await response.json();
-			console.log("Product created successfully:", newProduct);
-			return newProduct;
-		} catch (error) {
-			if (
-				error.message.includes("No authentication token") ||
-				error.message.includes("Authentication failed")
-			) {
-				window.location.href = "/";
-			}
-			throw error;
-		}
-	},
-
-	async updateProduct(id, productData) {
-		try {
-			const headers = await this.getAuthHeaders();
-
-			const apiProductData = {
-				sku: productData.sku || "",
-				name: productData.name,
-				description: productData.description || "",
-				price: productData.price,
-				stock: productData.stock,
-			};
-
-			const response = await fetch(`${API_BASE_URL}/products/${id}`, {
-				method: "PUT",
-				headers,
-				body: JSON.stringify(apiProductData),
-			});
-
-			if (!response.ok) {
-				if (response.status === 401) {
-					throw new Error("Authentication failed. Please log in again.");
-				}
-				const errorData = await response.json().catch(() => null);
-				throw new Error(
-					errorData?.message || `Failed to update product: ${response.status}`
-				);
-			}
-
-			return response.json();
-		} catch (error) {
-			if (
-				error.message.includes("No authentication token") ||
-				error.message.includes("Authentication failed")
-			) {
-				window.location.href = "/";
-			}
-			throw error;
-		}
-	},
-
-	async deleteProduct(id) {
-		try {
-			const headers = await this.getAuthHeaders();
-
-			const response = await fetch(`${API_BASE_URL}/products/${id}`, {
-				method: "DELETE",
-				headers,
-			});
-
-			if (!response.ok) {
-				if (response.status === 401) {
-					throw new Error("Authentication failed. Please log in again.");
-				}
-				const errorData = await response.json().catch(() => null);
-				throw new Error(
-					errorData?.message || `Failed to delete product: ${response.status}`
-				);
-			}
-
-			if (response.status === 204) {
-				return { success: true };
-			}
-
-			return response.json();
-		} catch (error) {
-			if (
-				error.message.includes("No authentication token") ||
-				error.message.includes("Authentication failed")
-			) {
-				window.location.href = "/";
-			}
-			throw error;
-		}
-	},
 };
 
 // Main Products Component

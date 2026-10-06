@@ -14,7 +14,7 @@ import {
   FaUser,
 } from "react-icons/fa";
 
-const API_BASE_URL = "https://pgimsapp-production.up.railway.app";
+import BASE_URL from "../../../config";
 
 export default function Expenses() {
   const [transactions, setTransactions] = useState([]);
@@ -141,7 +141,7 @@ export default function Expenses() {
     try {
       const headers = await getAuthHeaders();
       
-      const response = await fetch(`${API_BASE_URL}/user`, {
+      const response = await fetch(`${BASE_URL}/user`, {
         method: "GET",
         headers,
       });
@@ -170,7 +170,7 @@ export default function Expenses() {
     try {
       const headers = await getAuthHeaders();
       
-      const response = await fetch(`${API_BASE_URL}/users`, {
+      const response = await fetch(`${BASE_URL}/users`, {
         method: "GET",
         headers,
       });
@@ -218,7 +218,7 @@ export default function Expenses() {
       
       const headers = await getAuthHeaders();
       
-      const response = await fetch(`${API_BASE_URL}/expenses`, {
+      const response = await fetch(`${BASE_URL}/expenses`, {
         method: "GET",
         headers,
       });
@@ -407,7 +407,7 @@ export default function Expenses() {
       setError("");
       const headers = await getAuthHeaders();
       
-      const response = await fetch(`${API_BASE_URL}/expenses/${expenseToDelete.id}`, {
+      const response = await fetch(`${BASE_URL}/expenses/${expenseToDelete.id}`, {
         method: "DELETE",
         headers,
       });
@@ -460,8 +460,8 @@ export default function Expenses() {
       const headers = await getAuthHeaders();
       
       const url = selectedExpense 
-        ? `${API_BASE_URL}/expenses/${selectedExpense.id}`
-        : `${API_BASE_URL}/expenses`;
+        ? `${BASE_URL}/expenses/${selectedExpense.id}`
+        : `${BASE_URL}/expenses`;
       
       const method = selectedExpense ? 'PUT' : 'POST';
       

@@ -1,6 +1,6 @@
 // components/ProductList.js
 import { useState, useEffect } from 'react';
-import { orderItemAPI } from '../../../utils/salesApi';
+import { orderItemAPI } from "../../../services/api";
 
 export default function ProductList({ 
   inventory, 

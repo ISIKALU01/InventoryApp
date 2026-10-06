@@ -1,6 +1,6 @@
 // components/OrderPreview.js
 import { useState } from "react";
-import { orderItemAPI } from "../../../utils/salesApi";
+import { orderItemAPI } from "../../../services/api";
 
 export default function OrderPreview({
   cart,
