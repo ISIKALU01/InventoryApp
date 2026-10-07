@@ -19,6 +19,7 @@ import {
   FaSortNumericUp,
   FaExclamationTriangle,
   FaCheckCircle,
+  FaLock,
 } from "react-icons/fa";
 
 import { inventoryAPI, productAPI, storeAPI } from "../../../services/api";
@@ -530,108 +531,58 @@ const ProblemList = ({ problems, maxHeight = "max-h-48" }) => (
   </ul>
 );
 
-// Store + product + quantity fields shared by the add and edit modals
-const StockFormFields = ({ formData, onChange, disabled, stores, products, minQuantity }) => {
-  const selectedProduct = products.find((p) => sameId(p.id, formData.product_id));
-  const quantity = toNumber(formData.quantity);
-
-  return (
-    <div className="grid grid-cols-1 gap-5 px-6 py-6">
-      <div>
-        <label className={labelClass}>
-          <FaStore className="text-gray-400" />
-          Store <span className="text-red-500">*</span>
-        </label>
-        <select
-          name="store_id"
-          value={formData.store_id}
-          onChange={onChange}
-          required
-          disabled={disabled}
-          className={fieldClass()}
-        >
-          <option value="">Select a Store</option>
-          {stores.map((store) => (
-            <option key={store.id} value={store.id}>
-              {store.name} {store.address ? `- ${store.address}` : ""}
-            </option>
-          ))}
-        </select>
-        {stores.length === 0 && (
-          <p className="mt-1 text-xs text-red-600">
-            No stores available. Please create a store first.
-          </p>
-        )}
-      </div>
-
-      <div>
-        <label className={labelClass}>
-          <FaBox className="text-gray-400" />
-          Product <span className="text-red-500">*</span>
-        </label>
-        <select
-          name="product_id"
-          value={formData.product_id}
-          onChange={onChange}
-          required
-          disabled={disabled}
-          className={fieldClass()}
-        >
-          <option value="">Select a Product</option>
-          {products.map((product) => (
-            <option key={product.id} value={product.id}>
-              {product.name} - {product.sku || "No SKU"} ({formatCurrency(product.price)})
-            </option>
-          ))}
-        </select>
-        {products.length === 0 && (
-          <p className="mt-1 text-xs text-red-600">
-            No products available. Please create a product first.
-          </p>
-        )}
-      </div>
-
-      <div>
-        <label className={labelClass}>
-          <FaSortNumericUp className="text-gray-400" />
-          Quantity <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="number"
-          name="quantity"
-          value={formData.quantity}
-          onChange={onChange}
-          required
-          min={minQuantity}
-          step="1"
-          disabled={disabled}
-          placeholder="Enter quantity"
-          className={fieldClass()}
-        />
-      </div>
-
-      {selectedProduct && (
-        <StatGrid
-          stats={[
-            { label: "Unit Price", value: formatCurrency(selectedProduct.price) },
-            {
-              label: "Cost Price",
-              value: selectedProduct.cost_price ? formatCurrency(selectedProduct.cost_price) : "—",
-            },
-            {
-              label: "Stock Value",
-              value: formatCurrency(toNumber(selectedProduct.cost_price) * quantity),
-            },
-            {
-              label: "Retail Value",
-              value: formatCurrency(toNumber(selectedProduct.price) * quantity),
-            },
-          ]}
-        />
-      )}
-    </div>
-  );
+// Ways to change an existing row's quantity. `apply` always runs against the
+// latest quantity from the server, not the one shown when the modal opened.
+const STOCK_ADJUSTMENTS = {
+  add: {
+    label: "Add units",
+    hint: "Received new stock",
+    sign: "+",
+    apply: (current, amount) => current + amount,
+  },
+  remove: {
+    label: "Remove units",
+    hint: "Damaged, lost or returned",
+    sign: "−",
+    apply: (current, amount) => current - amount,
+  },
+  set: {
+    label: "Set exact count",
+    hint: "After a stock take",
+    sign: "=",
+    apply: (_current, amount) => amount,
+  },
 };
+
+// Row of equal-width toggle buttons
+const SegmentedControl = ({ options, value, onChange, disabled }) => (
+  <div
+    className="grid gap-px bg-gray-300 border border-gray-300"
+    style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+  >
+    {options.map((option) => {
+      const active = option.value === value;
+      return (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+          disabled={disabled}
+          className={`px-3 py-2 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            active ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+          }`}
+        >
+          <div className="text-sm font-medium">{option.label}</div>
+          {option.hint && (
+            <div className={`text-[11px] ${active ? "text-blue-100" : "text-gray-500"}`}>
+              {option.hint}
+            </div>
+          )}
+        </button>
+      );
+    })}
+  </div>
+);
 
 // ---------------------------------------------------------------------------
 // Modals
@@ -918,71 +869,421 @@ const ImportCSVModal = ({ isOpen, onClose, onImport, stores }) => {
   );
 };
 
-const AddStockModal = ({ isOpen, onClose, onAdd, stores, products }) => {
-  const [formData, setFormData] = useState({
-    store_id: "",
-    product_id: "",
-    quantity: "",
-  });
+const EMPTY_STOCK_FORM = {
+  mode: "new",
+  store_id: "",
+  product_id: "",
+  quantity: "",
+  inventory_id: "",
+  adjustment: "add",
+  amount: "",
+};
 
+// Two jobs in one modal: stock a product in a store for the first time, or
+// change the quantity of a store/product row that already exists
+const AddStockModal = ({ isOpen, onClose, onAdd, onRestock, stores, products, inventory }) => {
+  const [formData, setFormData] = useState(EMPTY_STOCK_FORM);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [conflict, setConflict] = useState(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setFormData(EMPTY_STOCK_FORM);
+      setNotice("");
+      setConflict(null);
+    }
+  }, [isOpen]);
+
+  const update = (changes) => {
+    setFormData((prev) => ({ ...prev, ...changes }));
+    setConflict(null);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    const changes = { [name]: value };
+    // A different store means a different set of stocked rows
+    if (name === "store_id" && formData.inventory_id) {
+      const row = inventory.find((item) => sameId(item.id, formData.inventory_id));
+      if (row && !sameId(row.store_id, value)) changes.inventory_id = "";
+    }
+    update(changes);
+  };
+
+  const describeRow = (row) => {
+    const product = safeGetProduct(row, products);
+    const store = safeGetStore(row, stores);
+    return { product, store, quantity: toNumber(row.quantity) };
+  };
+
+  // --- New product mode -----------------------------------------------------
+  const duplicateRow =
+    formData.mode === "new" && formData.store_id && formData.product_id
+      ? inventory.find(
+          (item) =>
+            sameId(item.store_id, formData.store_id) &&
+            sameId(item.product_id, formData.product_id)
+        )
+      : null;
+
+  const switchToUpdate = (row, amount = "") => {
+    update({
+      mode: "update",
+      store_id: row.store_id?.toString() || formData.store_id,
+      inventory_id: row.id.toString(),
+      adjustment: "add",
+      amount,
+    });
+  };
+
+  // --- Update mode ----------------------------------------------------------
+  const stockedRows = inventory
+    .filter((item) => !formData.store_id || sameId(item.store_id, formData.store_id))
+    .map((item) => ({ item, ...describeRow(item) }))
+    .sort((a, b) => String(a.product.name || "").localeCompare(String(b.product.name || "")));
+
+  const selectedRow = inventory.find((item) => sameId(item.id, formData.inventory_id));
+  const selected = selectedRow ? describeRow(selectedRow) : null;
+  const amount = formData.amount === "" ? null : Math.trunc(toNumber(formData.amount));
+  const adjustment = STOCK_ADJUSTMENTS[formData.adjustment];
+  const newQuantity =
+    selected && amount !== null ? adjustment.apply(selected.quantity, amount) : null;
+  const updateError =
+    newQuantity === null
+      ? ""
+      : formData.adjustment !== "set" && amount <= 0
+      ? "Enter at least 1 unit."
+      : newQuantity < 0
+      ? `Only ${selected.quantity} in stock, so ${amount} can't be removed.`
+      : formData.adjustment === "set" && newQuantity === selected.quantity
+      ? "That is already the current quantity."
+      : "";
+
+  const canSubmit =
+    !loading &&
+    (formData.mode === "new"
+      ? formData.store_id && formData.product_id && toNumber(formData.quantity) >= 1 && !duplicateRow
+      : selected && newQuantity !== null && !updateError);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.store_id || !formData.product_id || !formData.quantity) {
-      alert("Please fill in all required fields");
-      return;
-    }
+    if (!canSubmit) return;
 
     setLoading(true);
+    setNotice("");
     try {
-      const processedData = {
-        store_id: toId(formData.store_id),
-        product_id: toId(formData.product_id),
-        quantity: Math.max(0, Math.trunc(toNumber(formData.quantity))),
-      };
-
-      await onAdd(processedData);
+      if (formData.mode === "new") {
+        const quantity = Math.max(0, Math.trunc(toNumber(formData.quantity)));
+        const result = await onAdd({
+          store_id: toId(formData.store_id),
+          product_id: toId(formData.product_id),
+          quantity,
+        });
+        if (result?.status === "exists") {
+          // Someone stocked it after this page loaded: update that row instead
+          switchToUpdate(result.row, String(quantity));
+          setNotice(
+            `This product is already stocked in this store (${toNumber(result.row.quantity)} units), so a second row was not created. Your ${quantity} units are ready to be added to it.`
+          );
+          return;
+        }
+      } else {
+        const result = await onRestock({
+          inventoryId: selectedRow.id,
+          adjustment: formData.adjustment,
+          amount,
+          expectedQuantity: selected.quantity,
+          confirmed: Boolean(conflict),
+        });
+        if (result?.status === "conflict") {
+          setConflict({ expected: selected.quantity, actual: result.actual });
+          return;
+        }
+      }
       onClose();
-      setFormData({
-        store_id: "",
-        product_id: "",
-        quantity: "",
-      });
     } catch (error) {
-      console.error("Error adding inventory:", error);
+      console.error("Error saving inventory:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
   if (!isOpen) return null;
+
+  const isNew = formData.mode === "new";
 
   return (
     <ModalShell
-      title="Add Inventory"
-      subtitle="Stock a product in one of your stores"
-      icon={FaPlus}
-      iconClass="bg-green-600"
+      title={isNew ? "Add Inventory" : "Update Stock"}
+      subtitle={
+        isNew ? "Stock a product in one of your stores" : "Change the quantity of stocked items"
+      }
+      icon={isNew ? FaPlus : FaSortNumericUp}
+      iconClass={isNew ? "bg-green-600" : "bg-blue-600"}
       onClose={onClose}
       busy={loading}
     >
       <form onSubmit={handleSubmit}>
-        <StockFormFields
-          formData={formData}
-          onChange={handleChange}
-          disabled={loading}
-          stores={stores}
-          products={products}
-          minQuantity="1"
-        />
+        <div className="grid grid-cols-1 gap-5 px-6 py-6">
+          <SegmentedControl
+            value={formData.mode}
+            onChange={(mode) => {
+              setNotice("");
+              update({ mode });
+            }}
+            disabled={loading}
+            options={[
+              { value: "new", label: "Add product to store", hint: "First time in this store" },
+              { value: "update", label: "Update existing stock", hint: "Already in this store" },
+            ]}
+          />
+
+          {notice && (
+            <div className="px-3 py-2 text-sm text-blue-800 border border-blue-200 bg-blue-50">
+              {notice}
+            </div>
+          )}
+
+          <div>
+            <label className={labelClass}>
+              <FaStore className="text-gray-400" />
+              Store {isNew ? <span className="text-red-500">*</span> : (
+                <span className="font-normal text-gray-400 normal-case">(narrows the list below)</span>
+              )}
+            </label>
+            <select
+              name="store_id"
+              value={formData.store_id}
+              onChange={handleChange}
+              required={isNew}
+              disabled={loading}
+              className={fieldClass()}
+            >
+              <option value="">{isNew ? "Select a Store" : "All Stores"}</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name} {store.address ? `- ${store.address}` : ""}
+                </option>
+              ))}
+            </select>
+            {stores.length === 0 && (
+              <p className="mt-1 text-xs text-red-600">
+                No stores available. Please create a store first.
+              </p>
+            )}
+          </div>
+
+          {isNew ? (
+            <>
+              <div>
+                <label className={labelClass}>
+                  <FaBox className="text-gray-400" />
+                  Product <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="product_id"
+                  value={formData.product_id}
+                  onChange={handleChange}
+                  required
+                  disabled={loading}
+                  className={fieldClass(Boolean(duplicateRow))}
+                >
+                  <option value="">Select a Product</option>
+                  {products.map((product) => {
+                    const stocked =
+                      formData.store_id &&
+                      inventory.some(
+                        (item) =>
+                          sameId(item.store_id, formData.store_id) &&
+                          sameId(item.product_id, product.id)
+                      );
+                    return (
+                      <option key={product.id} value={product.id}>
+                        {product.name} - {product.sku || "No SKU"} ({formatCurrency(product.price)})
+                        {stocked ? " • already stocked" : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                {products.length === 0 && (
+                  <p className="mt-1 text-xs text-red-600">
+                    No products available. Please create a product first.
+                  </p>
+                )}
+              </div>
+
+              {duplicateRow && (
+                <div className="flex flex-col gap-2 px-3 py-3 text-sm border border-amber-200 bg-amber-50 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-amber-800">
+                    Already stocked here with{" "}
+                    <strong>{toNumber(duplicateRow.quantity)} units</strong>. Update that
+                    row instead of creating a duplicate.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => switchToUpdate(duplicateRow, formData.quantity)}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 shrink-0"
+                  >
+                    Update its stock
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className={labelClass}>
+                  <FaSortNumericUp className="text-gray-400" />
+                  Quantity <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  name="quantity"
+                  value={formData.quantity}
+                  onChange={handleChange}
+                  required
+                  min="1"
+                  step="1"
+                  disabled={loading}
+                  placeholder="Enter quantity"
+                  className={fieldClass()}
+                />
+              </div>
+
+              {formData.product_id && !duplicateRow && (() => {
+                const product = products.find((p) => sameId(p.id, formData.product_id));
+                if (!product) return null;
+                const quantity = toNumber(formData.quantity);
+                return (
+                  <StatGrid
+                    stats={[
+                      { label: "Unit Price", value: formatCurrency(product.price) },
+                      {
+                        label: "Cost Price",
+                        value: product.cost_price ? formatCurrency(product.cost_price) : "—",
+                      },
+                      {
+                        label: "Stock Value",
+                        value: formatCurrency(toNumber(product.cost_price) * quantity),
+                      },
+                      {
+                        label: "Retail Value",
+                        value: formatCurrency(toNumber(product.price) * quantity),
+                      },
+                    ]}
+                  />
+                );
+              })()}
+            </>
+          ) : (
+            <>
+              <div>
+                <label className={labelClass}>
+                  <FaBox className="text-gray-400" />
+                  Stocked Item <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="inventory_id"
+                  value={formData.inventory_id}
+                  onChange={handleChange}
+                  required
+                  disabled={loading}
+                  className={fieldClass()}
+                >
+                  <option value="">Select an item</option>
+                  {stockedRows.map(({ item, product, store, quantity }) => (
+                    <option key={item.id} value={item.id}>
+                      {product.name || "Unknown product"}
+                      {product.sku ? ` (${product.sku})` : ""}
+                      {formData.store_id ? "" : ` — ${store.name || "Unknown store"}`}
+                      {` — ${quantity} in stock`}
+                    </option>
+                  ))}
+                </select>
+                {stockedRows.length === 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Nothing is stocked {formData.store_id ? "in this store" : "yet"}. Use
+                    “Add product to store” first.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className={labelClass}>Adjustment</label>
+                <SegmentedControl
+                  value={formData.adjustment}
+                  onChange={(value) => update({ adjustment: value })}
+                  disabled={loading}
+                  options={Object.entries(STOCK_ADJUSTMENTS).map(([value, a]) => ({
+                    value,
+                    label: a.label,
+                    hint: a.hint,
+                  }))}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  <FaSortNumericUp className="text-gray-400" />
+                  {formData.adjustment === "set" ? "Counted Quantity" : "Units"}{" "}
+                  <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  name="amount"
+                  value={formData.amount}
+                  onChange={handleChange}
+                  required
+                  min={formData.adjustment === "set" ? "0" : "1"}
+                  step="1"
+                  disabled={loading}
+                  placeholder={
+                    formData.adjustment === "set" ? "Quantity on the shelf" : "Number of units"
+                  }
+                  className={fieldClass(Boolean(updateError))}
+                />
+                {updateError && <p className="mt-1 text-xs text-red-600">{updateError}</p>}
+              </div>
+
+              {selected && (
+                <StatGrid
+                  valueClass="text-lg font-semibold"
+                  stats={[
+                    { label: "Current", value: selected.quantity },
+                    {
+                      label: "Change",
+                      value:
+                        newQuantity === null
+                          ? "—"
+                          : `${newQuantity - selected.quantity >= 0 ? "+" : "−"}${Math.abs(
+                              newQuantity - selected.quantity
+                            )}`,
+                      color:
+                        newQuantity === null || newQuantity === selected.quantity
+                          ? "text-gray-800"
+                          : newQuantity > selected.quantity
+                          ? "text-green-700"
+                          : "text-red-600",
+                    },
+                    {
+                      label: "New Quantity",
+                      value: newQuantity === null ? "—" : newQuantity,
+                      color: newQuantity !== null && newQuantity < 0 ? "text-red-600" : "text-blue-700",
+                    },
+                  ]}
+                />
+              )}
+
+              {conflict && (
+                <div className="px-3 py-2 text-sm border text-amber-800 border-amber-200 bg-amber-50">
+                  The quantity changed from <strong>{conflict.expected}</strong> to{" "}
+                  <strong>{conflict.actual}</strong> since you opened this (for example a sale
+                  or another user). Saving will set it to <strong>{amount}</strong> anyway.
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
         <ModalFooter>
           <button
             type="button"
@@ -994,23 +1295,23 @@ const AddStockModal = ({ isOpen, onClose, onAdd, stores, products }) => {
           </button>
           <button
             type="submit"
-            disabled={
-              loading ||
-              !formData.store_id ||
-              !formData.product_id ||
-              !formData.quantity
-            }
-            className={primaryButtonClass("green")}
+            disabled={!canSubmit}
+            className={primaryButtonClass(isNew ? "green" : "blue")}
           >
             {loading ? (
               <>
                 <Spinner />
-                Adding...
+                Saving...
               </>
-            ) : (
+            ) : isNew ? (
               <>
                 <FaPlus className="mr-2" />
                 Add Inventory
+              </>
+            ) : (
+              <>
+                <FaSortNumericUp className="mr-2" />
+                {conflict ? "Confirm Update" : "Update Stock"}
               </>
             )}
           </button>
@@ -1020,6 +1321,23 @@ const AddStockModal = ({ isOpen, onClose, onAdd, stores, products }) => {
   );
 };
 
+// Read-only value in a field-shaped box, for details the edit modal locks
+const LockedField = ({ icon: Icon, label, value, hint }) => (
+  <div>
+    <div className={labelClass}>
+      <Icon className="text-gray-400" />
+      {label}
+      <FaLock className="ml-auto text-[10px] text-gray-400" title="Locked" />
+    </div>
+    <div className="px-3 py-2.5 text-sm text-gray-600 border border-gray-200 bg-gray-50 cursor-not-allowed select-none">
+      {value}
+    </div>
+    {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
+  </div>
+);
+
+// Only the product on a row can be changed here. Store and quantity are
+// locked: quantity changes go through Add Inventory → Update existing stock.
 const EditStockModal = ({
   isOpen,
   onClose,
@@ -1027,41 +1345,85 @@ const EditStockModal = ({
   inventoryItem,
   stores,
   products,
+  inventory,
 }) => {
-  const [formData, setFormData] = useState({
-    store_id: "",
-    product_id: "",
-    quantity: "",
-  });
-
+  const [productId, setProductId] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (inventoryItem) {
-      setFormData({
-        store_id: inventoryItem.store_id?.toString() || "",
-        product_id: inventoryItem.product_id?.toString() || "",
-        quantity: inventoryItem.quantity?.toString() || "",
-      });
+      setProductId(inventoryItem.product_id?.toString() || "");
+      setName(safeGetProduct(inventoryItem, products).name || "");
+      setEditingName(false);
     }
+    // Only reset when a different row is opened, not when products reload
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inventoryItem]);
+
+  const chooseProduct = (id) => {
+    setProductId(id);
+    setName(products.find((p) => sameId(p.id, id))?.name || "");
+    setEditingName(false);
+  };
+
+  if (!isOpen || !inventoryItem) return null;
+
+  const store = safeGetStore(inventoryItem, stores);
+  const currentProduct = safeGetProduct(inventoryItem, products);
+  const unchanged = sameId(productId, inventoryItem.product_id);
+
+  // Another row in this store already holding the chosen product
+  const duplicateRow =
+    !unchanged && productId
+      ? inventory.find(
+          (item) =>
+            !sameId(item.id, inventoryItem.id) &&
+            sameId(item.store_id, inventoryItem.store_id) &&
+            sameId(item.product_id, productId)
+        )
+      : null;
+
+  const selectedProduct = products.find((p) => sameId(p.id, productId));
+  const quantity = toNumber(inventoryItem.quantity);
+
+  // Renaming changes the product itself, so it applies everywhere it's used
+  const trimmedName = name.trim();
+  const nameChanged =
+    editingName && Boolean(selectedProduct) && trimmedName !== (selectedProduct.name || "");
+  const nameTaken =
+    nameChanged &&
+    products.find(
+      (p) =>
+        !sameId(p.id, productId) &&
+        String(p.name || "").trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+  const nameError = !nameChanged
+    ? ""
+    : !trimmedName
+    ? "Product name can't be empty."
+    : nameTaken
+    ? `Another product is already called "${nameTaken.name}".`
+    : "";
+
+  const canSubmit =
+    !loading &&
+    Boolean(productId) &&
+    (!unchanged || nameChanged) &&
+    !duplicateRow &&
+    !nameError;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.store_id || !formData.product_id || formData.quantity === "") {
-      alert("Please fill in all required fields");
-      return;
-    }
+    if (!canSubmit) return;
 
     setLoading(true);
     try {
-      const processedData = {
-        store_id: toId(formData.store_id),
-        product_id: toId(formData.product_id),
-        quantity: Math.max(0, Math.trunc(toNumber(formData.quantity))),
-      };
-
-      await onUpdate(inventoryItem.id, processedData);
+      await onUpdate(inventoryItem.id, {
+        productId: toId(productId),
+        newName: nameChanged ? trimmedName : null,
+      });
       onClose();
     } catch (error) {
       console.error("Error updating inventory:", error);
@@ -1070,32 +1432,126 @@ const EditStockModal = ({
     }
   };
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  if (!isOpen || !inventoryItem) return null;
-
   return (
     <ModalShell
       title="Edit Inventory"
-      subtitle="Update store, product or quantity"
+      subtitle={
+        currentProduct.name ? `Change or rename the product on ${currentProduct.name}` : "Change the product"
+      }
       icon={FaEdit}
       onClose={onClose}
       busy={loading}
     >
       <form onSubmit={handleSubmit}>
-        <StockFormFields
-          formData={formData}
-          onChange={handleChange}
-          disabled={loading}
-          stores={stores}
-          products={products}
-          minQuantity="0"
-        />
+        <div className="grid grid-cols-1 gap-5 px-6 py-6">
+          <LockedField
+            icon={FaStore}
+            label="Store"
+            value={`${store.name || "Unknown store"}${store.address ? ` - ${store.address}` : ""}`}
+          />
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className={`${labelClass} mb-0`}>
+                <FaBox className="text-gray-400" />
+                {editingName ? "Product Name" : "Product"} <span className="text-red-500">*</span>
+              </span>
+              {selectedProduct && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editingName) setName(selectedProduct.name || "");
+                    setEditingName(!editingName);
+                  }}
+                  disabled={loading}
+                  className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                >
+                  {editingName ? (
+                    <>
+                      <FaTimes className="text-[10px]" />
+                      Cancel rename
+                    </>
+                  ) : (
+                    <>
+                      <FaEdit className="text-[10px]" />
+                      Edit name
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+            {editingName ? (
+              <>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoFocus
+                  required
+                  disabled={loading}
+                  placeholder="Product name"
+                  className={fieldClass(Boolean(nameError))}
+                />
+                {nameError ? (
+                  <p className="mt-1 text-xs text-red-600">{nameError}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Renames this product everywhere it&apos;s used, in every store.
+                    {selectedProduct?.sku ? ` SKU ${selectedProduct.sku} stays the same.` : ""}
+                  </p>
+                )}
+              </>
+            ) : (
+              <select
+                value={productId}
+                onChange={(e) => chooseProduct(e.target.value)}
+                required
+                disabled={loading}
+                className={fieldClass(Boolean(duplicateRow))}
+              >
+                <option value="">Select a Product</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name} - {product.sku || "No SKU"} ({formatCurrency(product.price)})
+                  </option>
+                ))}
+              </select>
+            )}
+            {duplicateRow && (
+              <p className="mt-1 text-xs text-red-600">
+                This store already stocks that product ({toNumber(duplicateRow.quantity)} units).
+                Pick another product, or update that row&apos;s stock instead.
+              </p>
+            )}
+          </div>
+
+          <LockedField
+            icon={FaSortNumericUp}
+            label="Quantity"
+            value={quantity}
+            hint="To change stock, use Add Inventory → Update existing stock."
+          />
+
+          {selectedProduct && (
+            <StatGrid
+              stats={[
+                { label: "Unit Price", value: formatCurrency(selectedProduct.price) },
+                {
+                  label: "Cost Price",
+                  value: selectedProduct.cost_price ? formatCurrency(selectedProduct.cost_price) : "—",
+                },
+                {
+                  label: "Stock Value",
+                  value: formatCurrency(toNumber(selectedProduct.cost_price) * Math.max(0, quantity)),
+                },
+                {
+                  label: "Retail Value",
+                  value: formatCurrency(toNumber(selectedProduct.price) * Math.max(0, quantity)),
+                },
+              ]}
+            />
+          )}
+        </div>
         <ModalFooter>
           <button
             type="button"
@@ -1105,7 +1561,11 @@ const EditStockModal = ({
           >
             Cancel
           </button>
-          <button type="submit" disabled={loading} className={primaryButtonClass()}>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className={primaryButtonClass()}
+          >
             {loading ? (
               <>
                 <Spinner />
@@ -1193,12 +1653,30 @@ export default function Inventory() {
     }
   };
 
-  // Add new inventory - FIXED VERSION
+  // Re-read inventory from the server right before a write, so changes are
+  // based on what the database holds now rather than what the page loaded
+  const fetchLatestInventory = async () => {
+    const data = await inventoryAPI.getAllInventory();
+    const list = Array.isArray(data) ? data : [];
+    setInventory(list);
+    return list;
+  };
+
+  // Add new inventory. Returns { status: "exists", row } instead of creating
+  // a second row when the store already stocks this product.
   const handleAddInventory = async (inventoryData) => {
-    if (addingInventory) return;
-    
+    if (addingInventory) return { status: "busy" };
+
     setAddingInventory(true);
     try {
+      const latest = await fetchLatestInventory();
+      const existing = latest.find(
+        (item) =>
+          sameId(item.store_id, inventoryData.store_id) &&
+          sameId(item.product_id, inventoryData.product_id)
+      );
+      if (existing) return { status: "exists", row: existing };
+
       const response = await inventoryAPI.createInventory(inventoryData);
       const processedItem = normalizeInventoryItem(response, inventoryData);
 
@@ -1206,6 +1684,7 @@ export default function Inventory() {
 
       setShowAddStockModal(false);
       alert("Inventory added successfully!");
+      return { status: "ok" };
     } catch (error) {
       console.error("Error adding inventory:", error);
       alert(error.message || "Failed to add inventory");
@@ -1215,17 +1694,132 @@ export default function Inventory() {
     }
   };
 
-  // Update inventory
-  const handleUpdateInventory = async (id, inventoryData) => {
+  // Change the quantity of an existing row. The adjustment is applied to the
+  // server's current quantity, so sales or other users' edits made since the
+  // modal opened aren't overwritten. An exact count ("set") that would
+  // replace a changed quantity returns { status: "conflict" } until confirmed.
+  const handleRestockInventory = async ({
+    inventoryId,
+    adjustment,
+    amount,
+    expectedQuantity,
+    confirmed,
+  }) => {
+    if (addingInventory) return { status: "busy" };
+
+    setAddingInventory(true);
     try {
-      const response = await inventoryAPI.updateInventory(id, inventoryData);
-      setInventory((prev) =>
-        prev.map((item) =>
-          sameId(item.id, id)
-            ? normalizeInventoryItem(response, { ...item, ...inventoryData })
-            : item
-        )
-      );
+      const latest = await fetchLatestInventory();
+      const row = latest.find((item) => sameId(item.id, inventoryId));
+      if (!row) {
+        throw new Error("This inventory item no longer exists. It may have been deleted.");
+      }
+
+      const current = toNumber(row.quantity);
+      if (adjustment === "set" && current !== expectedQuantity && !confirmed) {
+        return { status: "conflict", actual: current };
+      }
+
+      const next = STOCK_ADJUSTMENTS[adjustment].apply(current, amount);
+      if (!Number.isInteger(next) || next < 0) {
+        throw new Error(
+          `Only ${current} units are in stock now, so ${amount} can't be removed.`
+        );
+      }
+
+      // Send the row's own store/product ids so only the quantity changes
+      const payload = {
+        store_id: toId(row.store_id ?? row.store?.id),
+        product_id: toId(row.product_id ?? row.product?.id),
+        quantity: next,
+      };
+      const response = await inventoryAPI.updateInventory(row.id, payload);
+      const saved = normalizeInventoryItem(response, { ...row, ...payload });
+      setInventory((prev) => prev.map((item) => (sameId(item.id, row.id) ? saved : item)));
+
+      setShowAddStockModal(false);
+      const productName = safeGetProduct(row, products).name || "Item";
+      alert(`${productName}: stock updated from ${current} to ${toNumber(saved.quantity)}.`);
+      return { status: "ok" };
+    } catch (error) {
+      console.error("Error updating stock:", error);
+      alert(error.message || "Failed to update stock");
+      throw error;
+    } finally {
+      setAddingInventory(false);
+    }
+  };
+
+  // Edit a row: switch which product it holds and/or rename that product.
+  // Store and quantity come from the server's current copy of the row, so a
+  // sale made while the modal was open isn't overwritten by the quantity
+  // shown when it opened.
+  const handleUpdateInventory = async (id, { productId, newName }) => {
+    try {
+      const latest = await fetchLatestInventory();
+      const row = latest.find((item) => sameId(item.id, id));
+      if (!row) {
+        throw new Error("This inventory item no longer exists. It may have been deleted.");
+      }
+
+      if (!sameId(row.product_id, productId)) {
+        const storeId = row.store_id ?? row.store?.id;
+        const duplicate = latest.find(
+          (item) =>
+            !sameId(item.id, id) &&
+            sameId(item.store_id, storeId) &&
+            sameId(item.product_id, productId)
+        );
+        if (duplicate) {
+          throw new Error("This store already stocks that product. Update that row's stock instead.");
+        }
+
+        const payload = {
+          store_id: toId(storeId),
+          product_id: toId(productId),
+          quantity: toNumber(row.quantity),
+        };
+        const response = await inventoryAPI.updateInventory(id, payload);
+        setInventory((prev) =>
+          prev.map((item) =>
+            sameId(item.id, id)
+              ? normalizeInventoryItem(response, { ...item, ...payload })
+              : item
+          )
+        );
+      }
+
+      if (newName) {
+        // Re-read the product so the rename doesn't send back a stale price,
+        // SKU or description; stock is left out so the backend keeps it
+        const latestProducts = await productAPI.getAllProducts();
+        const productList = Array.isArray(latestProducts) ? latestProducts : products;
+        const product = productList.find((p) => sameId(p.id, productId));
+        if (!product) throw new Error("This product no longer exists. It may have been deleted.");
+
+        const taken = productList.find(
+          (p) =>
+            !sameId(p.id, productId) &&
+            String(p.name || "").trim().toLowerCase() === newName.toLowerCase()
+        );
+        if (taken) throw new Error(`Another product is already called "${taken.name}".`);
+
+        const response = await productAPI.updateProduct(product.id, {
+          sku: product.sku,
+          name: newName,
+          description: product.description,
+          price: product.price,
+          cost_price: product.cost_price,
+        });
+        const saved = unwrapResponse(response, "product");
+        const renamed = {
+          ...product,
+          ...(saved && typeof saved === "object" && sameId(saved.id, product.id) ? saved : {}),
+          name: newName,
+        };
+        setProducts(productList.map((p) => (sameId(p.id, product.id) ? renamed : p)));
+      }
+
       setShowEditStockModal(false);
       setSelectedInventoryItem(null);
       alert("Inventory updated successfully!");
@@ -2026,8 +2620,10 @@ export default function Inventory() {
         isOpen={showAddStockModal}
         onClose={() => setShowAddStockModal(false)}
         onAdd={handleAddInventory}
+        onRestock={handleRestockInventory}
         stores={stores}
         products={products}
+        inventory={inventory}
       />
 
       <EditStockModal
@@ -2040,6 +2636,7 @@ export default function Inventory() {
         inventoryItem={selectedInventoryItem}
         stores={stores}
         products={products}
+        inventory={inventory}
       />
     </div>
   );
