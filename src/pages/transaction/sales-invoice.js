@@ -10,7 +10,8 @@ export default function SalesInvoice() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [stores, setStores] = useState([]);
-	const [selectedStore, setSelectedStore] = useState("");
+	const [selectedStore, setSelectedStore] = useState(""); // store id, "" = all stores
+	const [orderStore, setOrderStore] = useState(""); // store the order is sold from
 	const [searchTerm, setSearchTerm] = useState("");
 	const [filteredInventory, setFilteredInventory] = useState([]);
 	const [selectedItem, setSelectedItem] = useState(null);
@@ -65,15 +66,34 @@ export default function SalesInvoice() {
 		fetchCustomers();
 	}, [paymentMethod]);
 
-	// Fetch inventory data
+	// Fetch the store list for the store filter
+	useEffect(() => {
+		const fetchStores = async () => {
+			try {
+				const response = await http.get("/stores");
+				const storeData = Array.isArray(response.data)
+					? response.data
+					: response.data.data || [];
+				setStores(
+					[...storeData].sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+				);
+			} catch (err) {
+				console.error("Failed to fetch stores:", err);
+			}
+		};
+
+		fetchStores();
+	}, []);
+
+	// Fetch products. With a store selected, the backend returns only that
+	// store's products, and stock is that store's stock.
 	useEffect(() => {
 		const fetchInventory = async () => {
 			try {
 				setLoading(true);
 				const response = await http.get("/products", {
 					params: {
-						store: selectedStore || undefined,
-						search: searchTerm || undefined,
+						store_id: selectedStore || undefined,
 					},
 				});
 
@@ -83,16 +103,7 @@ export default function SalesInvoice() {
 					: inventoryData.data || inventoryData.products || [];
 
 				setInventory(transformedInventory);
-
-				const uniqueStores = [
-					...new Set(
-						transformedInventory
-							.filter((item) => item.store)
-							.map((item) => item.store)
-					),
-				].sort();
-
-				setStores(uniqueStores);
+				setError(null);
 				setLoading(false);
 			} catch (err) {
 				console.error("Failed to fetch inventory:", err);
@@ -102,16 +113,11 @@ export default function SalesInvoice() {
 		};
 
 		fetchInventory();
-	}, [selectedStore, searchTerm]);
+	}, [selectedStore]);
 
-	// Filter inventory based on store and search term
+	// Filter inventory by search term
 	useEffect(() => {
 		let filtered = inventory;
-
-		// Filter by store
-		if (selectedStore) {
-			filtered = filtered.filter((item) => item.store === selectedStore);
-		}
 
 		// Filter by search term
 		if (searchTerm) {
@@ -132,12 +138,31 @@ export default function SalesInvoice() {
 		}
 
 		setFilteredInventory(filtered);
-	}, [selectedStore, searchTerm, inventory]);
+	}, [searchTerm, inventory]);
 
 	// Handle store filter change
 	const handleStoreChange = (e) => {
 		setSelectedStore(e.target.value);
+		setOrderStore(e.target.value);
 	};
+
+	const storeName = (id) =>
+		stores.find((store) => String(store.id) === String(id))?.name || "";
+
+	// Stock a cart item can sell: the order store's stock, or the total if no store is chosen
+	const availableStock = (item) => {
+		if (orderStore && Array.isArray(item.product_stores)) {
+			const entry = item.product_stores.find(
+				(s) => String(s.store_id) === String(orderStore)
+			);
+			return entry ? Number(entry.stock) : 0;
+		}
+		return Number(item.product_stock);
+	};
+
+	// Products stocked in more than one store need a store to sell from
+	const needsOrderStore =
+		!orderStore && cart.some((item) => (item.product_stores || []).length > 1);
 
 	// Handle search input change
 	const handleSearchChange = (e) => {
@@ -234,7 +259,7 @@ export default function SalesInvoice() {
 			prev.map((item) => {
 				if (item.id === id) {
 					const currentQty = Number(item.default_quantity_added);
-					const maxStock = Number(item.product_stock);
+					const maxStock = availableStock(item);
 					return {
 						...item,
 						default_quantity_added: currentQty < maxStock ? currentQty + 1 : currentQty,
@@ -272,6 +297,7 @@ export default function SalesInvoice() {
 
 			const orderData = {
 				customer_id: selectedCustomer || null,
+				store_id: orderStore || undefined,
 				items: orderItems,
 				payment_method: paymentMethod,
 			};
@@ -387,6 +413,31 @@ export default function SalesInvoice() {
 							Are you sure you want to process this order?
 						</p>
 
+						{/* Store Section */}
+						<div className="mb-6">
+							<label className="block text-gray-700 font-medium mb-2">
+								Sell From Store
+							</label>
+							<select
+								className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-600 text-black outline-none"
+								value={orderStore}
+								onChange={(e) => setOrderStore(e.target.value)}
+							>
+								<option value="">-- Select Store --</option>
+								{stores.map((store) => (
+									<option key={store.id} value={store.id}>
+										{store.name}
+									</option>
+								))}
+							</select>
+							{needsOrderStore && (
+								<p className="mt-1 text-xs text-red-500">
+									Some items are stocked in more than one store. Choose the store
+									you are selling from.
+								</p>
+							)}
+						</div>
+
 						{/* Payment Method Section */}
 						<div className="mb-6">
 							<label className="block text-gray-700 font-medium mb-2">
@@ -457,10 +508,12 @@ export default function SalesInvoice() {
 								onClick={handleProcessOrder}
 								disabled={
 									!paymentMethod ||
+									needsOrderStore ||
 									(paymentMethod === "customer_balance" && !selectedCustomer)
 								}
 								className={`px-4 py-2 rounded text-white ${
 									paymentMethod &&
+									!needsOrderStore &&
 									(paymentMethod !== "customer_balance" || selectedCustomer)
 										? "bg-indigo-600 hover:bg-indigo-700"
 										: "bg-gray-400 cursor-not-allowed"
@@ -499,8 +552,8 @@ export default function SalesInvoice() {
 								>
 									<option value="">All Stores</option>
 									{stores.map((store) => (
-										<option key={store} value={store}>
-											{store}
+										<option key={store.id} value={store.id}>
+											{store.name}
 										</option>
 									))}
 								</select>
@@ -540,7 +593,7 @@ export default function SalesInvoice() {
 					<div>
 						<h3 className="text-sm font-semibold text-gray-700 mb-4 border-b pb-2">
 							Available Products ({loading ? "..." : filteredInventory.length})
-							{selectedStore && ` - Filtered by: ${selectedStore}`}
+							{selectedStore && ` - Filtered by: ${storeName(selectedStore)}`}
 							{searchTerm && ` - Search: "${searchTerm}"`}
 						</h3>
 
