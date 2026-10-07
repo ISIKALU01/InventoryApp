@@ -5,6 +5,7 @@ import '../styles/globals.css'
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { getLocalStorage } from '../../utils/auth';
+import { APPEARANCE_KEY, applyAppearance, loadAppearance } from '../../utils/appearance';
 
 export default function MyApp({ 
   Component, 
@@ -12,6 +13,26 @@ export default function MyApp({
 }) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+
+  // Keep appearance in step with the device ("System" theme) and other tabs
+  useEffect(() => {
+    applyAppearance(loadAppearance());
+
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const onSystemChange = () => {
+      if (loadAppearance().theme === 'system') applyAppearance(loadAppearance());
+    };
+    const onStorage = (e) => {
+      if (e.key === APPEARANCE_KEY) applyAppearance(loadAppearance());
+    };
+
+    media?.addEventListener?.('change', onSystemChange);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      media?.removeEventListener?.('change', onSystemChange);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
   
   useEffect(() => {
     const checkAuth = () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import InventoryNav from "../../components/InventoryNav";
 import {
 	FaSearch,
@@ -20,6 +20,9 @@ import {
 	FaBox,
 	FaCheckCircle,
 	FaExclamationTriangle,
+	FaChevronDown,
+	FaTimesCircle,
+	FaSyncAlt,
 } from "react-icons/fa";
 import { useRouter } from "next/router";
 
@@ -396,6 +399,63 @@ const ProblemList = ({ problems, maxHeight = "max-h-48" }) => (
 		))}
 	</ul>
 );
+
+// Slim, flat filter field for the page's filter bar: square corners, no
+// border or focus ring; the fill lightens on focus instead
+const filterFieldClass =
+	"block w-full h-8 px-2.5 text-xs text-gray-800 bg-gray-100 border-0 rounded-none outline-none shadow-none appearance-none transition-colors placeholder:text-gray-400 focus:bg-gray-50 focus:outline-none focus:ring-0";
+
+const FilterSelect = ({ className = "", children, ...props }) => (
+	<div className={`relative ${className}`}>
+		<select {...props} className={`${filterFieldClass} pr-7 cursor-pointer`}>
+			{children}
+		</select>
+		<FaChevronDown className="absolute text-[10px] text-gray-400 -translate-y-1/2 pointer-events-none right-2.5 top-1/2" />
+	</div>
+);
+
+const TOAST_DURATION = { success: 3000, error: 5000 };
+
+// Toast for quick confirmations and failures; the bar shows time left
+const Toast = ({ toast, onClose }) => {
+	const isError = toast.type === "error";
+	const Icon = isError ? FaTimesCircle : FaCheckCircle;
+
+	return (
+		<div
+			role={isError ? "alert" : "status"}
+			className="fixed z-[60] top-4 right-4 left-4 sm:left-auto sm:w-96 toast-in"
+		>
+			<div
+				className={`relative overflow-hidden bg-white border border-gray-200 border-l-4 shadow-xl ${
+					isError ? "border-l-red-600" : "border-l-green-600"
+				}`}
+			>
+				<div className="flex items-start gap-3 px-4 py-3.5">
+					<Icon className={`mt-0.5 shrink-0 text-lg ${isError ? "text-red-600" : "text-green-600"}`} />
+					<div className="flex-1 min-w-0">
+						<p className="text-sm font-semibold text-gray-900">
+							{toast.title || (isError ? "Something went wrong" : "Done")}
+						</p>
+						<p className="mt-0.5 text-sm text-gray-600 break-words">{toast.message}</p>
+					</div>
+					<button
+						type="button"
+						onClick={onClose}
+						aria-label="Dismiss"
+						className="flex items-center justify-center -mr-1 text-gray-400 transition-colors w-7 h-7 shrink-0 hover:bg-gray-100 hover:text-gray-700"
+					>
+						<FaTimes className="text-xs" />
+					</button>
+				</div>
+				<div
+					className={`h-1 toast-progress ${isError ? "bg-red-600/30" : "bg-green-600/30"}`}
+					style={{ animationDuration: `${TOAST_DURATION[toast.type]}ms` }}
+				/>
+			</div>
+		</div>
+	);
+};
 
 const EMPTY_PRODUCT_FORM = {
 	name: "",
@@ -984,7 +1044,6 @@ export default function Products() {
 	const [searchTerm, setSearchTerm] = useState("");
 	const [selectedDescription, setSelectedDescription] = useState("");
 	const [showFilters, setShowFilters] = useState(false);
-	const [isMobile, setIsMobile] = useState(false);
 	const [showImportModal, setShowImportModal] = useState(false);
 	const [showAddProductModal, setShowAddProductModal] = useState(false);
 	const [showEditProductModal, setShowEditProductModal] = useState(false);
@@ -994,8 +1053,24 @@ export default function Products() {
 	const [isAddingProduct, setIsAddingProduct] = useState(false);
 	const [isEditingProduct, setIsEditingProduct] = useState(false);
 	const [isDeletingProduct, setIsDeletingProduct] = useState(false);
-	const [error, setError] = useState("");
+	const [loadError, setLoadError] = useState("");
 	const router = useRouter();
+
+	const [toast, setToast] = useState(null);
+	const toastTimer = useRef(null);
+
+	const notify = (type, message, title) => {
+		clearTimeout(toastTimer.current);
+		setToast({ id: Date.now(), type, message, title });
+		toastTimer.current = setTimeout(() => setToast(null), TOAST_DURATION[type]);
+	};
+
+	const closeToast = () => {
+		clearTimeout(toastTimer.current);
+		setToast(null);
+	};
+
+	useEffect(() => () => clearTimeout(toastTimer.current), []);
 
 	// Extract unique descriptions for filtering
 	const descriptions = [
@@ -1024,11 +1099,16 @@ export default function Products() {
 
 	const loadProducts = async () => {
 		setIsLoading(true);
-		setError("");
+		setLoadError("");
 		try {
 			setProducts(toProductList(await productAPI.getAllProducts()));
 		} catch (err) {
-			setError(err.message);
+			setLoadError(err.message);
+			// With products already on screen, a failed refresh is a notice;
+			// a failed first load shows inline in the table instead
+			if (products.length > 0) {
+				notify("error", err.message || "Could not load products.", "Refresh failed");
+			}
 			console.error("Error loading products:", err);
 		} finally {
 			setIsLoading(false);
@@ -1074,16 +1154,6 @@ export default function Products() {
 	};
 
 	const summary = calculateSummary();
-
-	useEffect(() => {
-		const checkIsMobile = () => {
-			setIsMobile(window.innerWidth < 768);
-		};
-
-		checkIsMobile();
-		window.addEventListener("resize", checkIsMobile);
-		return () => window.removeEventListener("resize", checkIsMobile);
-	}, []);
 
 	useEffect(() => {
 		let filtered = products;
@@ -1170,15 +1240,15 @@ export default function Products() {
 
 	const handleAddProduct = async (productData) => {
 		setIsAddingProduct(true);
-		setError("");
 		try {
 			await productAPI.createProduct(productData);
 
 			// Refresh the products list to get the updated data from the server
 			await loadProducts();
 			setShowAddProductModal(false);
+			notify("success", `${productData.name || "The product"} was added to the catalogue.`, "Product added");
 		} catch (err) {
-			setError(err.message);
+			notify("error", err.message || "Could not add the product.", "Product not added");
 			console.error("Error adding product:", err);
 		} finally {
 			setIsAddingProduct(false);
@@ -1192,7 +1262,6 @@ export default function Products() {
 
 	const handleEditProduct = async (id, productData) => {
 		setIsEditingProduct(true);
-		setError("");
 		try {
 			const response = await productAPI.updateProduct(id, productData);
 			setProducts((prev) =>
@@ -1204,8 +1273,9 @@ export default function Products() {
 			);
 			setShowEditProductModal(false);
 			setSelectedProduct(null);
+			notify("success", `${productData.name || "The product"} was saved.`, "Product updated");
 		} catch (err) {
-			setError(err.message);
+			notify("error", err.message || "Could not save the product.", "Product not updated");
 			console.error("Error updating product:", err);
 		} finally {
 			setIsEditingProduct(false);
@@ -1214,412 +1284,360 @@ export default function Products() {
 
 	const handleDeleteProduct = async (id) => {
 		setIsDeletingProduct(true);
-		setError("");
 		try {
 			await productAPI.deleteProduct(id);
+			const deletedName = productToDelete?.name || "The product";
 			setProducts((prev) => prev.filter((product) => !sameId(product.id, id)));
 			setProductToDelete(null);
+			notify("success", `${deletedName} was removed from the catalogue.`, "Product deleted");
 		} catch (err) {
-			setError(err.message);
+			notify("error", err.message || "Could not delete the product.", "Product not deleted");
 			console.error("Error deleting product:", err);
 		} finally {
 			setIsDeletingProduct(false);
 		}
 	};
 
+	const hasFilters = Boolean(searchTerm || selectedDescription);
+
+	const marginTone = (marginPercent) =>
+		marginPercent < 0 ? "text-rose-600" : marginPercent < 15 ? "text-amber-600" : "text-emerald-600";
+
+	const summaryTiles = [
+		{
+			icon: FaStore,
+			iconClass: "bg-blue-50 text-blue-700",
+			label: "Total Products",
+			value: summary.totalProducts,
+			hint: `${summary.uniqueDescriptions} categories`,
+		},
+		{
+			icon: FaChartBar,
+			iconClass: "bg-purple-50 text-purple-700",
+			label: "Avg Price",
+			value: formatCurrency(summary.averagePrice),
+			hint: "Across all products",
+		},
+		{
+			icon: FaMoneyBillWave,
+			iconClass: "bg-orange-50 text-orange-700",
+			label: "Highest Price",
+			value: formatCurrency(summary.highestPrice),
+			hint: "Single product",
+		},
+		{
+			icon: FaTags,
+			iconClass: "bg-green-50 text-green-700",
+			label: "Avg Margin",
+			value: formatPercent(summary.averageMargin),
+			hint: "Price vs cost price",
+		},
+	];
+
+	const categoryFilter = (
+		<FilterSelect
+			value={selectedDescription}
+			onChange={(e) => setSelectedDescription(e.target.value)}
+			aria-label="Filter by category"
+		>
+			<option value="">All Categories</option>
+			{descriptions.map((description) => (
+				<option key={description} value={description}>
+					{description}
+				</option>
+			))}
+		</FilterSelect>
+	);
+
 	return (
-		<div className="relative max-w-6xl mx-auto pb-16 md:pb-0">
-			<h1 className="hidden mb-6 text-xl font-normal text-gray-800 md:block font-raleway">
-				Products
-			</h1>
+		<div className="relative pb-6 font-raleway">
+			{toast && <Toast key={toast.id} toast={toast} onClose={closeToast} />}
+
+			<h1 className="hidden mb-2 text-xl font-normal text-gray-800 md:block">Products</h1>
 			<InventoryNav />
 
-			{error && (
-				<div className="p-3 mb-4 text-sm text-red-700 bg-red-100 border border-red-300 rounded">
-					<strong>Error:</strong> {error}
-					<button
-						onClick={() => setError("")}
-						className="float-right font-bold"
-					>
-						×
-					</button>
-				</div>
-			)}
-
-			<div className="mt-4 space-y-4 px-2 md:px-0">
-				{/* Summary Cards */}
-				<div className="">
-					<div className="p-2 bg-white rounded shadow">
-						<div className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:overflow-x-auto sm:justify-between sm:space-x-1 md:space-x-2">
-							<div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-								<div className="flex items-center">
-									<div className="p-1 mr-1 rounded bg-blue-100 md:mr-2 md:p-1.5">
-										<FaStore className="text-xs text-blue-600 md:text-sm" />
-									</div>
-									<div>
-										<h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-											Total Products
-										</h3>
-										<p className="text-sm font-bold text-gray-800 md:text-lg">
-											{summary.totalProducts}
-										</p>
-										<p className="text-[8px] text-gray-500 md:text-xs">
-											{summary.uniqueDescriptions} categories
-										</p>
-									</div>
-								</div>
+			<div className="mt-5 space-y-5">
+				{/* Summary Tiles */}
+				<div className="grid grid-cols-2 gap-px bg-gray-200 border border-gray-200 lg:grid-cols-4">
+					{summaryTiles.map(({ icon: Icon, iconClass, label, value, hint }) => (
+						<div key={label} className="flex items-center gap-3 px-4 py-4 bg-white">
+							<div className={`flex items-center justify-center w-10 h-10 shrink-0 ${iconClass}`}>
+								<Icon className="text-sm" />
 							</div>
-
-							<div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-								<div className="flex items-center">
-									<div className="p-1 mr-1 rounded bg-purple-100 md:mr-2 md:p-1.5">
-										<FaChartBar className="text-xs text-purple-600 md:text-sm" />
-									</div>
-									<div>
-										<h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-											Avg Price
-										</h3>
-										<p className="text-sm font-bold text-gray-800 md:text-lg">
-											{formatCurrency(summary.averagePrice)}
-										</p>
-									</div>
+							<div className="min-w-0">
+								<div className={statLabelClass}>{label}</div>
+								<div className="text-lg font-bold leading-tight text-gray-900 truncate">
+									{isLoading && products.length === 0 ? "…" : value}
 								</div>
-							</div>
-
-							<div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-								<div className="flex items-center">
-									<div className="p-1 mr-1 rounded bg-orange-100 md:mr-2 md:p-1.5">
-										<FaMoneyBillWave className="text-xs text-orange-600 md:text-sm" />
-									</div>
-									<div>
-										<h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-											Highest Price
-										</h3>
-										<p className="text-sm font-bold text-gray-800 md:text-lg">
-											{formatCurrency(summary.highestPrice)}
-										</p>
-									</div>
-								</div>
-							</div>
-
-							<div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-								<div className="flex items-center">
-									<div className="p-1 mr-1 rounded bg-green-100 md:mr-2 md:p-1.5">
-										<FaTags className="text-xs text-green-600 md:text-sm" />
-									</div>
-									<div>
-										<h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-											Avg Margin
-										</h3>
-										<p className="text-sm font-bold text-gray-800 md:text-lg">
-											{formatPercent(summary.averageMargin)}
-										</p>
-										<p className="text-[8px] text-gray-500 md:text-xs">
-											Price vs cost price
-										</p>
-									</div>
-								</div>
+								<div className="text-xs text-gray-500 truncate">{hint}</div>
 							</div>
 						</div>
-					</div>
+					))}
 				</div>
 
-				{/* Search and Actions Section */}
-				<div className="p-3 bg-white rounded shadow">
-					<div className="flex flex-col w-full gap-3 md:flex-row items-stretch">
-						<div className="flex flex-col flex-grow gap-3 md:flex-row">
-							{isMobile ? (
-								<div className="flex w-full gap-2">
-									<div className="flex-1 relative">
-										<input
-											type="text"
-											placeholder="Search products..."
-											value={searchTerm}
-											onChange={(e) => setSearchTerm(e.target.value)}
-											className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-										/>
-										<FaSearch className="absolute right-2 top-1.5 text-xs text-gray-400" />
-									</div>
-
-									<button
-										onClick={toggleFilters}
-										className={`px-3 py-1.5 rounded transition-colors flex items-center text-xs ${
-											showFilters
-												? "bg-indigo-600 text-white"
-												: "bg-gray-200 text-gray-700 hover:bg-gray-300"
-										}`}
-									>
-										<FaSlidersH className="text-xs" />
-									</button>
-								</div>
-							) : (
-								<>
-									<div className="relative w-full md:w-48">
-										<input
-											type="text"
-											placeholder="Search products..."
-											value={searchTerm}
-											onChange={(e) => setSearchTerm(e.target.value)}
-											className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-										/>
-										<FaSearch className="absolute right-2 top-1.5 text-xs text-gray-400" />
-									</div>
-
-									<div className="w-full md:w-48">
-										<select
-											value={selectedDescription}
-											onChange={(e) => setSelectedDescription(e.target.value)}
-											className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-										>
-											<option value="">All Categories</option>
-											{descriptions.map((description) => (
-												<option key={description} value={description}>
-													{description}
-												</option>
-											))}
-										</select>
-									</div>
-								</>
+				{/* Products Table */}
+				<section className="bg-white border border-gray-200">
+					{/* Header */}
+					<div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-200">
+						<div className="flex items-baseline min-w-0 gap-2">
+							<h2 className="text-base font-semibold text-gray-900">Catalogue</h2>
+							<span className="text-xs text-gray-500 truncate">
+								{filteredProducts.length} {hasFilters ? "matching" : "products"}
+							</span>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							{hasFilters && (
+								<button
+									onClick={clearFilters}
+									className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+								>
+									<FaTimes className="text-[11px]" />
+									Clear filters
+								</button>
 							)}
-						</div>
-
-						<div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
+							<button
+								onClick={loadProducts}
+								disabled={isLoading}
+								className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
+							>
+								<FaSyncAlt className={`text-[11px] ${isLoading ? "animate-spin" : ""}`} />
+								{isLoading ? "Refreshing…" : "Refresh"}
+							</button>
 							<button
 								onClick={() => setShowImportModal(true)}
-								className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
 								disabled={isLoading}
+								className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
 							>
-								<FaFileImport className="mr-1 text-xs" />
+								<FaFileImport className="text-[11px]" />
 								Import CSV
 							</button>
 							<button
 								onClick={() => setShowAddProductModal(true)}
-								className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
 								disabled={isLoading}
+								className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
 							>
-								<FaPlus className="mr-1 text-xs" />
+								<FaPlus className="text-[11px]" />
 								Add Product
 							</button>
+						</div>
+					</div>
+
+					{/* Filters */}
+					<div className="px-5 py-3 border-b border-gray-200">
+						<div className="flex gap-2 md:grid md:grid-cols-[minmax(0,1fr)_12rem]">
+							<div className="relative flex-1 min-w-0">
+								<FaSearch className="absolute text-[11px] text-gray-400 -translate-y-1/2 pointer-events-none left-2.5 top-1/2" />
+								<input
+									type="search"
+									placeholder="Search by name, SKU or category"
+									value={searchTerm}
+									onChange={(e) => setSearchTerm(e.target.value)}
+									className={`${filterFieldClass} pl-8`}
+								/>
+							</div>
 							<button
-								onClick={loadProducts}
-								className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-gray-600 rounded hover:bg-gray-700"
-								disabled={isLoading}
+								type="button"
+								onClick={toggleFilters}
+								aria-expanded={showFilters}
+								className={`flex items-center h-8 gap-1.5 px-2.5 text-xs font-medium transition-colors md:hidden ${
+									showFilters || selectedDescription
+										? "bg-blue-600 text-white"
+										: "bg-gray-100 text-gray-700"
+								}`}
 							>
-								{isLoading ? "Refreshing..." : "Refresh"}
+								{showFilters ? <FaTimes className="text-[11px]" /> : <FaSlidersH className="text-[11px]" />}
+								Filters
+							</button>
+							<div className="hidden md:block">{categoryFilter}</div>
+						</div>
+						{showFilters && <div className="mt-2 md:hidden">{categoryFilter}</div>}
+					</div>
+
+					{isLoading && products.length === 0 ? (
+						<div className="flex items-center justify-center gap-3 text-sm text-gray-500 py-14">
+							<div className="w-5 h-5 border-2 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+							Loading products…
+						</div>
+					) : loadError && products.length === 0 ? (
+						<div className="flex flex-col items-center px-5 text-center py-14">
+							<div className="flex items-center justify-center w-12 h-12 mb-3 text-red-500 bg-red-50">
+								<FaExclamationTriangle className="text-xl" />
+							</div>
+							<p className="text-sm font-medium text-gray-700">Couldn&apos;t load products</p>
+							<p className="mt-1 text-xs text-red-600">{loadError}</p>
+							<button onClick={loadProducts} className={`${secondaryButtonClass} mt-4`}>
+								Try Again
 							</button>
 						</div>
-					</div>
-
-					{isMobile && showFilters && descriptions.length > 0 && (
-						<div className="grid grid-cols-1 gap-2 p-2 mt-3 bg-gray-50 rounded">
-							<div>
-								<label className="block mb-1 text-xs font-medium text-gray-700">
-									Description / Category
-								</label>
-								<select
-									value={selectedDescription}
-									onChange={(e) => setSelectedDescription(e.target.value)}
-									className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-								>
-									<option value="">All Categories</option>
-									{descriptions.map((description) => (
-										<option key={description} value={description}>
-											{description}
-										</option>
-									))}
-								</select>
+					) : filteredProducts.length === 0 ? (
+						<div className="flex flex-col items-center px-5 text-center py-14">
+							<div className="flex items-center justify-center w-12 h-12 mb-3 text-gray-400 bg-gray-100">
+								<FaBox className="text-xl" />
 							</div>
-
-							<div className="flex gap-2 pt-1">
-								<button
-									onClick={clearFilters}
-									className="flex-1 px-2 py-1.5 text-xs text-gray-700 transition-colors bg-gray-200 rounded hover:bg-gray-300"
-								>
-									Clear Filters
-								</button>
-								<button
-									onClick={toggleFilters}
-									className="flex-1 px-2 py-1.5 text-xs text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
-								>
-									Apply Filters
-								</button>
+							<p className="text-sm font-medium text-gray-700">
+								{products.length === 0 ? "No products yet" : "No products match your filters"}
+							</p>
+							<p className="mt-1 text-xs text-gray-500">
+								{products.length === 0
+									? "Add products one at a time or import them from a CSV"
+									: "Try a different search or category"}
+							</p>
+							<div className="flex flex-wrap justify-center gap-3 mt-4">
+								{products.length === 0 ? (
+									<>
+										<button onClick={() => setShowImportModal(true)} className={secondaryButtonClass}>
+											Import from CSV
+										</button>
+										<button onClick={() => setShowAddProductModal(true)} className={primaryButtonClass()}>
+											<FaPlus className="mr-2 text-xs" />
+											Add Your First Product
+										</button>
+									</>
+								) : (
+									<button onClick={clearFilters} className={secondaryButtonClass}>
+										Clear filters
+									</button>
+								)}
 							</div>
 						</div>
-					)}
-				</div>
-
-				{/* Products Table */}
-				<div className="overflow-hidden bg-white rounded shadow">
-					{isLoading && products.length === 0 && (
-						<div className="py-12 text-center">
-							<div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-							<p className="mt-2 text-sm text-gray-600">Loading products...</p>
-						</div>
-					)}
-
-					<div className="hidden overflow-x-auto text-black md:block">
-						<table className="w-full">
-							<thead className="bg-gray-50">
-								<tr>
-									<th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-										Product Name
-									</th>
-									<th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-										SKU
-									</th>
-									<th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-										Description / Category
-									</th>
-									<th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-										Price
-									</th>
-									<th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-										Actions
-									</th>
-								</tr>
-							</thead>
-							<tbody className="bg-white divide-y divide-gray-200">
-								{filteredProducts.map((product) => {
-									return (
-										<tr key={product.id} className="hover:bg-gray-50">
-											<td className="px-4 py-3 text-sm font-medium text-black">
-												{product.name || "N/A"}
-											</td>
-											<td className="px-4 py-3 text-sm text-black">
-												{product.sku || "—"}
-											</td>
-											<td className="px-4 py-3 text-sm text-black">
-												{product.description || "N/A"}
-											</td>
-											<td className="px-4 py-3 text-sm text-black">
-												{formatCurrency(product.price)}
-											</td>
-											<td className="px-4 py-3 text-sm">
-												<div className="flex gap-2">
-													<button
-														onClick={() => handleEditClick(product)}
-														className="p-1 text-blue-600 transition-colors hover:text-blue-800 hover:bg-blue-50 rounded"
-														title="Edit"
-														disabled={isLoading}
-													>
-														<FaEdit className="text-sm" />
-													</button>
-													<button
-														onClick={() => setProductToDelete(product)}
-														className="p-1 text-red-600 transition-colors hover:text-red-800 hover:bg-red-50 rounded"
-														title="Delete"
-														disabled={isLoading}
-													>
-														<FaTrash className="text-sm" />
-													</button>
-												</div>
-											</td>
+					) : (
+						<>
+							{/* Desktop Table */}
+							<div className="hidden overflow-x-auto md:block">
+								<table className="w-full text-sm">
+									<thead className="border-b border-gray-200 bg-gray-50">
+										<tr className="text-left">
+											<th className={`px-5 py-2.5 ${statLabelClass}`}>Product</th>
+											<th className={`px-3 py-2.5 ${statLabelClass}`}>SKU</th>
+											<th className={`px-3 py-2.5 ${statLabelClass}`}>Category</th>
+											<th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Price</th>
+											<th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Cost Price</th>
+											<th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Margin</th>
+											<th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
 										</tr>
+									</thead>
+									<tbody className="divide-y divide-gray-100">
+										{filteredProducts.map((product) => {
+											const margin = getMargin(product.price, product.cost_price);
+											return (
+												<tr key={product.id} className="transition-colors hover:bg-blue-50/50">
+													<td className="max-w-[18rem] px-5 py-3 font-medium text-gray-900 truncate">
+														{product.name || "N/A"}
+													</td>
+													<td className="px-3 py-3 text-gray-600 whitespace-nowrap">{product.sku || "—"}</td>
+													<td className="px-3 py-3">
+														{product.description ? (
+															<span className="inline-block max-w-[12rem] px-2 py-0.5 text-[11px] font-medium text-blue-800 truncate align-middle bg-blue-50">
+																{product.description}
+															</span>
+														) : (
+															<span className="text-gray-400">—</span>
+														)}
+													</td>
+													<td className="px-3 py-3 font-semibold text-right text-gray-900 whitespace-nowrap">
+														{formatCurrency(product.price)}
+													</td>
+													<td className="px-3 py-3 text-right text-gray-700 whitespace-nowrap">
+														{margin.hasCost ? formatCurrency(product.cost_price) : "—"}
+													</td>
+													<td
+														className={`px-3 py-3 font-medium text-right whitespace-nowrap ${
+															margin.hasCost ? marginTone(margin.marginPercent) : "text-gray-400"
+														}`}
+													>
+														{margin.hasCost ? formatPercent(margin.marginPercent) : "—"}
+													</td>
+													<td className="px-5 py-2">
+														<div className="flex justify-end gap-1">
+															<button
+																onClick={() => handleEditClick(product)}
+																className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 disabled:opacity-50"
+																title="Edit"
+																aria-label={`Edit ${product.name || "product"}`}
+																disabled={isLoading}
+															>
+																<FaEdit className="text-sm" />
+															</button>
+															<button
+																onClick={() => setProductToDelete(product)}
+																className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600 disabled:opacity-50"
+																title="Delete"
+																aria-label={`Delete ${product.name || "product"}`}
+																disabled={isLoading}
+															>
+																<FaTrash className="text-sm" />
+															</button>
+														</div>
+													</td>
+												</tr>
+											);
+										})}
+									</tbody>
+								</table>
+							</div>
+
+							{/* Mobile Cards */}
+							<ul className="divide-y divide-gray-100 md:hidden">
+								{filteredProducts.map((product) => {
+									const margin = getMargin(product.price, product.cost_price);
+									return (
+										<li key={product.id} className="px-5 py-4">
+											<div className="flex items-start justify-between gap-3">
+												<div className="min-w-0">
+													<p className="text-sm font-semibold text-gray-900 truncate">{product.name || "N/A"}</p>
+													<p className="text-xs text-gray-500 truncate">
+														SKU {product.sku || "—"}
+														{product.description && ` · ${product.description}`}
+													</p>
+												</div>
+												<p className="text-sm font-bold text-gray-900 whitespace-nowrap">
+													{formatCurrency(product.price)}
+												</p>
+											</div>
+
+											<div className="grid grid-cols-2 gap-px mt-3 bg-gray-200 border border-gray-200">
+												<div className="px-2.5 py-2 bg-white">
+													<div className={statLabelClass}>Cost Price</div>
+													<div className="text-xs font-semibold text-gray-900">
+														{margin.hasCost ? formatCurrency(product.cost_price) : "—"}
+													</div>
+												</div>
+												<div className="px-2.5 py-2 bg-white">
+													<div className={statLabelClass}>Margin</div>
+													<div
+														className={`text-xs font-semibold ${
+															margin.hasCost ? marginTone(margin.marginPercent) : "text-gray-400"
+														}`}
+													>
+														{margin.hasCost ? formatPercent(margin.marginPercent) : "—"}
+													</div>
+												</div>
+											</div>
+
+											<div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
+												<button
+													onClick={() => handleEditClick(product)}
+													className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+													disabled={isLoading}
+												>
+													<FaEdit className="text-[11px]" /> Edit
+												</button>
+												<button
+													onClick={() => setProductToDelete(product)}
+													className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+													disabled={isLoading}
+												>
+													<FaTrash className="text-[11px]" /> Delete
+												</button>
+											</div>
+										</li>
 									);
 								})}
-							</tbody>
-						</table>
-					</div>
-
-					<div className="text-black md:hidden">
-						{filteredProducts.map((product) => {
-							return (
-								<div key={product.id} className="p-4 border-b border-gray-200">
-									<div className="mb-2">
-										<div className="font-medium text-black">
-											{product.name || "N/A"}
-										</div>
-										<div className="text-xs text-gray-500">
-											SKU: {product.sku || "No SKU"}
-											{product.description && ` • ${product.description}`}
-										</div>
-									</div>
-
-									<div className="text-sm">
-										<div className="text-gray-600">Price</div>
-										<div className="font-medium">
-											{formatCurrency(product.price)}
-										</div>
-									</div>
-
-									<div className="flex gap-2 mt-3">
-										<button
-											onClick={() => handleEditClick(product)}
-											className="flex-1 px-3 py-1.5 text-xs text-blue-600 border border-blue-600 rounded transition-colors hover:bg-blue-50"
-											disabled={isLoading}
-										>
-											Edit
-										</button>
-										<button
-											onClick={() => setProductToDelete(product)}
-											className="flex-1 px-3 py-1.5 text-xs text-red-600 border border-red-600 rounded transition-colors hover:bg-red-50"
-											disabled={isLoading}
-										>
-											Delete
-										</button>
-									</div>
-								</div>
-							);
-						})}
-					</div>
-
-					{filteredProducts.length === 0 && !isLoading && (
-						<div className="py-12 text-center">
-							<div className="text-gray-400 mb-2">
-								<FaBox className="inline text-3xl" />
-							</div>
-							<p className="text-sm text-gray-500">No products found</p>
-							{products.length === 0 && (
-								<div className="flex justify-center gap-2 mt-2">
-									<button
-										onClick={() => setShowAddProductModal(true)}
-										className="px-4 py-2 text-xs text-white bg-green-600 rounded hover:bg-green-700"
-									>
-										Add Your First Product
-									</button>
-									<button
-										onClick={() => setShowImportModal(true)}
-										className="px-4 py-2 text-xs text-white bg-blue-600 rounded hover:bg-blue-700"
-									>
-										Import from CSV
-									</button>
-								</div>
-							)}
-						</div>
+							</ul>
+						</>
 					)}
-				</div>
+				</section>
 			</div>
-
-			{isMobile && (
-				<div className="fixed bottom-4 right-4 md:hidden">
-					<div className="flex flex-col gap-3">
-						<button
-							onClick={() => setShowImportModal(true)}
-							className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-blue-600 rounded-full shadow-lg hover:bg-blue-700 hover:scale-110"
-							title="Import CSV"
-							disabled={isLoading}
-						>
-							<FaFileImport className="text-lg" />
-						</button>
-						<button
-							onClick={() => setShowAddProductModal(true)}
-							className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-green-600 rounded-full shadow-lg hover:bg-green-700 hover:scale-110"
-							title="Add Product"
-							disabled={isLoading}
-						>
-							<FaPlus className="text-lg" />
-						</button>
-						<button
-							onClick={loadProducts}
-							className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-gray-600 rounded-full shadow-lg hover:bg-gray-700 hover:scale-110"
-							title="Refresh"
-							disabled={isLoading}
-						>
-							↻
-						</button>
-					</div>
-				</div>
-			)}
 
 			<ImportCSVModal
 				isOpen={showImportModal}
@@ -1651,6 +1669,35 @@ export default function Products() {
 				onConfirm={handleDeleteProduct}
 				isLoading={isDeletingProduct}
 			/>
+
+			<style jsx global>{`
+				@keyframes toast-in {
+					from {
+						opacity: 0;
+						transform: translateY(-8px);
+					}
+					to {
+						opacity: 1;
+						transform: translateY(0);
+					}
+				}
+				@keyframes toast-progress {
+					from {
+						width: 100%;
+					}
+					to {
+						width: 0%;
+					}
+				}
+				.toast-in {
+					animation: toast-in 0.2s ease-out;
+				}
+				.toast-progress {
+					animation-name: toast-progress;
+					animation-timing-function: linear;
+					animation-fill-mode: forwards;
+				}
+			`}</style>
 		</div>
 	);
 }

@@ -103,6 +103,11 @@ const formatNaira = (value) =>
 const fieldClass =
 	"block w-full px-3 py-2.5 text-sm text-gray-800 bg-gray-100 border-0 rounded-none outline-none transition-colors placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-600";
 
+// Slim, flat filter field: square corners, no border or focus ring; the
+// fill lightens on focus instead
+const filterFieldClass =
+	"block w-full h-8 px-2.5 text-xs text-gray-800 bg-gray-100 border-0 rounded-none outline-none shadow-none appearance-none transition-colors placeholder:text-gray-400 focus:bg-gray-50 focus:outline-none focus:ring-0";
+
 const labelClass =
 	"block mb-1.5 text-xs font-semibold tracking-wide text-gray-600 uppercase";
 
@@ -112,15 +117,21 @@ const primaryButtonClass =
 const secondaryButtonClass =
 	"flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-none transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed";
 
-// Borderless dropdown with its own chevron in place of the browser arrow
-const Select = ({ className = "", children, ...props }) => (
+// Borderless dropdown with its own chevron in place of the browser arrow;
+// `slim` gives the compact filter-bar version
+const Select = ({ className = "", slim = false, children, ...props }) => (
 	<div className={`relative ${className}`}>
-		<select {...props} className={`${fieldClass} pr-9 appearance-none cursor-pointer`}>
+		<select
+			{...props}
+			className={`${slim ? `${filterFieldClass} pr-7` : `${fieldClass} pr-9`} appearance-none cursor-pointer`}
+		>
 			{children}
 		</select>
 		<ChevronDown
-			size={16}
-			className="absolute text-gray-500 -translate-y-1/2 pointer-events-none right-3 top-1/2"
+			size={slim ? 13 : 16}
+			className={`absolute -translate-y-1/2 pointer-events-none top-1/2 ${
+				slim ? "text-gray-400 right-2.5" : "text-gray-500 right-3"
+			}`}
 		/>
 	</div>
 );
@@ -1068,8 +1079,9 @@ export default function SalesInvoice() {
 				<section className="flex-1 min-w-0 bg-white border border-gray-200">
 					<PanelHeader title="Products" meta={listMeta} />
 
-					<div className="grid gap-3 px-5 py-4 border-b border-gray-200 sm:grid-cols-[minmax(0,14rem)_1fr]">
+					<div className="grid gap-2 px-5 py-3 border-b border-gray-200 sm:grid-cols-[minmax(0,12rem)_1fr]">
 						<Select
+							slim
 							value={selectedStore}
 							onChange={handleStoreChange}
 							aria-label="Filter by store"
@@ -1084,15 +1096,15 @@ export default function SalesInvoice() {
 
 						<div className="relative">
 							<Search
-								size={16}
-								className="absolute text-gray-400 -translate-y-1/2 pointer-events-none left-3 top-1/2"
+								size={13}
+								className="absolute text-gray-400 -translate-y-1/2 pointer-events-none left-2.5 top-1/2"
 							/>
 							<input
 								type="search"
 								placeholder="Search by name, SKU, store or ID"
 								value={searchTerm}
 								onChange={(e) => setSearchTerm(e.target.value)}
-								className={`${fieldClass} pl-9`}
+								className={`${filterFieldClass} pl-8`}
 							/>
 						</div>
 					</div>

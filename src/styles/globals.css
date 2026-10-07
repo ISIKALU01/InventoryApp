@@ -12,12 +12,6 @@
   --font-sans: var(--font-raleway);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
 
 body {
   background: var(--background);
@@ -77,4 +71,322 @@ html {
 
 .hover-lift:hover {
   transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   Appearance (see utils/appearance.js). Set as data-* attributes on <html>.
+   Colour utilities read CSS variables, so remapping the variables restyles
+   every page without per-page dark: classes.
+   ========================================================================== */
+
+/* Accent colour: blue (buttons) and indigo (sidebar, nav) follow it */
+:root {
+  --acc-blue-300: #93c5fd;
+  --acc-blue-400: #60a5fa;
+  --acc-blue-500: #3b82f6;
+  --acc-indigo-300: #a5b4fc;
+  --acc-indigo-400: #818cf8;
+  --acc-indigo-500: #6366f1;
+}
+
+:root[data-accent="emerald"] {
+  --color-blue-50: #ecfdf5;
+  --color-blue-100: #d1fae5;
+  --color-blue-200: #a7f3d0;
+  --color-blue-300: #6ee7b7;
+  --color-blue-400: #34d399;
+  --color-blue-500: #10b981;
+  --color-blue-600: #059669;
+  --color-blue-700: #047857;
+  --color-blue-800: #065f46;
+  --color-blue-900: #064e3b;
+  --color-blue-950: #022c22;
+  --color-indigo-50: #ecfdf5;
+  --color-indigo-100: #d1fae5;
+  --color-indigo-200: #a7f3d0;
+  --color-indigo-300: #6ee7b7;
+  --color-indigo-400: #34d399;
+  --color-indigo-500: #10b981;
+  --color-indigo-600: #059669;
+  --color-indigo-700: #047857;
+  --color-indigo-800: #065f46;
+  --color-indigo-900: #064e3b;
+  --color-indigo-950: #022c22;
+  --acc-blue-300: #6ee7b7;
+  --acc-blue-400: #34d399;
+  --acc-blue-500: #10b981;
+  --acc-indigo-300: #6ee7b7;
+  --acc-indigo-400: #34d399;
+  --acc-indigo-500: #10b981;
+}
+
+:root[data-accent="teal"] {
+  --color-blue-50: #f0fdfa;
+  --color-blue-100: #ccfbf1;
+  --color-blue-200: #99f6e4;
+  --color-blue-300: #5eead4;
+  --color-blue-400: #2dd4bf;
+  --color-blue-500: #14b8a6;
+  --color-blue-600: #0d9488;
+  --color-blue-700: #0f766e;
+  --color-blue-800: #115e59;
+  --color-blue-900: #134e4a;
+  --color-blue-950: #042f2e;
+  --color-indigo-50: #f0fdfa;
+  --color-indigo-100: #ccfbf1;
+  --color-indigo-200: #99f6e4;
+  --color-indigo-300: #5eead4;
+  --color-indigo-400: #2dd4bf;
+  --color-indigo-500: #14b8a6;
+  --color-indigo-600: #0d9488;
+  --color-indigo-700: #0f766e;
+  --color-indigo-800: #115e59;
+  --color-indigo-900: #134e4a;
+  --color-indigo-950: #042f2e;
+  --acc-blue-300: #5eead4;
+  --acc-blue-400: #2dd4bf;
+  --acc-blue-500: #14b8a6;
+  --acc-indigo-300: #5eead4;
+  --acc-indigo-400: #2dd4bf;
+  --acc-indigo-500: #14b8a6;
+}
+
+:root[data-accent="violet"] {
+  --color-blue-50: #f5f3ff;
+  --color-blue-100: #ede9fe;
+  --color-blue-200: #ddd6fe;
+  --color-blue-300: #c4b5fd;
+  --color-blue-400: #a78bfa;
+  --color-blue-500: #8b5cf6;
+  --color-blue-600: #7c3aed;
+  --color-blue-700: #6d28d9;
+  --color-blue-800: #5b21b6;
+  --color-blue-900: #4c1d95;
+  --color-blue-950: #2e1065;
+  --color-indigo-50: #f5f3ff;
+  --color-indigo-100: #ede9fe;
+  --color-indigo-200: #ddd6fe;
+  --color-indigo-300: #c4b5fd;
+  --color-indigo-400: #a78bfa;
+  --color-indigo-500: #8b5cf6;
+  --color-indigo-600: #7c3aed;
+  --color-indigo-700: #6d28d9;
+  --color-indigo-800: #5b21b6;
+  --color-indigo-900: #4c1d95;
+  --color-indigo-950: #2e1065;
+  --acc-blue-300: #c4b5fd;
+  --acc-blue-400: #a78bfa;
+  --acc-blue-500: #8b5cf6;
+  --acc-indigo-300: #c4b5fd;
+  --acc-indigo-400: #a78bfa;
+  --acc-indigo-500: #8b5cf6;
+}
+
+:root[data-accent="rose"] {
+  --color-blue-50: #fff1f2;
+  --color-blue-100: #ffe4e6;
+  --color-blue-200: #fecdd3;
+  --color-blue-300: #fda4af;
+  --color-blue-400: #fb7185;
+  --color-blue-500: #f43f5e;
+  --color-blue-600: #e11d48;
+  --color-blue-700: #be123c;
+  --color-blue-800: #9f1239;
+  --color-blue-900: #881337;
+  --color-blue-950: #4c0519;
+  --color-indigo-50: #fff1f2;
+  --color-indigo-100: #ffe4e6;
+  --color-indigo-200: #fecdd3;
+  --color-indigo-300: #fda4af;
+  --color-indigo-400: #fb7185;
+  --color-indigo-500: #f43f5e;
+  --color-indigo-600: #e11d48;
+  --color-indigo-700: #be123c;
+  --color-indigo-800: #9f1239;
+  --color-indigo-900: #881337;
+  --color-indigo-950: #4c0519;
+  --acc-blue-300: #fda4af;
+  --acc-blue-400: #fb7185;
+  --acc-blue-500: #f43f5e;
+  --acc-indigo-300: #fda4af;
+  --acc-indigo-400: #fb7185;
+  --acc-indigo-500: #f43f5e;
+}
+
+:root[data-accent="orange"] {
+  --color-blue-50: #fff7ed;
+  --color-blue-100: #ffedd5;
+  --color-blue-200: #fed7aa;
+  --color-blue-300: #fdba74;
+  --color-blue-400: #fb923c;
+  --color-blue-500: #f97316;
+  --color-blue-600: #ea580c;
+  --color-blue-700: #c2410c;
+  --color-blue-800: #9a3412;
+  --color-blue-900: #7c2d12;
+  --color-blue-950: #431407;
+  --color-indigo-50: #fff7ed;
+  --color-indigo-100: #ffedd5;
+  --color-indigo-200: #fed7aa;
+  --color-indigo-300: #fdba74;
+  --color-indigo-400: #fb923c;
+  --color-indigo-500: #f97316;
+  --color-indigo-600: #ea580c;
+  --color-indigo-700: #c2410c;
+  --color-indigo-800: #9a3412;
+  --color-indigo-900: #7c2d12;
+  --color-indigo-950: #431407;
+  --acc-blue-300: #fdba74;
+  --acc-blue-400: #fb923c;
+  --acc-blue-500: #f97316;
+  --acc-indigo-300: #fdba74;
+  --acc-indigo-400: #fb923c;
+  --acc-indigo-500: #f97316;
+}
+
+/* Interface size: Tailwind sizes are rem-based, so this scales everything */
+:root[data-scale="compact"] {
+  font-size: 93.75%;
+}
+:root[data-scale="large"] {
+  font-size: 112.5%;
+}
+
+/* Reduce motion (loading spinners keep turning so progress stays visible) */
+:root[data-motion="reduce"] *:not(.animate-spin),
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+:root[data-motion="reduce"] {
+  scroll-behavior: auto;
+}
+
+/* Dark theme. Applied to the page area (.app-content); the sidebar keeps its
+   own colours. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0d1117;
+  --foreground: #e6e9ef;
+}
+
+[data-theme="dark"] .app-shell {
+  background-color: #0d1117;
+}
+
+[data-theme="dark"] .app-content {
+  color-scheme: dark;
+  --color-white: #161b22;
+  --color-gray-50: #1c222b;
+  --color-gray-100: #222a35;
+  --color-gray-200: #2d3643;
+  --color-gray-300: #3b4553;
+  --color-gray-400: #6b7686;
+  --color-gray-500: #8b96a6;
+  --color-gray-600: #a8b1bf;
+  --color-gray-700: #c4cbd6;
+  --color-gray-800: #dbe0e8;
+  --color-gray-900: #eceff4;
+  --color-gray-950: #f6f7f9;
+  --color-green-50: color-mix(in srgb, #22c55e 13%, #161b22);
+  --color-green-100: color-mix(in srgb, #22c55e 20%, #161b22);
+  --color-green-200: color-mix(in srgb, #22c55e 32%, #161b22);
+  --color-emerald-50: color-mix(in srgb, #10b981 13%, #161b22);
+  --color-emerald-100: color-mix(in srgb, #10b981 20%, #161b22);
+  --color-emerald-200: color-mix(in srgb, #10b981 32%, #161b22);
+  --color-teal-50: color-mix(in srgb, #14b8a6 13%, #161b22);
+  --color-teal-100: color-mix(in srgb, #14b8a6 20%, #161b22);
+  --color-teal-200: color-mix(in srgb, #14b8a6 32%, #161b22);
+  --color-sky-50: color-mix(in srgb, #0ea5e9 13%, #161b22);
+  --color-sky-100: color-mix(in srgb, #0ea5e9 20%, #161b22);
+  --color-sky-200: color-mix(in srgb, #0ea5e9 32%, #161b22);
+  --color-red-50: color-mix(in srgb, #ef4444 13%, #161b22);
+  --color-red-100: color-mix(in srgb, #ef4444 20%, #161b22);
+  --color-red-200: color-mix(in srgb, #ef4444 32%, #161b22);
+  --color-rose-50: color-mix(in srgb, #f43f5e 13%, #161b22);
+  --color-rose-100: color-mix(in srgb, #f43f5e 20%, #161b22);
+  --color-rose-200: color-mix(in srgb, #f43f5e 32%, #161b22);
+  --color-amber-50: color-mix(in srgb, #f59e0b 13%, #161b22);
+  --color-amber-100: color-mix(in srgb, #f59e0b 20%, #161b22);
+  --color-amber-200: color-mix(in srgb, #f59e0b 32%, #161b22);
+  --color-yellow-50: color-mix(in srgb, #eab308 13%, #161b22);
+  --color-yellow-100: color-mix(in srgb, #eab308 20%, #161b22);
+  --color-yellow-200: color-mix(in srgb, #eab308 32%, #161b22);
+  --color-orange-50: color-mix(in srgb, #f97316 13%, #161b22);
+  --color-orange-100: color-mix(in srgb, #f97316 20%, #161b22);
+  --color-orange-200: color-mix(in srgb, #f97316 32%, #161b22);
+  --color-purple-50: color-mix(in srgb, #a855f7 13%, #161b22);
+  --color-purple-100: color-mix(in srgb, #a855f7 20%, #161b22);
+  --color-purple-200: color-mix(in srgb, #a855f7 32%, #161b22);
+  --color-violet-50: color-mix(in srgb, #8b5cf6 13%, #161b22);
+  --color-violet-100: color-mix(in srgb, #8b5cf6 20%, #161b22);
+  --color-violet-200: color-mix(in srgb, #8b5cf6 32%, #161b22);
+  --color-blue-50: color-mix(in srgb, var(--acc-blue-500) 13%, #161b22);
+  --color-blue-100: color-mix(in srgb, var(--acc-blue-500) 20%, #161b22);
+  --color-blue-200: color-mix(in srgb, var(--acc-blue-500) 32%, #161b22);
+  --color-indigo-50: color-mix(in srgb, var(--acc-indigo-500) 13%, #161b22);
+  --color-indigo-100: color-mix(in srgb, var(--acc-indigo-500) 20%, #161b22);
+  --color-indigo-200: color-mix(in srgb, var(--acc-indigo-500) 32%, #161b22);
+}
+
+/* White text stays white (it shares --color-white with bg-white) */
+[data-theme="dark"] .app-content :is(.text-white, .hover\:text-white:hover) {
+  color: #fff;
+}
+[data-theme="dark"] .app-content .text-black {
+  color: #eceff4;
+}
+
+/* Modal backdrops darken instead of hazing the page */
+[data-theme="dark"] .app-content :is(.bg-gray-900\/10, .bg-gray-900\/20) {
+  background-color: rgb(0 0 0 / 0.55);
+}
+
+/* Coloured text was picked for white backgrounds; lift it for contrast */
+[data-theme="dark"] .app-content :is(.text-green-600, .text-green-700) { color: #4ade80; }
+[data-theme="dark"] .app-content :is(.text-green-800, .text-green-900) { color: #86efac; }
+[data-theme="dark"] .app-content :is(.text-emerald-600, .text-emerald-700) { color: #34d399; }
+[data-theme="dark"] .app-content :is(.text-emerald-800, .text-emerald-900) { color: #6ee7b7; }
+[data-theme="dark"] .app-content :is(.text-teal-600, .text-teal-700) { color: #2dd4bf; }
+[data-theme="dark"] .app-content :is(.text-teal-800, .text-teal-900) { color: #5eead4; }
+[data-theme="dark"] .app-content :is(.text-sky-600, .text-sky-700) { color: #38bdf8; }
+[data-theme="dark"] .app-content :is(.text-sky-800, .text-sky-900) { color: #7dd3fc; }
+[data-theme="dark"] .app-content :is(.text-red-600, .text-red-700) { color: #f87171; }
+[data-theme="dark"] .app-content :is(.text-red-800, .text-red-900) { color: #fca5a5; }
+[data-theme="dark"] .app-content :is(.text-rose-600, .text-rose-700) { color: #fb7185; }
+[data-theme="dark"] .app-content :is(.text-rose-800, .text-rose-900) { color: #fda4af; }
+[data-theme="dark"] .app-content :is(.text-amber-600, .text-amber-700) { color: #fbbf24; }
+[data-theme="dark"] .app-content :is(.text-amber-800, .text-amber-900) { color: #fcd34d; }
+[data-theme="dark"] .app-content :is(.text-yellow-600, .text-yellow-700) { color: #facc15; }
+[data-theme="dark"] .app-content :is(.text-yellow-800, .text-yellow-900) { color: #fde047; }
+[data-theme="dark"] .app-content :is(.text-orange-600, .text-orange-700) { color: #fb923c; }
+[data-theme="dark"] .app-content :is(.text-orange-800, .text-orange-900) { color: #fdba74; }
+[data-theme="dark"] .app-content :is(.text-purple-600, .text-purple-700) { color: #c084fc; }
+[data-theme="dark"] .app-content :is(.text-purple-800, .text-purple-900) { color: #d8b4fe; }
+[data-theme="dark"] .app-content :is(.text-violet-600, .text-violet-700) { color: #a78bfa; }
+[data-theme="dark"] .app-content :is(.text-violet-800, .text-violet-900) { color: #c4b5fd; }
+[data-theme="dark"] .app-content :is(.text-blue-600, .text-blue-700) { color: var(--acc-blue-400); }
+[data-theme="dark"] .app-content :is(.text-blue-800, .text-blue-900) { color: var(--acc-blue-300); }
+[data-theme="dark"] .app-content :is(.text-indigo-600, .text-indigo-700) { color: var(--acc-indigo-400); }
+[data-theme="dark"] .app-content :is(.text-indigo-800, .text-indigo-900) { color: var(--acc-indigo-300); }
+
+/* Components that are deliberately dark (e.g. hover cards) keep light-mode
+   values inside them */
+[data-theme="dark"] .app-content .theme-fixed {
+  color-scheme: light;
+  --color-white: #fff;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
 }

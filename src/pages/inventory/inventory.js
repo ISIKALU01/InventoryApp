@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import InventoryNav from "../../components/InventoryNav";
 import {
   FaSearch,
@@ -20,6 +20,8 @@ import {
   FaExclamationTriangle,
   FaCheckCircle,
   FaLock,
+  FaChevronDown,
+  FaTimesCircle,
 } from "react-icons/fa";
 
 import { inventoryAPI, productAPI, storeAPI } from "../../../services/api";
@@ -194,7 +196,7 @@ const RowInsightCard = ({ insight }) => {
         transform: `translateY(calc(${openUpward ? "-100%" : "0px"} + ${visible ? 0 : 4}px))`,
       }}
     >
-      <div className="overflow-hidden text-white rounded-xl shadow-2xl bg-gray-900/95 ring-1 ring-white/10 backdrop-blur">
+      <div className="overflow-hidden text-white theme-fixed rounded-xl shadow-2xl bg-gray-900/95 ring-1 ring-white/10 backdrop-blur">
         <div className="flex items-start justify-between gap-3 px-4 pt-3.5">
           <div className="min-w-0">
             <p className="text-[10px] font-medium tracking-wider text-gray-400 uppercase">
@@ -505,6 +507,63 @@ const ModalFooter = ({ children }) => (
     {children}
   </div>
 );
+
+// Slim, flat filter field for the page's filter bar: square corners, no
+// border or focus ring; the fill lightens on focus instead
+const filterFieldClass =
+  "block w-full h-8 px-2.5 text-xs text-gray-800 bg-gray-100 border-0 rounded-none outline-none shadow-none appearance-none transition-colors placeholder:text-gray-400 focus:bg-gray-50 focus:outline-none focus:ring-0";
+
+const FilterSelect = ({ className = "", children, ...props }) => (
+  <div className={`relative ${className}`}>
+    <select {...props} className={`${filterFieldClass} pr-7 cursor-pointer`}>
+      {children}
+    </select>
+    <FaChevronDown className="absolute text-[10px] text-gray-400 -translate-y-1/2 pointer-events-none right-2.5 top-1/2" />
+  </div>
+);
+
+const TOAST_DURATION = { success: 3000, error: 5000 };
+
+// Toast for quick confirmations and failures; the bar shows time left
+const Toast = ({ toast, onClose }) => {
+  const isError = toast.type === "error";
+  const Icon = isError ? FaTimesCircle : FaCheckCircle;
+
+  return (
+    <div
+      role={isError ? "alert" : "status"}
+      className="fixed z-[60] top-4 right-4 left-4 sm:left-auto sm:w-96 toast-in"
+    >
+      <div
+        className={`relative overflow-hidden bg-white border border-gray-200 border-l-4 shadow-xl ${
+          isError ? "border-l-red-600" : "border-l-green-600"
+        }`}
+      >
+        <div className="flex items-start gap-3 px-4 py-3.5">
+          <Icon className={`mt-0.5 shrink-0 text-lg ${isError ? "text-red-600" : "text-green-600"}`} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900">
+              {toast.title || (isError ? "Something went wrong" : "Done")}
+            </p>
+            <p className="mt-0.5 text-sm text-gray-600 break-words">{toast.message}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Dismiss"
+            className="flex items-center justify-center -mr-1 text-gray-400 transition-colors w-7 h-7 shrink-0 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <FaTimes className="text-xs" />
+          </button>
+        </div>
+        <div
+          className={`h-1 toast-progress ${isError ? "bg-red-600/30" : "bg-green-600/30"}`}
+          style={{ animationDuration: `${TOAST_DURATION[toast.type]}ms` }}
+        />
+      </div>
+    </div>
+  );
+};
 
 // Row of boxed label/value cells (2 per row on phones, all in one row from sm up)
 const StatGrid = ({ stats, valueClass = "text-sm font-medium" }) => (
@@ -1593,7 +1652,6 @@ export default function Inventory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStore, setSelectedStore] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddStockModal, setShowAddStockModal] = useState(false);
   const [showEditStockModal, setShowEditStockModal] = useState(false);
@@ -1602,6 +1660,25 @@ export default function Inventory() {
   const [error, setError] = useState(null);
   const [addingInventory, setAddingInventory] = useState(false);
   const [rowInsight, setRowInsight] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
+
+  const notify = (type, message, title) => {
+    clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), type, message, title });
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_DURATION[type]);
+  };
+
+  const closeToast = () => {
+    clearTimeout(toastTimer.current);
+    setToast(null);
+  };
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const showRowInsight = (event, product, figures) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -1683,11 +1760,12 @@ export default function Inventory() {
       setInventory((prev) => [...(Array.isArray(prev) ? prev : []), processedItem]);
 
       setShowAddStockModal(false);
-      alert("Inventory added successfully!");
+      const addedName = safeGetProduct(processedItem, products).name || "The product";
+      notify("success", `${addedName} is now stocked (${toNumber(processedItem.quantity)} units).`, "Inventory added");
       return { status: "ok" };
     } catch (error) {
       console.error("Error adding inventory:", error);
-      alert(error.message || "Failed to add inventory");
+      notify("error", error.message || "Failed to add inventory", "Inventory not added");
       throw error;
     } finally {
       setAddingInventory(false);
@@ -1739,11 +1817,11 @@ export default function Inventory() {
 
       setShowAddStockModal(false);
       const productName = safeGetProduct(row, products).name || "Item";
-      alert(`${productName}: stock updated from ${current} to ${toNumber(saved.quantity)}.`);
+      notify("success", `${productName}: ${current} → ${toNumber(saved.quantity)} units.`, "Stock updated");
       return { status: "ok" };
     } catch (error) {
       console.error("Error updating stock:", error);
-      alert(error.message || "Failed to update stock");
+      notify("error", error.message || "Failed to update stock", "Stock not updated");
       throw error;
     } finally {
       setAddingInventory(false);
@@ -1822,27 +1900,40 @@ export default function Inventory() {
 
       setShowEditStockModal(false);
       setSelectedInventoryItem(null);
-      alert("Inventory updated successfully!");
+      notify("success", "Your changes were saved.", "Inventory updated");
     } catch (error) {
       console.error("Error updating inventory:", error);
-      alert(error.message || "Failed to update inventory");
+      notify("error", error.message || "Failed to update inventory", "Inventory not updated");
       throw error;
     }
   };
 
-  // Delete inventory
-  const handleDeleteInventory = async (id) => {
-    if (!confirm("Are you sure you want to delete this inventory item?")) {
-      return;
-    }
+  // Delete inventory (asks first in a confirmation modal)
+  const handleDeleteInventory = (item) => {
+    setDeleteError("");
+    setDeleteTarget(item);
+  };
 
+  const closeDelete = () => {
+    if (!deleting) setDeleteTarget(null);
+  };
+
+  const confirmDeleteInventory = async () => {
+    const item = deleteTarget;
     try {
-      await inventoryAPI.deleteInventory(id);
-      setInventory((prev) => prev.filter((item) => !sameId(item.id, id)));
-      alert("Inventory deleted successfully!");
+      setDeleting(true);
+      setDeleteError("");
+      await inventoryAPI.deleteInventory(item.id);
+      setInventory((prev) => prev.filter((row) => !sameId(row.id, item.id)));
+      setDeleteTarget(null);
+      const name = safeGetProduct(item, products).name || "The item";
+      const storeName = safeGetStore(item, stores).name || "the store";
+      notify("success", `${name} was removed from ${storeName}.`, "Inventory deleted");
     } catch (error) {
       console.error("Error deleting inventory:", error);
-      alert(error.message || "Failed to delete inventory item.");
+      setDeleteError(error.message || "Failed to delete inventory item.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1876,17 +1967,6 @@ export default function Inventory() {
   const summary = calculateSummary();
   const isFiltered = Boolean(searchTerm || selectedStore);
   const selectedStoreName = stores.find((s) => sameId(s.id, selectedStore))?.name;
-
-  // Detect mobile screen size
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkIsMobile();
-    window.addEventListener("resize", checkIsMobile);
-    return () => window.removeEventListener("resize", checkIsMobile);
-  }, []);
 
   // Fetch data on component mount
   useEffect(() => {
@@ -2045,566 +2125,384 @@ export default function Inventory() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading inventory...</div>
+      <div className="relative pb-6 font-raleway">
+        <h1 className="hidden mb-2 text-xl font-normal text-gray-800 md:block">Inventory</h1>
+        <InventoryNav />
+        <div className="flex items-center justify-center gap-3 mt-5 text-sm text-gray-500 bg-white border border-gray-200 py-14">
+          <div className="w-5 h-5 border-2 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+          Loading inventory…
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="relative max-w-6xl mx-auto pb-16 md:pb-0">
-        <h1 className="hidden mb-6 text-xl font-normal text-gray-800 md:block font-raleway">
-          Inventory
-        </h1>
+      <div className="relative pb-6 font-raleway">
+        <h1 className="hidden mb-2 text-xl font-normal text-gray-800 md:block">Inventory</h1>
         <InventoryNav />
 
-        <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-lg text-center">
-          <FaExclamationTriangle className="mx-auto text-red-500 text-3xl mb-4" />
-          <h2 className="text-lg font-semibold text-red-800 mb-2">
-            Unable to Load Inventory
-          </h2>
-          <p className="text-red-600 mb-4">{error}</p>
-          <div className="space-y-3">
-            <button
-              onClick={handleRetry}
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-            >
-              Try Again
-            </button>
-            <div className="text-sm text-red-500">
-              <p>If this problem persists, please check:</p>
-              <ul className="list-disc list-inside mt-2 text-left max-w-md mx-auto">
-                <li>Your internet connection</li>
-                <li>Server status</li>
-                <li>Authentication token validity</li>
-              </ul>
-            </div>
+        <div className="flex flex-col items-center px-5 mt-5 text-center bg-white border border-gray-200 py-14">
+          <div className="flex items-center justify-center w-12 h-12 mb-3 text-red-500 bg-red-50">
+            <FaExclamationTriangle className="text-xl" />
           </div>
+          <h2 className="text-sm font-semibold text-gray-900">Unable to load inventory</h2>
+          <p className="mt-1 text-xs text-red-600">{error}</p>
+          <p className="max-w-sm mt-3 text-xs text-gray-500">
+            Check your internet connection, the server status, and that you&apos;re still signed in.
+          </p>
+          <button onClick={handleRetry} className={`${secondaryButtonClass} mt-4`}>
+            Try Again
+          </button>
         </div>
       </div>
     );
   }
 
+  const stockTone = ({ isOutOfStock, isLowStock }) =>
+    isOutOfStock
+      ? { text: "text-red-600", badge: "bg-red-50 text-red-700", label: "Out of Stock" }
+      : isLowStock
+      ? { text: "text-amber-600", badge: "bg-amber-50 text-amber-700", label: "Low Stock" }
+      : { text: "text-green-700", badge: "bg-green-50 text-green-700", label: "In Stock" };
+
+  const summaryTiles = [
+    {
+      icon: FaShoppingCart,
+      iconClass: "bg-blue-50 text-blue-700",
+      label: "Total Items",
+      value: summary.totalItems,
+      hint: `${summary.totalUnits.toLocaleString()} units`,
+    },
+    {
+      icon: FaUniversity,
+      iconClass: "bg-green-50 text-green-700",
+      label: "Stock Value",
+      value: formatCurrency(summary.totalStockValue),
+      hint: "Based on cost price",
+    },
+    {
+      icon: FaTag,
+      iconClass: "bg-purple-50 text-purple-700",
+      label: "Retail Value",
+      value: formatCurrency(summary.totalRetailValue),
+      hint: "Based on unit price",
+    },
+    {
+      icon: FaMoneyBillWave,
+      iconClass: "bg-amber-50 text-amber-700",
+      label: "Low Stock",
+      value: summary.lowStockItems,
+      hint: `${summary.outOfStockItems} out of stock`,
+    },
+  ];
+
+  const storeFilter = (
+    <FilterSelect
+      value={selectedStore}
+      onChange={(e) => setSelectedStore(e.target.value)}
+      aria-label="Filter by store"
+    >
+      <option value="">All Stores</option>
+      {stores.map((store) => (
+        <option key={store.id} value={store.id}>
+          {store.name}
+        </option>
+      ))}
+    </FilterSelect>
+  );
+
   return (
-    <div className="relative max-w-6xl mx-auto pb-16 md:pb-0">
-      <h1 className="hidden mb-6 text-xl font-normal text-gray-800 md:block font-raleway">
-        Inventory
-      </h1>
+    <div className="relative pb-6 font-raleway">
+      {toast && <Toast key={toast.id} toast={toast} onClose={closeToast} />}
+
+      <h1 className="hidden mb-2 text-xl font-normal text-gray-800 md:block">Inventory</h1>
       <InventoryNav />
 
-      <div className="mt-4 space-y-4 px-2 md:px-0">
-        {/* Summary Cards */}
-        <div className="">
-          <div className="p-2 bg-white rounded shadow">
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:overflow-x-auto sm:justify-between sm:space-x-1 md:space-x-2">
-              {/* ITEMS */}
-              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-                <div className="flex items-center">
-                  <div className="p-1 mr-1 rounded bg-blue-100 md:mr-2 md:p-1.5">
-                    <FaShoppingCart className="text-xs text-blue-600 md:text-sm" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Total Items
-                    </h3>
-                    <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {summary.totalItems}
-                    </p>
-                    <p className="text-[8px] text-gray-500 md:text-xs">
-                      {summary.totalUnits.toLocaleString()} units
-                    </p>
-                  </div>
+      <div className="mt-5 space-y-5">
+        {/* Summary Tiles (totals follow the active filters) */}
+        <div className="bg-white border border-gray-200">
+          <div className="grid grid-cols-2 gap-px bg-gray-200 lg:grid-cols-4">
+            {summaryTiles.map(({ icon: Icon, iconClass, label, value, hint }) => (
+              <div key={label} className="flex items-center gap-3 px-4 py-4 bg-white">
+                <div className={`flex items-center justify-center w-10 h-10 shrink-0 ${iconClass}`}>
+                  <Icon className="text-sm" />
+                </div>
+                <div className="min-w-0">
+                  <div className={statLabelClass}>{label}</div>
+                  <div className="text-lg font-bold leading-tight text-gray-900 truncate">{value}</div>
+                  <div className="text-xs text-gray-500 truncate">{hint}</div>
                 </div>
               </div>
-
-              {/* Stock Value card - Now using cost price */}
-              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-                <div className="flex items-center">
-                  <div className="p-1 mr-1 rounded bg-green-100 md:mr-2 md:p-1.5">
-                    <FaUniversity className="text-xs text-green-600 md:text-sm" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Stock Value
-                    </h3>
-                    <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {formatCurrency(summary.totalStockValue)}
-                    </p>
-                    <p className="text-[8px] text-gray-500 md:text-xs">
-                      Based on cost price
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Retail value - Now using unit price */}
-              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-                <div className="flex items-center">
-                  <div className="p-1 mr-1 rounded bg-red-100 md:mr-2 md:p-1.5">
-                    <FaTag className="text-xs text-red-600 md:text-sm" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Retail Value
-                    </h3>
-                    <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {formatCurrency(summary.totalRetailValue)}
-                    </p>
-                    <p className="text-[8px] text-gray-500 md:text-xs">
-                      Based on unit price
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Low Stock Items */}
-              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-                <div className="flex items-center">
-                  <div className="p-1 mr-1 rounded bg-yellow-100 md:mr-2 md:p-1.5">
-                    <FaMoneyBillWave className="text-xs text-yellow-600 md:text-sm" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Low Stock
-                    </h3>
-                    <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {summary.lowStockItems}
-                    </p>
-                    <p className="text-[8px] text-gray-500 md:text-xs">
-                      {summary.outOfStockItems} out of stock
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {isFiltered && (
-              <div className="flex items-center justify-between gap-2 px-2 pt-2 mt-1 text-[10px] text-gray-500 border-t border-gray-100 md:text-xs">
-                <span className="truncate">
-                  Totals for {summary.totalItems} of {inventory.length} items
-                  {selectedStoreName && ` · ${selectedStoreName}`}
-                  {searchTerm && ` · “${searchTerm}”`}
-                </span>
-                <button
-                  onClick={clearFilters}
-                  className="shrink-0 font-medium text-indigo-600 hover:text-indigo-800"
-                >
-                  Clear filters
-                </button>
-              </div>
-            )}
+            ))}
           </div>
-        </div>
-
-        {/* Filters and Actions */}
-        <div className="p-3 bg-white rounded shadow">
-          <div className="flex flex-col w-full gap-3 md:flex-row items-stretch">
-            {/* Left side - Search and filters */}
-            <div className="flex flex-col flex-grow gap-3 md:flex-row">
-              {/* Search bar and filter button for mobile */}
-              {isMobile ? (
-                <div className="flex w-full gap-2">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      placeholder="Search products, SKU, stores..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    <FaSearch className="absolute right-2 top-1.5 text-xs text-gray-400" />
-                  </div>
-
-                  <button
-                    onClick={toggleFilters}
-                    className={`px-3 py-1.5 rounded transition-colors flex items-center text-xs ${
-                      showFilters
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
-                  >
-                    <FaSlidersH className="text-xs" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* Search bar for desktop */}
-                  <div className="relative w-full md:w-64">
-                    <input
-                      type="text"
-                      placeholder="Search products, SKU, stores..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    <FaSearch className="absolute right-2 top-1.5 text-xs text-gray-400" />
-                  </div>
-
-                  {/* Desktop filters */}
-                  <div className="flex gap-3">
-                    {/* Store filter */}
-                    <div className="w-48">
-                      <select
-                        value={selectedStore}
-                        onChange={(e) => setSelectedStore(e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="">All Stores</option>
-                        {stores.map((store) => (
-                          <option key={store.id} value={store.id}>
-                            {store.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Right side - Action buttons */}
-            <div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
+          {isFiltered && (
+            <div className="flex items-center justify-between gap-2 px-4 py-2 text-xs text-gray-500 border-t border-gray-200 bg-gray-50">
+              <span className="truncate">
+                Totals for {summary.totalItems} of {inventory.length} items
+                {selectedStoreName && ` · ${selectedStoreName}`}
+                {searchTerm && ` · “${searchTerm}”`}
+              </span>
               <button
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
+                onClick={clearFilters}
+                className="font-medium text-blue-600 shrink-0 hover:text-blue-800"
               >
-                <FaFileImport className="mr-1 text-xs" />
-                Import CSV
+                Clear filters
               </button>
-              <button
-                onClick={() => setShowAddStockModal(true)}
-                className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
-              >
-                <FaPlus className="mr-1 text-xs" />
-                Add Inventory
-              </button>
-            </div>
-          </div>
-
-          {/* Filter dropdown for mobile */}
-          {isMobile && showFilters && (
-            <div className="grid grid-cols-1 gap-2 p-2 mt-3 bg-gray-50 rounded">
-              {/* Store filter */}
-              <div>
-                <label className="block mb-1 text-xs font-medium text-gray-700">
-                  Store
-                </label>
-                <select
-                  value={selectedStore}
-                  onChange={(e) => setSelectedStore(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">All Stores</option>
-                  {stores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={clearFilters}
-                  className="flex-1 px-2 py-1.5 text-xs text-gray-700 transition-colors bg-gray-200 rounded hover:bg-gray-300"
-                >
-                  Clear Filters
-                </button>
-                <button
-                  onClick={toggleFilters}
-                  className="flex-1 px-2 py-1.5 text-xs text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
-                >
-                  Apply Filters
-                </button>
-              </div>
             </div>
           )}
         </div>
 
         {/* Inventory Table */}
-        <div className="overflow-hidden bg-white rounded shadow">
-          {/* Desktop Table */}
-          <div className="hidden overflow-x-auto text-black md:block">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Product Details
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Store
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Quantity
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Unit Price
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Cost Price
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Stock Value
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+        <section className="bg-white border border-gray-200">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-200">
+            <div className="flex items-baseline min-w-0 gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Stock</h2>
+              <span className="text-xs text-gray-500 truncate">
+                {filteredInventory.length} {isFiltered ? "matching" : "items"}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100"
+              >
+                <FaFileImport className="text-xs" />
+                Import CSV
+              </button>
+              <button
+                onClick={() => setShowAddStockModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700"
+              >
+                <FaPlus className="text-xs" />
+                Add Inventory
+              </button>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="px-5 py-3 border-b border-gray-200">
+            <div className="flex gap-2 md:grid md:grid-cols-[minmax(0,1fr)_12rem]">
+              <div className="relative flex-1 min-w-0">
+                <FaSearch className="absolute text-[11px] text-gray-400 -translate-y-1/2 pointer-events-none left-2.5 top-1/2" />
+                <input
+                  type="search"
+                  placeholder="Search products, SKU, stores..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={`${filterFieldClass} pl-8`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={toggleFilters}
+                aria-expanded={showFilters}
+                className={`flex items-center h-8 gap-1.5 px-2.5 text-xs font-medium transition-colors md:hidden ${
+                  showFilters || selectedStore ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700"
+                }`}
+              >
+                {showFilters ? <FaTimes className="text-[11px]" /> : <FaSlidersH className="text-[11px]" />}
+                Filters
+              </button>
+              <div className="hidden md:block">{storeFilter}</div>
+            </div>
+            {showFilters && <div className="mt-2 md:hidden">{storeFilter}</div>}
+          </div>
+
+          {filteredInventory.length === 0 ? (
+            <div className="flex flex-col items-center px-5 text-center py-14">
+              <div className="flex items-center justify-center w-12 h-12 mb-3 text-gray-400 bg-gray-100">
+                <FaBox className="text-xl" />
+              </div>
+              <p className="text-sm font-medium text-gray-700">
+                {inventory.length === 0 ? "No inventory yet" : "No inventory items match your filters"}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                {inventory.length === 0
+                  ? "Stock a product in a store to see it here"
+                  : "Try a different search or store"}
+              </p>
+              <div className="mt-4">
+                {inventory.length === 0 ? (
+                  <button onClick={() => setShowAddStockModal(true)} className={primaryButtonClass()}>
+                    <FaPlus className="mr-2 text-xs" />
+                    Add Your First Inventory Item
+                  </button>
+                ) : (
+                  <button onClick={clearFilters} className={secondaryButtonClass}>
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table: fixed layout so long names truncate instead of
+                  widening the table past the page */}
+              <div className="hidden md:block">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col />
+                    <col className="w-[18%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[5.5rem]" />
+                  </colgroup>
+                  <thead className="border-b border-gray-200 bg-gray-50">
+                    <tr className="text-left">
+                      <th className={`px-5 py-2.5 ${statLabelClass}`}>Product</th>
+                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Store</th>
+                      <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Stock</th>
+                      <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Price / Cost</th>
+                      <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Stock Value</th>
+                      <th className={`px-4 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredInventory.map((item) => {
+                      const product = safeGetProduct(item, products);
+                      const store = safeGetStore(item, stores);
+                      const figures = getStockFigures(item, product);
+                      const { quantity, stockValue } = figures;
+                      const tone = stockTone(figures);
+
+                      return (
+                        <tr
+                          key={item.id}
+                          className="transition-colors hover:bg-blue-50/50"
+                          onMouseEnter={(e) => showRowInsight(e, product, figures)}
+                          onMouseLeave={hideRowInsight}
+                        >
+                          <td className="px-5 py-3">
+                            <div className="font-medium text-gray-900 truncate" title={product.name}>
+                              {product.name || "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">
+                              SKU {product.sku || "—"}
+                              {product.description && ` · ${product.description}`}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="text-gray-900 truncate" title={store.name}>{store.name || "N/A"}</div>
+                            {store.address && (
+                              <div className="text-xs text-gray-500 truncate">{store.address}</div>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <div className={`font-semibold ${tone.text}`}>{quantity}</div>
+                            <span className={`inline-block mt-0.5 px-1.5 py-px text-[10px] font-semibold whitespace-nowrap ${tone.badge}`}>
+                              {tone.label}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <div className="text-gray-900 truncate">{formatCurrency(product.price)}</div>
+                            <div className="text-xs text-gray-500 truncate">
+                              {product.cost_price ? `Cost ${formatCurrency(product.cost_price)}` : "No cost price"}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 font-semibold text-right text-gray-900 truncate">
+                            {formatCurrency(stockValue)}
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="flex justify-end gap-1">
+                              <button
+                                onClick={() => handleEditClick(item)}
+                                className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+                                title="Edit"
+                                aria-label={`Edit ${product.name || "item"}`}
+                              >
+                                <FaEdit className="text-sm" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteInventory(item)}
+                                className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600"
+                                title="Delete"
+                                aria-label={`Delete ${product.name || "item"}`}
+                              >
+                                <FaTrash className="text-sm" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <ul className="divide-y divide-gray-100 md:hidden">
                 {filteredInventory.map((item) => {
                   const product = safeGetProduct(item, products);
                   const store = safeGetStore(item, stores);
                   const figures = getStockFigures(item, product);
-                  const { quantity, stockValue, isLowStock, isOutOfStock } = figures;
+                  const { quantity, stockValue, marginPct } = figures;
+                  const tone = stockTone(figures);
 
                   return (
-                    <tr
-                      key={item.id}
-                      className="transition-colors hover:bg-gray-50"
-                      onMouseEnter={(e) => showRowInsight(e, product, figures)}
-                      onMouseLeave={hideRowInsight}
-                    >
-                      <td className="px-4 py-3 text-sm">
-                        <div>
-                          <div className="font-medium text-black">
-                            {product.name || "N/A"}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            SKU: {product.sku || "No SKU"}
-                            {product.description && ` • ${product.description}`}
-                          </div>
+                    <li key={item.id} className="px-5 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{product.name || "N/A"}</p>
+                          <p className="text-xs text-gray-500 truncate">
+                            SKU {product.sku || "—"} · {store.name || "N/A"}
+                          </p>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        <div className="font-medium">{store.name || "N/A"}</div>
-                        {store.address && (
-                          <div className="text-xs text-gray-500">
-                            {store.address}
+                        <span className={`shrink-0 px-2 py-0.5 text-[11px] font-semibold ${tone.badge}`}>
+                          {tone.label}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-px mt-3 bg-gray-200 border border-gray-200">
+                        {[
+                          ["Quantity", quantity, tone.text],
+                          ["Unit Price", formatCurrency(product.price)],
+                          ["Cost Price", product.cost_price ? formatCurrency(product.cost_price) : "—"],
+                          ["Stock Value", formatCurrency(stockValue)],
+                          [
+                            "Margin",
+                            marginPct === null ? "—" : `${marginPct.toFixed(1)}%`,
+                            marginPct === null
+                              ? "text-gray-400"
+                              : marginPct < 0
+                              ? "text-rose-600"
+                              : marginPct < 15
+                              ? "text-amber-600"
+                              : "text-emerald-600",
+                          ],
+                          ["Store", store.name || "N/A"],
+                        ].map(([label, value, color = "text-gray-900"]) => (
+                          <div key={label} className="px-2.5 py-2 bg-white">
+                            <div className={statLabelClass}>{label}</div>
+                            <div className={`text-xs font-semibold truncate ${color}`}>{value}</div>
                           </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        <span
-                          className={`font-medium ${
-                            isOutOfStock
-                              ? "text-red-600"
-                              : isLowStock
-                              ? "text-yellow-600"
-                              : "text-green-600"
-                          }`}
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
+                        <button
+                          onClick={() => handleEditClick(item)}
+                          className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
                         >
-                          {quantity}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {formatCurrency(product.price)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {product.cost_price
-                          ? formatCurrency(product.cost_price)
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-black">
-                        {formatCurrency(stockValue)}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            isOutOfStock
-                              ? "bg-red-100 text-red-800"
-                              : isLowStock
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-green-100 text-green-800"
-                          }`}
+                          <FaEdit className="text-[11px]" /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteInventory(item)}
+                          className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
                         >
-                          {isOutOfStock
-                            ? "Out of Stock"
-                            : isLowStock
-                            ? "Low Stock"
-                            : "In Stock"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEditClick(item)}
-                            className="p-1 text-blue-600 transition-colors hover:text-blue-800 hover:bg-blue-50 rounded"
-                            title="Edit"
-                          >
-                            <FaEdit className="text-sm" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteInventory(item.id)}
-                            className="p-1 text-red-600 transition-colors hover:text-red-800 hover:bg-red-50 rounded"
-                            title="Delete"
-                          >
-                            <FaTrash className="text-sm" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                          <FaTrash className="text-[11px]" /> Delete
+                        </button>
+                      </div>
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Cards */}
-          <div className="text-black md:hidden">
-            {filteredInventory.map((item) => {
-              const product = safeGetProduct(item, products);
-              const store = safeGetStore(item, stores);
-              const figures = getStockFigures(item, product);
-              const { quantity, stockValue, isLowStock, isOutOfStock, marginPct } = figures;
-
-              return (
-                <div key={item.id} className="p-4 border-b border-gray-200">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <div className="font-medium text-black">
-                        {product.name || "N/A"}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        SKU: {product.sku || "No SKU"}
-                      </div>
-                    </div>
-                    <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        isOutOfStock
-                          ? "bg-red-100 text-red-800"
-                          : isLowStock
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-green-100 text-green-800"
-                      }`}
-                    >
-                      {isOutOfStock
-                        ? "Out of Stock"
-                        : isLowStock
-                        ? "Low Stock"
-                        : "In Stock"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-600">Store</div>
-                      <div className="font-medium">{store.name || "N/A"}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Quantity</div>
-                      <div
-                        className={`font-medium ${
-                          isOutOfStock
-                            ? "text-red-600"
-                            : isLowStock
-                            ? "text-yellow-600"
-                            : "text-green-600"
-                        }`}
-                      >
-                        {quantity}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Unit Price</div>
-                      <div className="font-medium">
-                        {formatCurrency(product.price)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Cost Price</div>
-                      <div className="font-medium">
-                        {product.cost_price
-                          ? formatCurrency(product.cost_price)
-                          : "—"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Stock Value</div>
-                      <div className="font-medium">
-                        {formatCurrency(stockValue)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Margin</div>
-                      <div
-                        className={`font-medium ${
-                          marginPct === null
-                            ? "text-gray-400"
-                            : marginPct < 0
-                            ? "text-rose-600"
-                            : marginPct < 15
-                            ? "text-amber-600"
-                            : "text-emerald-600"
-                        }`}
-                      >
-                        {marginPct === null ? "—" : `${marginPct.toFixed(1)}%`}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => handleEditClick(item)}
-                      className="flex-1 px-3 py-1.5 text-xs text-blue-600 border border-blue-600 rounded transition-colors hover:bg-blue-50"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteInventory(item.id)}
-                      className="flex-1 px-3 py-1.5 text-xs text-red-600 border border-red-600 rounded transition-colors hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {filteredInventory.length === 0 && (
-            <div className="py-12 text-center">
-              <div className="text-gray-400 mb-2">
-                <FaBox className="inline text-3xl" />
-              </div>
-              <p className="text-sm text-gray-500">No inventory items found</p>
-              {inventory.length === 0 && (
-                <button
-                  onClick={() => setShowAddStockModal(true)}
-                  className="mt-2 px-4 py-2 text-xs text-white bg-green-600 rounded hover:bg-green-700"
-                >
-                  Add Your First Inventory Item
-                </button>
-              )}
-            </div>
+              </ul>
+            </>
           )}
-        </div>
+        </section>
       </div>
-
-      {/* Fixed Action Buttons for Mobile */}
-      {isMobile && (
-        <div className="fixed bottom-4 right-4 md:hidden">
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-blue-600 rounded-full shadow-lg hover:bg-blue-700 hover:scale-110"
-              title="Import CSV"
-            >
-              <FaFileImport className="text-lg" />
-            </button>
-            <button
-              onClick={() => setShowAddStockModal(true)}
-              className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-green-600 rounded-full shadow-lg hover:bg-green-700 hover:scale-110"
-              title="Add Inventory"
-            >
-              <FaPlus className="text-lg" />
-            </button>
-          </div>
-        </div>
-      )}
 
       <RowInsightCard insight={rowInsight} />
 
@@ -2638,6 +2536,84 @@ export default function Inventory() {
         products={products}
         inventory={inventory}
       />
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <ModalShell
+          title="Delete Inventory Item"
+          subtitle="This can't be undone"
+          icon={FaTrash}
+          iconClass="bg-red-600"
+          onClose={closeDelete}
+          busy={deleting}
+          maxWidth="max-w-md"
+        >
+          <div className="px-6 py-5 space-y-4">
+            {deleteError && (
+              <div className="flex items-start gap-3 px-4 py-3 text-sm text-red-800 border border-red-200 bg-red-50">
+                <FaExclamationTriangle className="mt-0.5 shrink-0 text-red-600" />
+                <div>
+                  <p className="font-semibold">Not deleted</p>
+                  <p className="mt-0.5 text-red-700">{deleteError}</p>
+                </div>
+              </div>
+            )}
+            <p className="text-sm text-gray-600">
+              This removes the product&apos;s stock record from this store. The product itself stays in
+              your catalogue.
+            </p>
+            <StatGrid
+              stats={[
+                { label: "Product", value: safeGetProduct(deleteTarget, products).name || "N/A" },
+                { label: "Store", value: safeGetStore(deleteTarget, stores).name || "N/A" },
+                { label: "Quantity", value: toNumber(deleteTarget.quantity) },
+              ]}
+            />
+          </div>
+          <ModalFooter>
+            <button onClick={closeDelete} disabled={deleting} className={secondaryButtonClass}>
+              Cancel
+            </button>
+            <button
+              onClick={confirmDeleteInventory}
+              disabled={deleting}
+              className="flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white bg-red-600 border border-red-600 rounded-none transition-colors hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {deleting ? <Spinner /> : <FaTrash className="mr-2 text-xs" />}
+              {deleting ? "Deleting…" : "Delete Item"}
+            </button>
+          </ModalFooter>
+        </ModalShell>
+      )}
+
+      <style jsx global>{`
+        @keyframes toast-in {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes toast-progress {
+          from {
+            width: 100%;
+          }
+          to {
+            width: 0%;
+          }
+        }
+        .toast-in {
+          animation: toast-in 0.2s ease-out;
+        }
+        .toast-progress {
+          animation-name: toast-progress;
+          animation-timing-function: linear;
+          animation-fill-mode: forwards;
+        }
+      `}</style>
     </div>
   );
 }
