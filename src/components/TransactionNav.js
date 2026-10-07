@@ -6,7 +6,7 @@ import {
 } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
 
-export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrdersCount }) {
+export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrdersCount = 0, queueDisabled = false }) {
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -37,6 +37,7 @@ export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrde
 
   // Check if current page is Sales Point
   const isSalesPoint = router.pathname === '/transaction/sales-invoice';
+  const queueBlocked = queueDisabled || queuedOrdersCount >= 3;
 
   // Check screen size on mount and resize
   useEffect(() => {
@@ -83,11 +84,11 @@ export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrde
           <div className="flex gap-0 font-raleway">
             <button 
               onClick={onQueueOrder}
-              disabled={queuedOrdersCount >= 3}
+              disabled={queueBlocked}
               className={`
                 flex items-center px-2 py-1 text-xs font-medium
                 border border-gray-300 rounded-l-md transition-all duration-200
-                ${queuedOrdersCount >= 3 
+                ${queueBlocked 
                   ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
                   : 'bg-indigo-600 text-white hover:bg-indigo-800'
                 }
@@ -127,11 +128,11 @@ export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrde
               <>
                 <button 
                   onClick={onQueueOrder}
-                  disabled={queuedOrdersCount >= 3}
+                  disabled={queueBlocked}
                   className={`
                     flex items-center px-2 py-1 text-xs font-medium
                     border border-gray-300 rounded-md transition-all duration-200
-                    ${queuedOrdersCount >= 3 
+                    ${queueBlocked 
                       ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
                       : 'bg-indigo-600 text-white hover:bg-indigo-800'
                     }
