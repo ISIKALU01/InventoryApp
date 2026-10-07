@@ -1,9 +1,266 @@
 // pages/transaction/sales-invoice.js
 import TransactionNav from "../../components/TransactionNav";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import http from "../../../services/http";
-import { Trash2 } from "lucide-react";
-import { FaTimes } from "react-icons/fa";
+import {
+	AlertTriangle,
+	CheckCircle2,
+	ChevronDown,
+	Loader2,
+	Minus,
+	Package,
+	Plus,
+	Search,
+	ShoppingCart,
+	Trash2,
+	X,
+	XCircle,
+	History,
+	Info,
+} from "lucide-react";
+
+const PAYMENT_METHODS = [
+	{ value: "cash", label: "Cash" },
+	{ value: "card", label: "Card" },
+	{ value: "bank_transfer", label: "Bank Transfer" },
+	{ value: "customer_balance", label: "Customer Balance" },
+	{ value: "credit_limit", label: "Credit Limit" },
+	{ value: "complimentary", label: "Complimentary" },
+	{ value: "loyalty", label: "Loyalty" },
+];
+
+const CUSTOMER_METHODS = ["customer_balance", "credit_limit"];
+
+const TOAST_DURATION = { success: 3000, error: 5000 };
+
+// Queued (parked) orders live in this browser; the nav allows up to three
+const MAX_QUEUED_ORDERS = 3;
+const QUEUE_STORAGE_KEY = "salesPoint.queuedOrders";
+
+const loadQueuedOrders = () => {
+	try {
+		const saved = JSON.parse(localStorage.getItem(QUEUE_STORAGE_KEY));
+		return Array.isArray(saved) ? saved : [];
+	} catch {
+		return [];
+	}
+};
+
+const saveQueuedOrders = (orders) => {
+	try {
+		localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(orders));
+	} catch {
+		// Storage blocked or full: the queue still works for this session
+	}
+};
+
+// What we keep of a cart to rebuild it later
+const snapshotCart = (cart) => ({
+	id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+	createdAt: new Date().toISOString(),
+	items: cart.map((item) => ({
+		product_id: item.product_id,
+		product_name: item.product_name,
+		product_price: item.product_price,
+		quantity: Number(item.default_quantity_added) || 1,
+	})),
+});
+
+const queuedTotal = (order) =>
+	order.items.reduce((sum, item) => sum + item.quantity * parseFloat(item.product_price || 0), 0);
+
+const queuedCount = (order) => order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+const formatTime = (iso) =>
+	new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+// Safety stop for the paginated product fetch
+const MAX_PRODUCT_PAGES = 100;
+
+// API responses may be a bare array, { data: [...] } (Laravel paginator)
+// or { [key]: [...] }
+const toList = (body, key) => {
+	if (Array.isArray(body)) return body;
+	if (Array.isArray(body?.data)) return body.data;
+	if (Array.isArray(body?.[key])) return body[key];
+	return [];
+};
+
+// A product's store comes back as a name or as a { name } object
+const storeNameOf = (store) =>
+	(store && typeof store === "object" ? store.name : store)?.toString().trim() || "";
+
+const formatNaira = (value) =>
+	`₦${Number(value || 0).toLocaleString("en-NG", {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	})}`;
+
+// ---------------------------------------------------------------------------
+// Shared pieces
+// ---------------------------------------------------------------------------
+
+const fieldClass =
+	"block w-full px-3 py-2.5 text-sm text-gray-800 bg-gray-100 border-0 rounded-none outline-none transition-colors placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-600";
+
+const labelClass =
+	"block mb-1.5 text-xs font-semibold tracking-wide text-gray-600 uppercase";
+
+const primaryButtonClass =
+	"flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-none transition-colors hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed";
+
+const secondaryButtonClass =
+	"flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-none transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed";
+
+// Borderless dropdown with its own chevron in place of the browser arrow
+const Select = ({ className = "", children, ...props }) => (
+	<div className={`relative ${className}`}>
+		<select {...props} className={`${fieldClass} pr-9 appearance-none cursor-pointer`}>
+			{children}
+		</select>
+		<ChevronDown
+			size={16}
+			className="absolute text-gray-500 -translate-y-1/2 pointer-events-none right-3 top-1/2"
+		/>
+	</div>
+);
+
+const PanelHeader = ({ title, meta, action }) => (
+	<div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-200">
+		<div className="flex items-baseline min-w-0 gap-2">
+			<h2 className="text-base font-semibold text-gray-900">{title}</h2>
+			{meta && <span className="text-xs text-gray-500 truncate">{meta}</span>}
+		</div>
+		{action}
+	</div>
+);
+
+const EmptyState = ({ icon: Icon, title, hint, tone = "gray" }) => (
+	<div className="flex flex-col items-center justify-center px-5 py-12 text-center">
+		<div
+			className={`flex items-center justify-center w-12 h-12 mb-3 ${
+				tone === "red" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-400"
+			}`}
+		>
+			<Icon size={22} />
+		</div>
+		<p className="text-sm font-medium text-gray-700">{title}</p>
+		{hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
+	</div>
+);
+
+const STOCK_BADGE = {
+	"in-stock": "bg-green-50 text-green-700",
+	"low-stock": "bg-amber-50 text-amber-700",
+	"out-of-stock": "bg-red-50 text-red-700",
+};
+
+// Toast for quick confirmations and failures; the bar shows time left
+const Toast = ({ toast, onClose }) => {
+	const isError = toast.type === "error";
+	const Icon = isError ? XCircle : CheckCircle2;
+
+	return (
+		<div
+			role={isError ? "alert" : "status"}
+			className="fixed z-[60] top-4 right-4 left-4 sm:left-auto sm:w-96 toast-in"
+		>
+			<div
+				className={`relative overflow-hidden bg-white border border-gray-200 border-l-4 shadow-xl ${
+					isError ? "border-l-red-600" : "border-l-green-600"
+				}`}
+			>
+				<div className="flex items-start gap-3 px-4 py-3.5">
+					<Icon
+						size={20}
+						className={`mt-0.5 shrink-0 ${isError ? "text-red-600" : "text-green-600"}`}
+					/>
+					<div className="flex-1 min-w-0">
+						<p className="text-sm font-semibold text-gray-900">
+							{toast.title || (isError ? "Something went wrong" : "Done")}
+						</p>
+						<p className="mt-0.5 text-sm text-gray-600 break-words">{toast.message}</p>
+					</div>
+					<button
+						type="button"
+						onClick={onClose}
+						aria-label="Dismiss"
+						className="flex items-center justify-center w-7 h-7 -mr-1 text-gray-400 transition-colors shrink-0 hover:bg-gray-100 hover:text-gray-700"
+					>
+						<X size={16} />
+					</button>
+				</div>
+				<div
+					className={`h-1 toast-progress ${isError ? "bg-red-600/30" : "bg-green-600/30"}`}
+					style={{ animationDuration: `${TOAST_DURATION[toast.type]}ms` }}
+				/>
+			</div>
+		</div>
+	);
+};
+
+// Floating panel over a lightly blurred page, matching the inventory modals
+const ModalShell = ({ title, subtitle, icon: Icon, iconClass, onClose, busy = false, children }) => (
+	<div
+		className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-20 overflow-y-auto bg-gray-900/20 backdrop-blur-[2px]"
+		onClick={(e) => {
+			if (e.target === e.currentTarget && !busy) onClose();
+		}}
+	>
+		<div
+			role="dialog"
+			aria-modal="true"
+			className="relative w-full max-w-md bg-white border border-gray-300 rounded-none shadow-2xl modal-in"
+		>
+			<div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-200">
+				<div className="flex items-center gap-3">
+					<div className={`flex items-center justify-center w-10 h-10 text-white ${iconClass}`}>
+						<Icon size={20} />
+					</div>
+					<div>
+						<h2 className="text-lg font-semibold leading-tight text-gray-900">{title}</h2>
+						{subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
+					</div>
+				</div>
+				<button
+					type="button"
+					onClick={onClose}
+					disabled={busy}
+					aria-label="Close"
+					className="flex items-center justify-center w-8 h-8 text-gray-400 transition-colors border border-transparent hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50"
+				>
+					<X size={16} />
+				</button>
+			</div>
+			{children}
+		</div>
+	</div>
+);
+
+const ModalFooter = ({ children }) => (
+	<div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+		{children}
+	</div>
+);
+
+const SummaryRow = ({ label, value, strong = false, valueClass = "" }) => (
+	<div className="flex items-center justify-between px-4 py-2.5 bg-white">
+		<span className={strong ? "text-sm font-semibold text-gray-900" : "text-sm text-gray-600"}>
+			{label}
+		</span>
+		<span
+			className={`${
+				strong ? "text-base font-bold text-gray-900" : "text-sm font-medium text-gray-900"
+			} ${valueClass}`}
+		>
+			{value}
+		</span>
+	</div>
+);
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function SalesInvoice() {
 	const [inventory, setInventory] = useState([]);
@@ -13,34 +270,43 @@ export default function SalesInvoice() {
 	const [selectedStore, setSelectedStore] = useState("");
 	const [searchTerm, setSearchTerm] = useState("");
 	const [filteredInventory, setFilteredInventory] = useState([]);
-	const [selectedItem, setSelectedItem] = useState(null);
-	const [cartLoading, setCartLoading] = useState(false);
+	const [addingId, setAddingId] = useState(null);
 	const [cart, setCart] = useState([]);
 	const [showOrderModal, setShowOrderModal] = useState(false);
 	const [paymentMethod, setPaymentMethod] = useState("");
 	const [selectedCustomer, setSelectedCustomer] = useState("");
 	const [customers, setCustomers] = useState([]);
-	
-	// Success pop-up state
-	const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-	const [successMessage, setSuccessMessage] = useState("");
+	const [processing, setProcessing] = useState(false);
+	const [orderError, setOrderError] = useState("");
+	const [completedOrder, setCompletedOrder] = useState(null);
+	const [queuedOrders, setQueuedOrders] = useState([]);
+	const [queueLoaded, setQueueLoaded] = useState(false);
+	const [queueBusy, setQueueBusy] = useState(false);
+	const [showRecallModal, setShowRecallModal] = useState(false);
 
+	const [toast, setToast] = useState(null);
+	const toastTimer = useRef(null);
 
-	// Show success pop-up
-	const showSuccess = (message) => {
-		setSuccessMessage(message);
-		setShowSuccessPopup(true);
-		setTimeout(() => {
-			setShowSuccessPopup(false);
-		}, 3000); // Auto hide after 3 seconds
+	const notify = (type, message, title) => {
+		clearTimeout(toastTimer.current);
+		setToast({ id: Date.now(), type, message, title });
+		toastTimer.current = setTimeout(() => setToast(null), TOAST_DURATION[type]);
 	};
 
-	// Manual close success pop-up
-	const closeSuccessPopup = () => {
-		setShowSuccessPopup(false);
+	const closeToast = () => {
+		clearTimeout(toastTimer.current);
+		setToast(null);
 	};
+
+	useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+	const needsCustomer = CUSTOMER_METHODS.includes(paymentMethod);
 
 	useEffect(() => {
+		// A customer picked for one method may not qualify for another
+		setSelectedCustomer("");
+		setCustomers([]);
+
 		const fetchCustomers = async () => {
 			try {
 				let url = "";
@@ -59,50 +325,69 @@ export default function SalesInvoice() {
 				setCustomers(response.data);
 			} catch (error) {
 				console.error("Error fetching customers:", error);
+				setOrderError("Could not load customers. Please try again.");
 			}
 		};
 
 		fetchCustomers();
 	}, [paymentMethod]);
 
-	// Fetch inventory data
+	// Fetch every product once and filter on the client. /products can be
+	// paginated, so follow last_page; reading only page one hid whole stores
+	// whose products sat on later pages.
 	useEffect(() => {
+		let cancelled = false;
+
 		const fetchInventory = async () => {
 			try {
 				setLoading(true);
-				const response = await http.get("/products", {
-					params: {
-						store: selectedStore || undefined,
-						search: searchTerm || undefined,
-					},
-				});
+				const allProducts = [];
+				let page = 1;
+				let lastPage = 1;
 
-				const inventoryData = response.data;
-				const transformedInventory = Array.isArray(inventoryData)
-					? inventoryData
-					: inventoryData.data || inventoryData.products || [];
+				do {
+					const response = await http.get("/products", { params: { page } });
+					const body = response.data;
+					allProducts.push(...toList(body, "products"));
+					lastPage = Number(body?.last_page ?? body?.meta?.last_page ?? 1);
+					page += 1;
+				} while (page <= lastPage && page <= MAX_PRODUCT_PAGES);
 
-				setInventory(transformedInventory);
-
-				const uniqueStores = [
-					...new Set(
-						transformedInventory
-							.filter((item) => item.store)
-							.map((item) => item.store)
-					),
-				].sort();
-
-				setStores(uniqueStores);
-				setLoading(false);
+				if (cancelled) return;
+				setInventory(allProducts);
+				setError(null);
 			} catch (err) {
 				console.error("Failed to fetch inventory:", err);
-				setError(err.message);
-				setLoading(false);
+				if (!cancelled) setError(err.message);
+			} finally {
+				if (!cancelled) setLoading(false);
 			}
 		};
 
 		fetchInventory();
-	}, [selectedStore, searchTerm]);
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	// The filter lists every store, not just the ones that happen to appear
+	// in the loaded products
+	useEffect(() => {
+		const fetchStores = async () => {
+			try {
+				const response = await http.get("/stores");
+				setStores(toList(response.data, "stores").map(storeNameOf).filter(Boolean));
+			} catch (err) {
+				console.error("Failed to fetch stores:", err);
+			}
+		};
+
+		fetchStores();
+	}, []);
+
+	const storeOptions = [
+		...new Set([...stores, ...inventory.map((item) => storeNameOf(item.store)).filter(Boolean)]),
+	].sort((a, b) => a.localeCompare(b));
 
 	// Filter inventory based on store and search term
 	useEffect(() => {
@@ -110,7 +395,7 @@ export default function SalesInvoice() {
 
 		// Filter by store
 		if (selectedStore) {
-			filtered = filtered.filter((item) => item.store === selectedStore);
+			filtered = filtered.filter((item) => storeNameOf(item.store) === selectedStore);
 		}
 
 		// Filter by search term
@@ -119,7 +404,7 @@ export default function SalesInvoice() {
 			filtered = filtered.filter((item) => {
 				const productName = item.name || "";
 				const productSku = item.sku || "";
-				const storeName = item.store || "";
+				const storeName = storeNameOf(item.store) || "";
 
 				return (
 					productName.toLowerCase().includes(term) ||
@@ -134,21 +419,6 @@ export default function SalesInvoice() {
 		setFilteredInventory(filtered);
 	}, [selectedStore, searchTerm, inventory]);
 
-	// Handle store filter change
-	const handleStoreChange = (e) => {
-		setSelectedStore(e.target.value);
-	};
-
-	// Handle search input change
-	const handleSearchChange = (e) => {
-		setSearchTerm(e.target.value);
-	};
-
-	// Handle search form submission
-	const handleSearchSubmit = (e) => {
-		e.preventDefault();
-	};
-
 	// Helper function to determine stock status
 	const getStockStatus = (stock) => {
 		const stockNum = parseInt(stock) || 0;
@@ -157,75 +427,54 @@ export default function SalesInvoice() {
 		return "in-stock";
 	};
 
-	// Get stock status badge
-	const getStockBadge = (stockStatus, stock) => {
-		const styles = {
-			"in-stock": "bg-green-100 text-green-800",
-			"low-stock": "bg-yellow-100 text-yellow-800",
-			"out-of-stock": "bg-red-100 text-red-800",
-		};
-
-		const labels = {
+	const stockLabel = (stockStatus, stock) =>
+		({
 			"in-stock": "In Stock",
 			"low-stock": `Low Stock (${stock})`,
 			"out-of-stock": "Out of Stock",
-		};
+		}[stockStatus]);
 
-		return (
-			<span
-				className={`px-2 py-1 text-xs font-medium rounded-full ${styles[stockStatus]}`}
-			>
-				{labels[stockStatus]}
-			</span>
-		);
-	};
-
-	// Fetch all cart items
+	// Fetch all cart items (kept off the product list's loading flag so the
+	// list doesn't flash a spinner every time an item is added)
 	const fetchCart = async () => {
 		try {
-			setLoading(true);
 			const response = await http.get("/cart");
 			setCart(response.data.data || []);
 		} catch (error) {
 			console.error("Error fetching cart:", error);
-		} finally {
-			setLoading(false);
+			notify("error", "Could not load the current order.");
 		}
 	};
 
 	//add to cart
-	const handleItemClick = async (id) => {
+	const handleItemClick = async (item) => {
+		if (addingId) return;
 		try {
-			setCartLoading(true);
-			const response = await http.post(`/cart/${id}`, {});
-			setSelectedItem(response.data);
-			console.log("Cart item details:", response.data);
-			
-			// ✅ Show success pop-up instead of alert
-			showSuccess("Item added to cart successfully!");
-			
-			// ✅ Immediately refresh cart to show update
+			setAddingId(item.id);
+			await http.post(`/cart/${item.id}`, {});
+			notify("success", `${item.name} added to the order.`, "Item added");
 			await fetchCart();
 		} catch (error) {
-			console.error("Error fetching cart item:", error);
-			// You might want to add error pop-ups too
-			alert("Failed to add item to cart");
+			console.error("Error adding cart item:", error);
+			notify(
+				"error",
+				error.response?.data?.message || `Could not add ${item.name} to the order.`,
+				"Item not added"
+			);
 		} finally {
-			setCartLoading(false);
+			setAddingId(null);
 		}
 	};
 
 	// 🗑️ Delete cart item
-	const handleDelete = async (id) => {
+	const handleDelete = async (item) => {
 		try {
-			await http.delete(`/cart/${id}`);
-			setCart((prev) => prev.filter((item) => item.id !== id));
-			
-			// ✅ Show success pop-up
-			showSuccess("Item removed from cart successfully!");
+			await http.delete(`/cart/${item.id}`);
+			setCart((prev) => prev.filter((cartItem) => cartItem.id !== item.id));
+			notify("success", `${item.product_name} removed from the order.`, "Item removed");
 		} catch (err) {
 			console.error("Error deleting cart item:", err);
-			alert("Failed to remove item from cart");
+			notify("error", `Could not remove ${item.product_name}.`, "Item not removed");
 		}
 	};
 
@@ -262,9 +511,22 @@ export default function SalesInvoice() {
 		);
 	};
 
+	const openOrderModal = () => {
+		setOrderError("");
+		setShowOrderModal(true);
+	};
+
+	const closeOrderModal = () => {
+		if (processing) return;
+		setShowOrderModal(false);
+	};
+
 	// Process the order
 	const handleProcessOrder = async () => {
 		try {
+			setProcessing(true);
+			setOrderError("");
+
 			const orderItems = cart.map((item) => ({
 				product_id: item.product_id,
 				quantity: item.default_quantity_added,
@@ -279,47 +541,170 @@ export default function SalesInvoice() {
 			const response = await http.post("/orders", orderData);
 
 			if (response.data) {
-				// ✅ Show success pop-up instead of alert
-				showSuccess("Order processed successfully!");
+				setCompletedOrder({
+					total,
+					itemCount,
+					method:
+						PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label || paymentMethod,
+					customer: customers.find((c) => String(c.id) === String(selectedCustomer))?.name,
+				});
 				setCart([]);
 				setShowOrderModal(false);
+				setPaymentMethod("");
 			}
 		} catch (error) {
 			console.error("Error processing order:", error);
 
 			if (error.response && error.response.data) {
-				// You can inspect what Laravel sent back
 				console.log("Error details:", error.response.data);
-
-				// Example: show a specific message from backend
-				const message =
-					error.response.data.message ||
-					"Failed to process order. Please try again.";
-				alert(message);
+				setOrderError(
+					error.response.data.message || "Failed to process order. Please try again."
+				);
 			} else {
-				// Network or unexpected error
-				alert("Something went wrong. Please try again later.");
+				setOrderError("Could not reach the server. Check your connection and try again.");
 			}
+		} finally {
+			setProcessing(false);
 		}
 	};
+
+	const clearServerCart = (items) =>
+		http.delete("/clear-selected-cart", {
+			data: {
+				cart_ids: items.map((item) => item.id),
+			},
+		});
 
 	// Clear all items from cart
 	const handleClearOrder = async () => {
 		try {
-			const cartIds = cart.map((item) => item.id);
-			await http.delete("/clear-selected-cart", {
-				data: {
-					cart_ids: cartIds,
-				},
-			});
+			await clearServerCart(cart);
 			setCart([]);
-			
-			// ✅ Show success pop-up
-			showSuccess("Cart cleared successfully!");
+			notify("success", "All items were removed from the order.", "Order cleared");
 		} catch (err) {
 			console.error("Error clearing cart:", err);
-			alert("Failed to clear cart");
+			notify("error", "Could not clear the order.", "Order not cleared");
 		}
+	};
+
+	// Restore the queue after mount (localStorage isn't available during SSR)
+	useEffect(() => {
+		setQueuedOrders(loadQueuedOrders());
+		setQueueLoaded(true);
+	}, []);
+
+	useEffect(() => {
+		if (queueLoaded) saveQueuedOrders(queuedOrders);
+	}, [queuedOrders, queueLoaded]);
+
+	// Park the current cart so another customer can be served
+	const handleQueueOrder = async () => {
+		if (queueBusy) return;
+		if (cart.length === 0) {
+			notify("error", "Add items to the order before queuing it.", "Nothing to queue");
+			return;
+		}
+		if (queuedOrders.length >= MAX_QUEUED_ORDERS) {
+			notify(
+				"error",
+				`Up to ${MAX_QUEUED_ORDERS} orders can be queued. Recall or discard one first.`,
+				"Queue is full"
+			);
+			return;
+		}
+
+		try {
+			setQueueBusy(true);
+			const snapshot = snapshotCart(cart);
+			await clearServerCart(cart);
+			setQueuedOrders((prev) => [...prev, snapshot]);
+			setCart([]);
+			notify(
+				"success",
+				`${queuedCount(snapshot)} item${queuedCount(snapshot) === 1 ? "" : "s"} · ${formatNaira(
+					queuedTotal(snapshot)
+				)} saved. Recall it from the nav when ready.`,
+				"Order queued"
+			);
+		} catch (err) {
+			console.error("Error queuing order:", err);
+			notify("error", "Could not queue the order. Please try again.", "Order not queued");
+		} finally {
+			setQueueBusy(false);
+		}
+	};
+
+	// Rebuild a queued order in the cart. If the cart already has items they
+	// take the recalled order's place in the queue, so nothing is lost.
+	const handleRecallOrder = async (order) => {
+		if (queueBusy) return;
+
+		try {
+			setQueueBusy(true);
+
+			const parked = cart.length > 0 ? snapshotCart(cart) : null;
+			if (parked) await clearServerCart(cart);
+
+			const failed = [];
+			for (const item of order.items) {
+				try {
+					await http.post(`/cart/${item.product_id}`, {});
+				} catch (err) {
+					console.error(`Error re-adding ${item.product_name}:`, err);
+					failed.push(item.product_name);
+				}
+			}
+
+			// Quantities are kept on the client, so put them back on the fresh rows
+			const response = await http.get("/cart");
+			const wanted = new Map(order.items.map((item) => [String(item.product_id), item.quantity]));
+			setCart(
+				(response.data.data || []).map((row) => {
+					const qty = wanted.get(String(row.product_id));
+					if (!qty) return row;
+					const stock = Number(row.product_stock);
+					return {
+						...row,
+						default_quantity_added: stock > 0 ? Math.min(qty, stock) : qty,
+					};
+				})
+			);
+
+			setQueuedOrders((prev) => [
+				...prev.filter((queued) => queued.id !== order.id),
+				...(parked ? [parked] : []),
+			]);
+			setShowRecallModal(false);
+
+			if (failed.length > 0) {
+				notify(
+					"error",
+					`Recalled, but ${failed.join(", ")} could not be added back. ${
+						failed.length === 1 ? "It may" : "They may"
+					} be out of stock.`,
+					"Order partly recalled"
+				);
+			} else {
+				notify(
+					"success",
+					parked
+						? "Your previous order was queued in its place."
+						: `${queuedCount(order)} item${queuedCount(order) === 1 ? "" : "s"} back in the order.`,
+					"Order recalled"
+				);
+			}
+		} catch (err) {
+			console.error("Error recalling order:", err);
+			notify("error", "Could not recall the order. Please try again.", "Order not recalled");
+			fetchCart();
+		} finally {
+			setQueueBusy(false);
+		}
+	};
+
+	const handleDiscardQueued = (order) => {
+		setQueuedOrders((prev) => prev.filter((queued) => queued.id !== order.id));
+		notify("success", "The queued order was discarded.", "Order discarded");
 	};
 
 	// 💰 Calculate totals
@@ -330,100 +715,98 @@ export default function SalesInvoice() {
 	);
 	const discount = 0; // or calculate dynamically
 	const total = subtotal - discount;
+	const itemCount = cart.reduce((sum, item) => sum + Number(item.default_quantity_added), 0);
+
+	const canConfirm = Boolean(paymentMethod) && (!needsCustomer || selectedCustomer) && !processing;
 
 	useEffect(() => {
 		fetchCart();
 	}, []);
 
+	// Escape closes whichever dialog is open
+	useEffect(() => {
+		if (!showOrderModal && !completedOrder && !showRecallModal) return;
+		const onKey = (e) => {
+			if (e.key !== "Escape") return;
+			if (completedOrder) setCompletedOrder(null);
+			else if (showRecallModal) {
+				if (!queueBusy) setShowRecallModal(false);
+			} else closeOrderModal();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	});
+
+	const listMeta = [
+		loading ? "Loading…" : `${filteredInventory.length} available`,
+		selectedStore && selectedStore,
+		searchTerm && `“${searchTerm}”`,
+	]
+		.filter(Boolean)
+		.join(" · ");
+
 	return (
 		<div className="pt-0 mt-0 font-raleway">
-			{/* Success Pop-up */}
-			{showSuccessPopup && (
-				<div className="fixed top-4 right-4 z-50 max-w-sm w-full">
-					<div className="bg-green-50 border border-green-200 rounded-lg shadow-lg p-4 animate-fade-in">
-						<div className="flex items-center justify-between">
-							<div className="flex items-center">
-								<div className="flex-shrink-0">
-									<svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-										<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-									</svg>
-								</div>
-								<div className="ml-3">
-									<p className="text-sm font-medium text-green-800">
-										{successMessage}
-									</p>
-								</div>
-							</div>
-							<button
-								onClick={closeSuccessPopup}
-								className="ml-auto pl-3 flex-shrink-0"
-							>
-								<svg className="w-4 h-4 text-green-400 hover:text-green-600" fill="currentColor" viewBox="0 0 20 20">
-									<path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-								</svg>
-							</button>
-						</div>
-					</div>
-				</div>
-			)}
+			{toast && <Toast key={toast.id} toast={toast} onClose={closeToast} />}
 
 			{/* Order Modal */}
 			{showOrderModal && (
-				<div className="fixed inset-0 z-40 flex items-center justify-center bg-opacity-50">
-					<div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-						<div className="flex items-center justify-between border-b pb-2 mb-4">
-							<h2 className="text-lg font-semibold text-gray-800">
-								Process Order
-							</h2>
-							<button
-								onClick={() => setShowOrderModal(false)}
-								className="text-gray-400 transition-colors hover:text-gray-600"
+				<ModalShell
+					title="Process Order"
+					subtitle={`${itemCount} item${itemCount === 1 ? "" : "s"} · ${formatNaira(total)}`}
+					icon={ShoppingCart}
+					iconClass="bg-blue-600"
+					onClose={closeOrderModal}
+					busy={processing}
+				>
+					<div className="px-6 py-5 space-y-5">
+						{orderError && (
+							<div
+								role="alert"
+								className="flex items-start gap-3 px-4 py-3 text-sm text-red-800 border border-red-200 bg-red-50"
 							>
-								<FaTimes className="text-sm" />
-							</button>
-						</div>
+								<AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-600" />
+								<div>
+									<p className="font-semibold">Order not processed</p>
+									<p className="mt-0.5 text-red-700">{orderError}</p>
+								</div>
+							</div>
+						)}
 
-						<p className="mb-4 text-gray-400">
-							Are you sure you want to process this order?
-						</p>
-
-						{/* Payment Method Section */}
-						<div className="mb-6">
-							<label className="block text-gray-700 font-medium mb-2">
-								Select Payment Method
+						<div>
+							<label htmlFor="payment-method" className={labelClass}>
+								Payment Method
 							</label>
-							<select
-								className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-600 text-black outline-none"
+							<Select
+								id="payment-method"
 								value={paymentMethod}
-								onChange={(e) => setPaymentMethod(e.target.value)}
+								onChange={(e) => {
+									setOrderError("");
+									setPaymentMethod(e.target.value);
+								}}
+								disabled={processing}
 							>
-								<option value="">-- Select Payment Method --</option>
-								<option value="cash">Cash</option>
-								<option value="card">Card</option>
-								<option value="bank_transfer">Bank Transfer</option>
-								<option value="customer_balance">Customer Balance</option>
-								<option value="credit_limit">Credit Limit</option>
-								<option value="complimentary">Complimentary</option>
-								<option value="loyalty">Loyalty</option>
-							</select>
+								<option value="">Select payment method</option>
+								{PAYMENT_METHODS.map((method) => (
+									<option key={method.value} value={method.value}>
+										{method.label}
+									</option>
+								))}
+							</Select>
 						</div>
 
-						{(paymentMethod === "customer_balance" ||
-							paymentMethod === "credit_limit") && (
-							<div className="mb-6">
-								<label
-									htmlFor="customer"
-									className="block text-gray-700 font-medium mb-2"
-								>
-									Select Customer
+						{needsCustomer && (
+							<div>
+								<label htmlFor="customer" className={labelClass}>
+									Customer
 								</label>
-								<select
+								<Select
 									id="customer"
-									className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-600 text-black outline-none"
 									value={selectedCustomer}
 									onChange={(e) => setSelectedCustomer(e.target.value)}
+									disabled={processing}
 								>
-									<option value="">-- Select Customer --</option>
+									<option value="">Select customer</option>
 									{customers.map((cust) => (
 										<option
 											key={cust.id}
@@ -434,354 +817,463 @@ export default function SalesInvoice() {
 											} // 🔒 Disable customers with no credit limit
 										>
 											{cust.name} —{" "}
-											{paymentMethod === "customer_balance" &&
-												` ₦ ${Number(cust.balance).toLocaleString()}`}{" "}
-											{paymentMethod === "credit_limit" &&
-												` (Credit Limit: ₦${Number(
-													cust.credit_limit
-												).toLocaleString()})`}
+											{paymentMethod === "customer_balance"
+												? `Balance ${formatNaira(cust.balance)}`
+												: `Credit limit ${formatNaira(cust.credit_limit)}`}
 										</option>
 									))}
-								</select>
+								</Select>
+								{paymentMethod === "credit_limit" && (
+									<p className="mt-1.5 text-xs text-gray-500">
+										Customers without a credit limit can&apos;t be selected.
+									</p>
+								)}
 							</div>
 						)}
 
-						<div className="flex justify-end gap-2">
-							<button
-								onClick={() => setShowOrderModal(false)}
-								className="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
-							>
-								Cancel
-							</button>
-							<button
-								onClick={handleProcessOrder}
-								disabled={
-									!paymentMethod ||
-									(paymentMethod === "customer_balance" && !selectedCustomer)
-								}
-								className={`px-4 py-2 rounded text-white ${
-									paymentMethod &&
-									(paymentMethod !== "customer_balance" || selectedCustomer)
-										? "bg-indigo-600 hover:bg-indigo-700"
-										: "bg-gray-400 cursor-not-allowed"
-								}`}
-							>
-								Confirm
-							</button>
+						<div className="grid gap-px bg-gray-200 border border-gray-200">
+							<SummaryRow label="Subtotal" value={formatNaira(subtotal)} />
+							<SummaryRow
+								label="Discount"
+								value={formatNaira(discount)}
+								valueClass="text-green-700"
+							/>
+							<SummaryRow label="Total" value={formatNaira(total)} strong />
 						</div>
 					</div>
-				</div>
+
+					<ModalFooter>
+						<button
+							type="button"
+							onClick={closeOrderModal}
+							disabled={processing}
+							className={secondaryButtonClass}
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							onClick={handleProcessOrder}
+							disabled={!canConfirm}
+							className={primaryButtonClass}
+						>
+							{processing && <Loader2 size={16} className="animate-spin" />}
+							{processing ? "Processing…" : "Confirm Order"}
+						</button>
+					</ModalFooter>
+				</ModalShell>
 			)}
 
-			<h1 className="text-xl font-normal text-gray-800 mb-2 hidden md:block">
-				Sales Point
-			</h1>
-			<TransactionNav />
-
-			<div className="flex flex-col lg:flex-row gap-6 mt-6">
-				{/* Products Section */}
-				<div className="flex-1 bg-white rounded-lg shadow-md p-4">
-					{/* Search Header */}
-					<div className="mb-6">
-						<h2 className="text-lg font-semibold text-gray-800 mb-4">
-							Products
-						</h2>
-
-						<form
-							onSubmit={handleSearchSubmit}
-							className="flex flex-col sm:flex-row gap-3 mb-4 w-full"
-						>
-							<div className="flex-1 min-w-0">
-								<select
-									value={selectedStore}
-									onChange={handleStoreChange}
-									className="w-full px-4 py-3 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black outline-none"
-								>
-									<option value="">All Stores</option>
-									{stores.map((store) => (
-										<option key={store} value={store}>
-											{store}
-										</option>
-									))}
-								</select>
-							</div>
-
-							<div className="flex-1 min-w-0 flex">
-								<input
-									type="text"
-									placeholder="Search products by name, SKU, store, or ID..."
-									value={searchTerm}
-									onChange={handleSearchChange}
-									className="flex-1 min-w-0 px-4 py-3 border border-gray-300 rounded-l-md text-sm text-black focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-								/>
-								<button
-									type="submit"
-									className="px-4 py-3 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 transition-colors outline-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-								>
-									<svg
-										className="w-4 h-4"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-											d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-										/>
-									</svg>
-								</button>
-							</div>
-						</form>
-					</div>
-
-					{/* Products List */}
-					<div>
-						<h3 className="text-sm font-semibold text-gray-700 mb-4 border-b pb-2">
-							Available Products ({loading ? "..." : filteredInventory.length})
-							{selectedStore && ` - Filtered by: ${selectedStore}`}
-							{searchTerm && ` - Search: "${searchTerm}"`}
-						</h3>
-
-						{loading ? (
-							<div className="flex items-center justify-center h-32">
-								<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-								<span className="ml-3 text-gray-600">Loading inventory...</span>
-							</div>
-						) : error ? (
-							<div className="text-center text-red-500 py-6">
-								<svg
-									className="w-8 h-8 mx-auto mb-2 text-red-300"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-									/>
-								</svg>
-								<p className="text-sm">Error loading products</p>
-								<p className="text-xs mt-1">{error}</p>
-							</div>
-						) : filteredInventory.length === 0 ? (
-							<div className="text-center text-gray-500 py-6">
-								<svg
-									className="w-8 h-8 mx-auto mb-2 text-gray-300"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-									/>
-								</svg>
-								<p className="text-sm">No products found</p>
-								<p className="text-xs mt-1">
-									{selectedStore || searchTerm
-										? "Try changing your filters or search term"
-										: "Add products to your inventory to see them here"}
+			{/* Recall Order Modal */}
+			{showRecallModal && (
+				<ModalShell
+					title="Recall Order"
+					subtitle={`${queuedOrders.length} of ${MAX_QUEUED_ORDERS} queued`}
+					icon={History}
+					iconClass="bg-blue-600"
+					onClose={() => setShowRecallModal(false)}
+					busy={queueBusy}
+				>
+					<div className="px-6 py-5 space-y-4">
+						{cart.length > 0 && queuedOrders.length > 0 && (
+							<div className="flex items-start gap-3 px-4 py-3 text-sm text-blue-800 border border-blue-200 bg-blue-50">
+								<Info size={18} className="mt-0.5 shrink-0 text-blue-600" />
+								<p>
+									Your current order ({itemCount} item{itemCount === 1 ? "" : "s"}) will be
+									queued in place of the one you recall.
 								</p>
 							</div>
-						) : (
-							<div className="space-y-2">
-								{filteredInventory.map((item) => {
-									const stockStatus = getStockStatus(item.stock);
+						)}
 
-									return (
-										<div
-											key={item.id}
-											className="flex items-center justify-between p-3 rounded-lg bg-gray-50 cursor-pointer"
-											onClick={() => handleItemClick(item.id)}
-										>
-											<div className="flex-1 min-w-0">
-												<div className="font-medium text-gray-800 truncate">
-													{item.name}
-												</div>
-												<div className="text-xs text-gray-500 flex flex-wrap gap-2 mt-1">
-													<span>ID: {item.id}</span>
-													<span>SKU: {item.sku}</span>
-													<span>Store: {item.store}</span>
-												</div>
-												<div className="flex items-center mt-1 space-x-2">
-													{getStockBadge(stockStatus, item.stock)}
-													<span className="text-xs text-gray-500 capitalize">
-														{item.description}
+						{queuedOrders.length === 0 ? (
+							<EmptyState icon={History} title="No queued orders" hint="Queue an order to see it here" />
+						) : (
+							<ul className="border border-gray-200 divide-y divide-gray-200">
+								{queuedOrders.map((order, index) => (
+									<li key={order.id} className="px-4 py-3.5">
+										<div className="flex items-start justify-between gap-3">
+											<div className="min-w-0">
+												<p className="text-sm font-semibold text-gray-900">
+													Order {index + 1}
+													<span className="ml-2 text-xs font-normal text-gray-500">
+														Queued {formatTime(order.createdAt)}
 													</span>
-												</div>
+												</p>
+												<p className="mt-0.5 text-xs text-gray-500 truncate">
+													{order.items
+														.map((item) => `${item.quantity}× ${item.product_name}`)
+														.join(", ")}
+												</p>
 											</div>
-											<div className="text-right flex-shrink-0 ml-2">
-												<div className="font-semibold text-gray-800">
-													₦{parseFloat(item.price).toFixed(2)}
-												</div>
-												<div className="text-xs text-gray-500">
-													Stock: {item.stock}
-												</div>
+											<p className="text-sm font-semibold text-gray-900 shrink-0">
+												{formatNaira(queuedTotal(order))}
+											</p>
+										</div>
+										<div className="flex items-center justify-between mt-3">
+											<span className="text-xs text-gray-500">
+												{queuedCount(order)} item{queuedCount(order) === 1 ? "" : "s"}
+											</span>
+											<div className="flex gap-2">
+												<button
+													type="button"
+													onClick={() => handleDiscardQueued(order)}
+													disabled={queueBusy}
+													className="flex items-center justify-center px-3 py-1.5 text-xs font-medium text-red-600 transition-colors border border-gray-300 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+												>
+													Discard
+												</button>
+												<button
+													type="button"
+													onClick={() => handleRecallOrder(order)}
+													disabled={queueBusy}
+													className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+												>
+													{queueBusy && <Loader2 size={12} className="animate-spin" />}
+													Recall
+												</button>
 											</div>
 										</div>
-									);
-								})}
-							</div>
+									</li>
+								))}
+							</ul>
 						)}
 					</div>
-				</div>
+					<ModalFooter>
+						<button
+							type="button"
+							onClick={() => setShowRecallModal(false)}
+							disabled={queueBusy}
+							className={secondaryButtonClass}
+						>
+							Close
+						</button>
+					</ModalFooter>
+				</ModalShell>
+			)}
 
-				{/* Order Preview Section */}
-				<div className="lg:w-1/3 bg-white rounded-lg shadow-md p-4">
-					<h2 className="text-lg font-semibold text-gray-800 mb-4">
-						Order Preview
-					</h2>
-
-					{/* If empty */}
-					{cart.length === 0 ? (
-						<div className="bg-gray-50 rounded-lg p-4 mb-4 text-center text-gray-500 py-8">
-							<svg
-								className="w-12 h-12 mx-auto mb-3 text-gray-300"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-								/>
-							</svg>
-							<p className="text-sm">No items in order</p>
-							<p className="text-xs mt-1">
-								Select products to add to your order
+			{/* Order Success Modal */}
+			{completedOrder && (
+				<ModalShell
+					title="Order Processed"
+					subtitle="The sale has been recorded"
+					icon={CheckCircle2}
+					iconClass="bg-green-600"
+					onClose={() => setCompletedOrder(null)}
+				>
+					<div className="px-6 py-5">
+						<div className="px-4 py-5 mb-4 text-center border border-green-200 bg-green-50">
+							<p className="text-xs font-semibold tracking-wide text-green-700 uppercase">
+								Amount
+							</p>
+							<p className="mt-1 text-3xl font-bold text-gray-900">
+								{formatNaira(completedOrder.total)}
 							</p>
 						</div>
-					) : (
-						<div className="mb-4 space-y-3">
-							{cart.map((item) => (
-								<div
-									key={item.id}
-									className="flex items-center justify-between  bg-gray-50 rounded-lg p-3"
-								>
-									<div className="flex-1">
-										<div className="font-medium text-gray-800">
-											{item.product_name}
-										</div>
-										<div className="text-xs text-gray-500">
-											₦{parseFloat(item.product_price).toFixed(2)} ×{" "}
-											{item.default_quantity_added}
-										</div>
-										<div className="flex items-center mt-1">
-											<button
-												onClick={() => handleDecrease(item.id)}
-												className="w-9 h-9 flex items-center justify-center border border-blue-500 rounded-l-lg text-blue-600 font-bold text-lg transition-all duration-200 hover:bg-blue-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
-												aria-label={`Decrease quantity for ${item.name}`}
-												disabled={item.default_quantity_added <= 1} // Optional: disable at min
-											>
-												-
-											</button>
-											<span
-												className="w-12 h-9 flex items-center justify-center border-t border-b border-blue-500 text-gray-800 text-base font-medium bg-white"
-												aria-live="polite"
-											>
-												{item.default_quantity_added}
-											</span>
-											<button
-												onClick={() => handleIncrease(item.id)}
-												className="w-9 h-9 flex items-center justify-center border border-blue-500 rounded-r-lg text-blue-600 font-bold text-lg transition-all duration-200 hover:bg-blue-600 hover:text-white"
-												aria-label={`Increase quantity for ${item.name}`}
-											>
-												+
-											</button>
-										</div>
-									</div>
-
-									<div className="flex items-center gap-2">
-										<div className="font-semibold text-gray-800">
-											₦
-											{(
-												parseFloat(item.product_price) *
-												item.default_quantity_added
-											).toFixed(2)}
-										</div>
-										<button
-											onClick={() => handleDelete(item.id)}
-											className="p-2 rounded text-red-500 hover:text-white hover:bg-red-500 transition-all duration-200 shadow-sm hover:shadow-md"
-											title="Remove item"
-										>
-											<Trash2 size={18} strokeWidth={2} />
-										</button>
-									</div>
-								</div>
-							))}
+						<div className="grid gap-px bg-gray-200 border border-gray-200">
+							<SummaryRow label="Items" value={completedOrder.itemCount} />
+							<SummaryRow label="Payment" value={completedOrder.method} />
+							{completedOrder.customer && (
+								<SummaryRow label="Customer" value={completedOrder.customer} />
+							)}
 						</div>
+					</div>
+					<ModalFooter>
+						<button
+							type="button"
+							autoFocus
+							onClick={() => setCompletedOrder(null)}
+							className={primaryButtonClass}
+						>
+							Start New Sale
+						</button>
+					</ModalFooter>
+				</ModalShell>
+			)}
+
+			<h1 className="hidden mb-2 text-xl font-normal text-gray-800 md:block">
+				Sales Point
+			</h1>
+			<TransactionNav
+				onQueueOrder={handleQueueOrder}
+				onRecallOrder={() => setShowRecallModal(true)}
+				queuedOrdersCount={queuedOrders.length}
+				queueDisabled={cart.length === 0 || queueBusy}
+			/>
+
+			<div className="flex flex-col gap-5 mt-5 lg:flex-row lg:items-start">
+				{/* Products Section */}
+				<section className="flex-1 min-w-0 bg-white border border-gray-200">
+					<PanelHeader title="Products" meta={listMeta} />
+
+					<div className="grid gap-3 px-5 py-4 border-b border-gray-200 sm:grid-cols-[minmax(0,14rem)_1fr]">
+						<Select
+							value={selectedStore}
+							onChange={(e) => setSelectedStore(e.target.value)}
+							aria-label="Filter by store"
+						>
+							<option value="">All Stores</option>
+							{storeOptions.map((store) => (
+								<option key={store} value={store}>
+									{store}
+								</option>
+							))}
+						</Select>
+
+						<div className="relative">
+							<Search
+								size={16}
+								className="absolute text-gray-400 -translate-y-1/2 pointer-events-none left-3 top-1/2"
+							/>
+							<input
+								type="search"
+								placeholder="Search by name, SKU, store or ID"
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+								className={`${fieldClass} pl-9`}
+							/>
+						</div>
+					</div>
+
+					{loading ? (
+						<div className="flex items-center justify-center gap-3 py-12 text-sm text-gray-500">
+							<Loader2 size={20} className="text-blue-600 animate-spin" />
+							Loading products…
+						</div>
+					) : error ? (
+						<EmptyState
+							icon={AlertTriangle}
+							tone="red"
+							title="Couldn't load products"
+							hint={error}
+						/>
+					) : filteredInventory.length === 0 ? (
+						<EmptyState
+							icon={Package}
+							title="No products found"
+							hint={
+								selectedStore || searchTerm
+									? "Try a different store or search term"
+									: "Add products to your inventory to see them here"
+							}
+						/>
+					) : (
+						<ul className="divide-y divide-gray-100">
+							{filteredInventory.map((item) => {
+								const stockStatus = getStockStatus(item.stock);
+								const outOfStock = stockStatus === "out-of-stock";
+								const isAdding = addingId === item.id;
+
+								return (
+									<li key={item.id}>
+										<button
+											type="button"
+											onClick={() => handleItemClick(item)}
+											disabled={outOfStock || Boolean(addingId)}
+											className="flex items-center w-full gap-4 px-5 py-3.5 text-left transition-colors hover:bg-blue-50/60 focus:outline-none focus-visible:bg-blue-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+										>
+											<div className={`flex-1 min-w-0 ${outOfStock ? "opacity-50" : ""}`}>
+												<div className="flex items-center gap-2">
+													<span className="text-sm font-medium text-gray-900 truncate">
+														{item.name}
+													</span>
+													<span
+														className={`shrink-0 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STOCK_BADGE[stockStatus]}`}
+													>
+														{stockLabel(stockStatus, item.stock)}
+													</span>
+												</div>
+												<div className="flex flex-wrap mt-1 text-xs text-gray-500 gap-x-3 gap-y-0.5">
+													<span>SKU {item.sku || "—"}</span>
+													<span>{storeNameOf(item.store)}</span>
+													<span>ID {item.id}</span>
+													{item.description && (
+														<span className="capitalize truncate">{item.description}</span>
+													)}
+												</div>
+											</div>
+
+											<div className={`text-right shrink-0 ${outOfStock ? "opacity-50" : ""}`}>
+												<div className="text-sm font-semibold text-gray-900">
+													{formatNaira(item.price)}
+												</div>
+												<div className="mt-0.5 text-xs text-gray-500">{item.stock} in stock</div>
+											</div>
+
+											<span
+												className={`flex items-center justify-center w-8 h-8 shrink-0 ${
+													outOfStock ? "bg-gray-100 text-gray-300" : "bg-blue-600 text-white"
+												}`}
+												aria-hidden="true"
+											>
+												{isAdding ? (
+													<Loader2 size={16} className="animate-spin" />
+												) : (
+													<Plus size={16} />
+												)}
+											</span>
+										</button>
+									</li>
+								);
+							})}
+						</ul>
+					)}
+				</section>
+
+				{/* Order Preview Section */}
+				<aside className="bg-white border border-gray-200 lg:w-96 lg:shrink-0 lg:sticky lg:top-4">
+					<PanelHeader
+						title="Order Preview"
+						meta={cart.length > 0 ? `${itemCount} item${itemCount === 1 ? "" : "s"}` : null}
+						action={
+							cart.length > 0 && (
+								<button
+									type="button"
+									onClick={handleClearOrder}
+									className="text-xs font-medium text-red-600 transition-colors hover:text-red-700"
+								>
+									Clear all
+								</button>
+							)
+						}
+					/>
+
+					{cart.length === 0 ? (
+						<EmptyState
+							icon={ShoppingCart}
+							title="No items in order"
+							hint="Select products on the left to add them"
+						/>
+					) : (
+						<ul className="divide-y divide-gray-100">
+							{cart.map((item) => {
+								const qty = Number(item.default_quantity_added);
+								const atMax = qty >= Number(item.product_stock);
+
+								return (
+									<li key={item.id} className="px-5 py-3.5">
+										<div className="flex items-start justify-between gap-3">
+											<div className="min-w-0">
+												<p className="text-sm font-medium text-gray-900 truncate">
+													{item.product_name}
+												</p>
+												<p className="mt-0.5 text-xs text-gray-500">
+													{formatNaira(item.product_price)} each
+												</p>
+											</div>
+											<p className="text-sm font-semibold text-gray-900 shrink-0">
+												{formatNaira(parseFloat(item.product_price) * qty)}
+											</p>
+										</div>
+
+										<div className="flex items-center justify-between mt-2.5">
+											<div className="flex items-stretch border border-gray-300">
+												<button
+													type="button"
+													onClick={() => handleDecrease(item.id)}
+													disabled={qty <= 1}
+													aria-label={`Decrease quantity for ${item.product_name}`}
+													className="flex items-center justify-center w-8 h-8 text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+												>
+													<Minus size={14} />
+												</button>
+												<span
+													className="flex items-center justify-center w-10 h-8 text-sm font-semibold text-gray-900 border-gray-300 border-x"
+													aria-live="polite"
+												>
+													{qty}
+												</span>
+												<button
+													type="button"
+													onClick={() => handleIncrease(item.id)}
+													disabled={atMax}
+													aria-label={`Increase quantity for ${item.product_name}`}
+													title={atMax ? "No more stock available" : undefined}
+													className="flex items-center justify-center w-8 h-8 text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+												>
+													<Plus size={14} />
+												</button>
+											</div>
+
+											<button
+												type="button"
+												onClick={() => handleDelete(item)}
+												title="Remove item"
+												aria-label={`Remove ${item.product_name}`}
+												className="flex items-center justify-center w-8 h-8 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+											>
+												<Trash2 size={16} />
+											</button>
+										</div>
+									</li>
+								);
+							})}
+						</ul>
 					)}
 
 					{/* Totals */}
-					<div className="space-y-3 border-t pt-4">
-						<div className="flex justify-between text-sm">
-							<span className="text-gray-600">Subtotal:</span>
-							<span className="font-medium text-gray-900">
-								₦{subtotal.toFixed(2)}
-							</span>
-						</div>
-						<div className="flex justify-between text-sm">
-							<span className="text-gray-600">Discount:</span>
-							<span className="font-medium text-green-600">
-								₦{discount.toFixed(2)}
-							</span>
-						</div>
-						<div className="flex justify-between text-lg font-semibold border-t pt-2">
-							<span className="text-gray-900">Total:</span>
-							<span className="text-gray-700">₦{total.toFixed(2)}</span>
-						</div>
+					<div className="grid gap-px bg-gray-200 border-t border-gray-200">
+						<SummaryRow label="Subtotal" value={formatNaira(subtotal)} />
+						<SummaryRow
+							label="Discount"
+							value={formatNaira(discount)}
+							valueClass="text-green-700"
+						/>
+						<SummaryRow label="Total" value={formatNaira(total)} strong />
 					</div>
 
-					{/* Buttons */}
-					<div className="mt-6 space-y-3">
+					<div className="px-5 py-4 border-t border-gray-200 bg-gray-50">
 						<button
+							type="button"
 							disabled={cart.length === 0}
-							onClick={() => setShowOrderModal(true)}
-							className={`w-full py-3 px-4 rounded-md font-medium ${
-								cart.length === 0
-									? "bg-gray-300 text-gray-500 cursor-not-allowed"
-									: "bg-indigo-600 text-white hover:bg-indigo-700"
-							}`}
+							onClick={openOrderModal}
+							className={`${primaryButtonClass} w-full py-3`}
 						>
+							<ShoppingCart size={16} />
 							Process Order
 						</button>
-						<button
-							onClick={handleClearOrder}
-							disabled={cart.length === 0}
-							className={`w-full py-2 px-4 rounded-md font-medium ${
-								cart.length === 0
-									? "bg-gray-100 text-gray-400 cursor-not-allowed"
-									: "bg-red-50 text-red-500 hover:bg-red-100"
-							}`}
-						>
-							Clear Order
-						</button>
 					</div>
-				</div>
+				</aside>
 			</div>
 
-			{/* Add CSS for animation */}
-			<style jsx>{`
-				@keyframes fade-in {
+			<style jsx global>{`
+				@keyframes toast-in {
 					from {
 						opacity: 0;
-						transform: translateY(-10px);
+						transform: translateY(-8px);
 					}
 					to {
 						opacity: 1;
 						transform: translateY(0);
 					}
 				}
-				.animate-fade-in {
-					animation: fade-in 0.3s ease-out;
+				@keyframes toast-progress {
+					from {
+						width: 100%;
+					}
+					to {
+						width: 0%;
+					}
+				}
+				@keyframes modal-in {
+					from {
+						opacity: 0;
+						transform: translateY(8px) scale(0.98);
+					}
+					to {
+						opacity: 1;
+						transform: translateY(0) scale(1);
+					}
+				}
+				.toast-in {
+					animation: toast-in 0.2s ease-out;
+				}
+				.toast-progress {
+					animation-name: toast-progress;
+					animation-timing-function: linear;
+					animation-fill-mode: forwards;
+				}
+				.modal-in {
+					animation: modal-in 0.18s ease-out;
 				}
 			`}</style>
 		</div>
