@@ -1,7 +1,6 @@
 // pages/deleted-transactions.js
 import { useState, useEffect } from "react";
-import axios from "axios";
-import BASE_URL from "../../config";
+import http from "../../services/http";
 import { 
   Search, 
   Filter, 
@@ -34,7 +33,6 @@ export default function DeletedTransactions() {
   const [exportLoading, setExportLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  const token = localStorage.getItem("token");
 
   // Check screen size
   useEffect(() => {
@@ -55,11 +53,7 @@ export default function DeletedTransactions() {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`${BASE_URL}/view-deleted-transaction`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await http.get("/view-deleted-transaction");
 
       console.log("Deleted Transactions Response:", response.data);
       

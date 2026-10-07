@@ -8,13 +8,12 @@ import TopCategory from "@/components/TopCatgry";
 import CashFlow from "@/components/CashFlow";
 import ProfitLoss from "@/components/ProfitLoss";
 import DebtorCreditor from "@/components/DebtorCreditor";
-import axios from "axios";
+import http from "../../services/http";
 import {
 	getLocalStorage,
 	removeLocalStorage,
 	verifyToken,
 } from "../../utils/auth";
-import BASE_URL from "../../config";
 
 export default function Dashboard() {
 	const [user, setUser] = useState(null);
@@ -60,7 +59,7 @@ export default function Dashboard() {
 				console.log("🎉 User authenticated successfully:", userData.role);
 
 				// ✅ Fetch dashboard cards data for both roles
-				await fetchDashboardData(token);
+				await fetchDashboardData();
 				
 			} catch (error) {
 				console.error("❌ Authentication check failed:", error);
@@ -78,14 +77,10 @@ export default function Dashboard() {
 		}
 	}, [router, authChecked]);
 
-	const fetchDashboardData = async (token) => {
+	const fetchDashboardData = async () => {
 		try {
 			console.log("📊 Fetching dashboard card data...");
-			const response = await axios.get(`${BASE_URL}/dashboardCards`, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
+			const response = await http.get("/dashboardCards");
 			console.log("✅ Dashboard data fetched:", response.data);
 			setCards(response.data);
 		} catch (error) {
@@ -161,7 +156,7 @@ export default function Dashboard() {
 					<div className="bg-white overflow-hidden shadow mb-8">
 						<div className="px-4 py-5 sm:p-6">
 							<h2 className="text-2xl font-bold text-gray-900 mb-6">
-								{user.role === 'admin' ? 'Administrative Controls' : 'Sales Dashboard'}
+								{user.role === 'admin' ? 'Ops Center' : 'Sales Dashboard'}
 							</h2>
 
 							{/* DASHBOARD CARDS - Show for both roles */}

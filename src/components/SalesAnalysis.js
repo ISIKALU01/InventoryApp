@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import BASE_URL from "../../config";
+import http from "../../services/http";
 
 export default function SalesAnalysis() {
 	const [dateRange, setDateRange] = useState("today");
@@ -20,15 +19,12 @@ export default function SalesAnalysis() {
 	const fetchSalesData = async () => {
 		try {
 			setLoading(true);
-			const token = localStorage.getItem("token");
 			const filter = dateRange === "today" ? "" : dateRange;
-			const url = `${BASE_URL}/dashboardCards${
+			const url = `/dashboardCards${
 				filter ? `?filter=${filter}` : ""
 			}`;
 
-			const response = await axios.get(url, {
-				headers: token ? { Authorization: `Bearer ${token}` } : {},
-			});
+			const response = await http.get(url);
 
 			setData(response.data);
 		} catch (error) {

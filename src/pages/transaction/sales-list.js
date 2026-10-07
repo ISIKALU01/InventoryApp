@@ -2,8 +2,7 @@
 import { useState, useEffect } from 'react';
 import TransactionNav from '../../components/TransactionNav';
 import { FaSearch, FaFileExport, FaShoppingCart, FaMoneyBillWave, FaTrash, FaEye, FaSlidersH, FaTimes, FaPrint, FaArrowLeft, FaUser } from 'react-icons/fa';
-import axios from 'axios';
-import BASE_URL from '../../../config';
+import http from "../../../services/http";
 
 export default function SalesList() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -18,18 +17,13 @@ export default function SalesList() {
   const [locations, setLocations] = useState([]);
   const [users, setUsers] = useState([]);
 
-  const token = localStorage.getItem("token");
 
   // Fetch orders data
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${BASE_URL}/orders`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await http.get("/orders");
         
         const ordersData = response.data;
         // Log all orders data to console
@@ -53,7 +47,7 @@ export default function SalesList() {
     };
 
     fetchOrders();
-  }, [token]);
+  }, []);
 
   // Delete order method
   const deleteOrder = async (orderId) => {
@@ -62,11 +56,7 @@ export default function SalesList() {
     }
 
     try {
-      const response = await axios.delete(`${BASE_URL}/orders/${orderId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await http.delete(`/orders/${orderId}`);
       
       if (response.status === 200 || response.status === 204) {
         // Remove the deleted order from state

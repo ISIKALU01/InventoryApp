@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import http from "../../services/http";
 import { FaChartBar, FaArrowUp, FaArrowDown } from "react-icons/fa";
-import BASE_URL from "../../config";
 import { getLocalStorage } from "../../utils/auth";
 
 export default function ProfitLoss() {
@@ -22,8 +21,7 @@ export default function ProfitLoss() {
 
 			const finalFilter = filter === "today" ? "" : `this_${filter}`;
 
-			const response = await axios.get(`${BASE_URL}/admin-profit-loss`, {
-				headers: { Authorization: `Bearer ${token}` },
+			const response = await http.get("/admin-profit-loss", {
 				params: { filter: finalFilter },
 			});
 
