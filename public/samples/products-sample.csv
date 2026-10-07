@@ -1,0 +1,101 @@
+﻿Product Name,SKU (Stock Keeping Unit),Description / Category ,Price,Cost price
+Rice 50kg,GRN-001,Long grain parboiled rice,78000.00,62780.00
+Rice 25kg,GRN-002,Long grain parboiled rice,40500.00,33440.00
+Rice 10kg,GRN-003,Long grain parboiled rice,17000.00,13490.00
+Beans 50kg,GRN-004,Brown honey beans,85000.00,62960.00
+Beans 5kg,GRN-005,Brown honey beans,9500.00,7860.00
+Garri White 10kg,GRN-006,Ijebu white garri,12000.00,8950.00
+Garri Yellow 10kg,GRN-007,Yellow garri,13000.00,11200.00
+Semovita 10kg,GRN-008,Wheat semolina,14500.00,11330.00
+Semovita 2kg,GRN-009,Wheat semolina,3200.00,2270.00
+Golden Penny Flour 2kg,GRN-010,All-purpose flour,3500.00,2960.00
+Spaghetti 500g,PST-001,"Pasta, single pack",1100.00,900.00
+Spaghetti Carton (20),PST-002,"Pasta, carton of 20",21000.00,16610.00
+Macaroni 500g,PST-003,Elbow macaroni,1050.00,830.00
+Indomie Chicken 70g,PST-004,Instant noodles,250.00,200.00
+Indomie Carton (40),PST-005,"Instant noodles, carton of 40",9800.00,8370.00
+Vegetable Oil 5L,OIL-001,Refined vegetable oil,16500.00,14030.00
+Vegetable Oil 3L,OIL-002,Refined vegetable oil,10200.00,7400.00
+Vegetable Oil 1L,OIL-003,Refined vegetable oil,3600.00,2530.00
+Palm Oil 5L,OIL-004,Red palm oil,14000.00,10190.00
+Palm Oil 1L,OIL-005,Red palm oil,3000.00,2280.00
+Groundnut Oil 3L,OIL-006,Pure groundnut oil,11500.00,9260.00
+Sugar 1kg,SGR-001,Granulated white sugar,1800.00,1460.00
+Sugar Cubes 500g,SGR-002,St. Louis sugar cubes,1500.00,1070.00
+Salt 500g,SPC-001,Iodized table salt,400.00,350.00
+Maggi Cubes (100),SPC-002,"Seasoning cubes, pack of 100",2200.00,1630.00
+Knorr Cubes (50),SPC-003,"Seasoning cubes, pack of 50",1300.00,920.00
+Curry Powder 50g,SPC-004,Ground curry,450.00,360.00
+Thyme 50g,SPC-005,Dried thyme leaves,450.00,350.00
+Tomato Paste 400g,CAN-001,Tin tomato paste,1400.00,1080.00
+Tomato Paste Sachet 70g,CAN-002,Sachet tomato paste,200.00,160.00
+Sardines 125g,CAN-003,Sardines in vegetable oil,950.00,780.00
+Corned Beef 340g,CAN-004,Canned corned beef,3800.00,3090.00
+Baked Beans 415g,CAN-005,Beans in tomato sauce,1600.00,1190.00
+Sweet Corn 340g,CAN-006,Canned sweet corn,1450.00,1160.00
+Peak Milk Tin 400g,DRY-001,Evaporated milk powder tin,5600.00,4750.00
+Peak Milk Sachet 14g,DRY-002,Powdered milk sachet,150.00,130.00
+Dano Milk 400g,DRY-003,Full cream milk powder,4800.00,3470.00
+Milo 500g,BEV-001,Chocolate malt drink refill,3900.00,3200.00
+Milo 1kg,BEV-002,Chocolate malt drink refill,7200.00,5870.00
+Bournvita 500g,BEV-003,Chocolate malt drink refill,3700.00,2680.00
+Lipton Tea (100 bags),BEV-004,Yellow label tea,3200.00,2280.00
+Nescafe Classic 200g,BEV-005,Instant coffee,6500.00,5380.00
+Coca-Cola 50cl,BEV-006,"Soft drink, PET bottle",400.00,290.00
+Coca-Cola Pack (12),BEV-007,"Soft drink, pack of 12",4600.00,4010.00
+Fanta 50cl,BEV-008,Orange soft drink,400.00,350.00
+Sprite 50cl,BEV-009,Lemon-lime soft drink,400.00,320.00
+Malt Drink 33cl,BEV-010,Non-alcoholic malt can,600.00,450.00
+Bottled Water 75cl,BEV-011,Table water,200.00,150.00
+Bottled Water Pack (12),BEV-012,"Table water, pack of 12",2200.00,1630.00
+Chi Exotic 1L,BEV-013,Fruit juice blend,1900.00,1570.00
+Cabin Biscuit,SNK-001,Cream crackers,600.00,430.00
+Digestive Biscuits 400g,SNK-002,Wheat biscuits,1700.00,1390.00
+Plantain Chips 150g,SNK-003,Salted plantain chips,700.00,610.00
+Gala Sausage Roll,SNK-004,Sausage roll snack,300.00,220.00
+Chin Chin 500g,SNK-005,Crunchy fried snack,1500.00,1120.00
+Groundnut 500g,SNK-006,Roasted peanuts,1200.00,850.00
+Bread Loaf,BAK-001,Sliced white bread,1500.00,1060.00
+Eggs Crate (30),FRS-001,Fresh eggs,5500.00,3860.00
+Frozen Chicken 1kg,FRS-002,Whole frozen chicken,6500.00,5370.00
+Frozen Fish (Titus) 1kg,FRS-003,Mackerel,5000.00,3790.00
+Butter 250g,FRS-004,Salted butter,2500.00,1940.00
+Yoghurt 1L,FRS-005,Sweetened yoghurt,2400.00,1970.00
+Omo Detergent 900g,HSH-001,Washing powder,2800.00,2260.00
+Ariel Detergent 2kg,HSH-002,Washing powder,6200.00,4780.00
+Morning Fresh 500ml,HSH-003,Dishwashing liquid,1600.00,1380.00
+Hypo Bleach 1L,HSH-004,Household bleach,1100.00,950.00
+Dettol 500ml,HSH-005,Antiseptic liquid,3500.00,3000.00
+Harpic 500ml,HSH-006,Toilet cleaner,2300.00,1780.00
+Insecticide 300ml,HSH-007,Mosquito spray,2600.00,2140.00
+Toilet Roll Pack (12),HSH-008,2-ply toilet tissue,4500.00,3700.00
+Kitchen Towel (2 rolls),HSH-009,Paper towels,1800.00,1530.00
+Refuse Bags (20),HSH-010,Black bin bags,1200.00,880.00
+Matches (10 boxes),HSH-011,Safety matches,300.00,220.00
+Candle Pack (6),HSH-012,White candles,900.00,660.00
+Lux Soap 175g,PRS-001,Beauty bar soap,650.00,470.00
+Dettol Soap 175g,PRS-002,Antibacterial soap,800.00,580.00
+Closeup Toothpaste 140g,PRS-003,Gel toothpaste,1300.00,990.00
+Pepsodent Toothpaste 140g,PRS-004,Fluoride toothpaste,1150.00,880.00
+Toothbrush,PRS-005,Medium bristle,400.00,330.00
+Vaseline 250ml,PRS-006,Petroleum jelly,2200.00,1560.00
+Nivea Lotion 400ml,PRS-007,Body lotion,4800.00,3810.00
+Shampoo 400ml,PRS-008,Hair shampoo,3300.00,2720.00
+Sanitary Pads (8),PRS-009,Regular pads,1100.00,830.00
+Diapers Medium (40),BBY-001,Baby diapers,9500.00,6930.00
+Baby Wipes (80),BBY-002,Unscented wipes,2100.00,1640.00
+Cerelac 400g,BBY-003,Infant cereal,4900.00,4050.00
+SMA Gold 400g,BBY-004,Infant formula,9800.00,7780.00
+AA Batteries (4),ELC-001,Alkaline batteries,1500.00,1210.00
+Rechargeable Lantern,ELC-002,LED lantern,8500.00,6050.00
+LED Bulb 15W,ELC-003,Energy saving bulb,1200.00,910.00
+Extension Box 4-way,ELC-004,Power extension,6000.00,4870.00
+Phone Charger USB-C,ELC-005,Fast charger,4500.00,3360.00
+Exercise Book (20 leaves),STN-001,Pack of 12,2400.00,1780.00
+Biro Pen (Box of 50),STN-002,Blue ballpoint pens,3000.00,2160.00
+A4 Paper Ream,STN-003,"80gsm, 500 sheets",6500.00,5510.00
+Pencil (12),STN-004,HB pencils,900.00,770.00
+Plastic Bucket 20L,HME-001,With lid,3500.00,2700.00
+Plastic Chair,HME-002,Armless chair,7500.00,6090.00
+Cooking Pot Set (3),HME-003,Aluminium pots,18000.00,14740.00
+Gas Lighter,HME-004,Refillable lighter,700.00,590.00

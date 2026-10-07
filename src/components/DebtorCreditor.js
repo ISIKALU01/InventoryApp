@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import http from "../../services/http";
 import { FaChartBar, FaArrowUp, FaArrowDown, FaEye, FaSpinner, FaTimes } from "react-icons/fa";
-import BASE_URL from "../../config";
 
 export default function DebtorCreditor() {
 	const [dateRange, setDateRange] = useState("today");
@@ -21,15 +20,7 @@ export default function DebtorCreditor() {
 		const fetchDebtorCreditorData = async () => {
 			try {
 				setLoading(true);
-				const token = localStorage.getItem("token");
-				const response = await axios.get(
-					`${BASE_URL}/admin-debtors-creditors?filter=${dateRange}`,
-					{
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					}
-				);
+				const response = await http.get(`/admin-debtors-creditors?filter=${dateRange}`);
 				setData(response.data);
 			} catch (error) {
 				console.error("Error fetching debtor/creditor data:", error);
@@ -45,16 +36,8 @@ export default function DebtorCreditor() {
 		try {
 			setViewLoading(type);
 			setViewError(null);
-			const token = localStorage.getItem("token");
 			
-			const response = await axios.get(
-				`${BASE_URL}/view-debtors-creditors?type=${type}&filter=${dateRange}`,
-				{
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				}
-			);
+			const response = await http.get(`/view-debtors-creditors?type=${type}&filter=${dateRange}`);
 
 			console.log(`${type} API Response:`, response.data);
 			

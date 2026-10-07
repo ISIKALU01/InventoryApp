@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import http from "../../services/http";
 import { FaBoxes, FaTags } from "react-icons/fa";
-import BASE_URL from "../../config";
 import { getLocalStorage } from "../../utils/auth";
 
 export default function InventorySummary() {
@@ -14,11 +13,7 @@ export default function InventorySummary() {
 				const token = getLocalStorage("token");
 				if (!token) return;
 
-				const response = await axios.get(`${BASE_URL}/admin-get-summary`, {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				});
+				const response = await http.get("/admin-get-summary");
 
 				console.log("✅ Inventory summary fetched:", response.data);
 				setSummary(response.data);

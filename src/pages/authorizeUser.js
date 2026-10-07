@@ -1,7 +1,6 @@
 // pages/admin/user-approval.js
 import { useState, useEffect } from "react";
-import axios from "axios";
-import BASE_URL from "../../config";
+import http from "../../services/http";
 import { Check, X, Search, Filter, Clock, Users, Calendar, RefreshCw, Menu, Phone, Mail, LogOut } from "lucide-react";
 
 export default function UserApproval() {
@@ -20,7 +19,6 @@ export default function UserApproval() {
 	const [showMobileFilters, setShowMobileFilters] = useState(false);
 	const [loggingOutId, setLoggingOutId] = useState(null); // Track which user is being logged out
 
-	const token = localStorage.getItem("token");
 
 	// Show success pop-up
 	const showSuccess = (message) => {
@@ -35,11 +33,7 @@ export default function UserApproval() {
 	const fetchLoginRequests = async () => {
 		try {
 			setLoading(true);
-			const response = await axios.get(`${BASE_URL}/admin/login-requests`, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
+			const response = await http.get("/admin/login-requests");
 			
 			// Handle different response formats
 			const usersData = Array.isArray(response.data) 
@@ -59,11 +53,7 @@ export default function UserApproval() {
 	const fetchApprovedStaff = async () => {
 		try {
 			setApprovedLoading(true);
-			const response = await axios.get(`${BASE_URL}/admin/approved-staff-today`, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
+			const response = await http.get("/admin/approved-staff-today");
 
 			console.log("Approved staff response:", response.data);
 			
@@ -84,16 +74,7 @@ export default function UserApproval() {
 	const handleApprove = async (userId) => {
 		try {
 			setApprovingId(userId);
-			const response = await axios.post(
-				`${BASE_URL}/admin/approve/${userId}`,
-				{},
-				{
-					headers: {
-						Authorization: `Bearer ${token}`,
-						"Content-Type": "application/json",
-					},
-				}
-			);
+			const response = await http.post(`/admin/approve/${userId}`, {});
 
 			showSuccess("User approved successfully!");
 			
@@ -126,16 +107,7 @@ export default function UserApproval() {
 		try {
 			setLoggingOutId(staffId);
 			
-			const response = await axios.post(
-				`${BASE_URL}/staff/${staffId}/logout`,
-				{},
-				{
-					headers: {
-						Authorization: `Bearer ${token}`,
-						"Content-Type": "application/json",
-					},
-				}
-			);
+			const response = await http.post(`/staff/${staffId}/logout`, {});
 
 			showSuccess(`User ${staffName} has been logged out successfully!`);
 			

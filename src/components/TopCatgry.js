@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import BASE_URL from "../../config";
+import http from "../../services/http";
 
 export default function TopCatgry() {
 	const [showAll, setShowAll] = useState(false);
@@ -13,13 +12,7 @@ export default function TopCatgry() {
 	const fetchData = async () => {
 		try {
 			setLoading(true);
-			const token = localStorage.getItem("token"); // if authentication is required
-			const response = await axios.get(
-				`${BASE_URL}/filter-options?filter_by=${filterBy}&time_filter=${timeFilter}`,
-				{
-					headers: token ? { Authorization: `Bearer ${token}` } : {},
-				}
-			);
+			const response = await http.get(`/filter-options?filter_by=${filterBy}&time_filter=${timeFilter}`);
 
 			// Response structure:
 			// { filter_by, time_filter, data: [{ id, name, price }] }
