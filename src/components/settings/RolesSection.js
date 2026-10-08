@@ -5,7 +5,17 @@
 // backend refuses to edit the admin role or give anyone "manage users", and
 // records every change, which the history panel lists.
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { FaExclamationTriangle, FaHistory, FaLock, FaSave, FaUndo, FaUserShield } from "react-icons/fa";
+import {
+  FaEdit,
+  FaExclamationTriangle,
+  FaHistory,
+  FaLock,
+  FaPlus,
+  FaSave,
+  FaTrash,
+  FaUndo,
+  FaUserShield,
+} from "react-icons/fa";
 import http from "../../../services/http";
 import { ModalFooter, ModalShell, Panel, Spinner, secondaryButtonClass } from "./ui";
 
@@ -21,6 +31,154 @@ const messageFrom = (error, fallback) => {
 
 const sameSet = (a, b) => a.length === b.length && a.every((item) => b.includes(item));
 
+const HISTORY_VERB = {
+  created: "created",
+  updated: "changed",
+  renamed: "renamed",
+  deleted: "deleted",
+};
+
+const fieldClass = (hasError) =>
+  `block w-full px-3 py-2.5 text-sm text-gray-800 bg-white border rounded-none outline-none transition-colors placeholder:text-gray-400 disabled:opacity-50 disabled:bg-gray-50 ${
+    hasError
+      ? "border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+      : "border-gray-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+  }`;
+
+const labelClass = "block mb-1.5 text-xs font-semibold tracking-wide text-gray-600 uppercase";
+
+// Create a custom role (role = null) or rename one (role = the custom role)
+const RoleFormModal = ({ role, roles, catalog, onClose, onSaved }) => {
+  const isEdit = Boolean(role);
+  const [label, setLabel] = useState(role?.label || "");
+  const [description, setDescription] = useState(role?.description || "");
+  const [startFrom, setStartFrom] = useState("");
+  const [errors, setErrors] = useState({});
+  const [formError, setFormError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  // Copying admin means "everything except what only admins may hold"
+  const startingPermissions = () => {
+    if (!startFrom) return [];
+    const source = roles.find((r) => r.value === startFrom);
+    const locked = catalog.filter((p) => p.locked).map((p) => p.name);
+    return (source?.permissions || []).filter((p) => !locked.includes(p));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const name = label.trim().replace(/\s+/g, " ");
+    if (!name) {
+      setErrors({ label: "Give the role a name." });
+      return;
+    }
+
+    setBusy(true);
+    setErrors({});
+    setFormError("");
+    try {
+      const payload = { label: name, description: description.trim() || null };
+      const { data } = isEdit
+        ? await http.put(`/roles/${role.value}`, payload)
+        : await http.post("/roles", { ...payload, permissions: startingPermissions() });
+      onSaved(data, isEdit);
+    } catch (error) {
+      const fieldErrors = Object.fromEntries(
+        Object.entries(error.response?.data?.errors || {}).map(([field, messages]) => [field, messages[0]])
+      );
+      setErrors(fieldErrors);
+      if (!fieldErrors.label && !fieldErrors.description) {
+        setFormError(messageFrom(error, isEdit ? "Could not rename this role." : "Could not create this role."));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ModalShell
+      title={isEdit ? "Rename Role" : "Add Role"}
+      subtitle={isEdit ? "Its users and permissions stay the same" : "Then tick what it may do in the grid"}
+      icon={isEdit ? FaEdit : FaPlus}
+      onClose={onClose}
+      busy={busy}
+    >
+      <form onSubmit={handleSubmit} noValidate>
+        <div className="px-6 py-6 space-y-5">
+          {formError && (
+            <div role="alert" className="flex items-start gap-3 px-4 py-3 text-sm text-red-800 border border-red-200 bg-red-50">
+              <FaExclamationTriangle className="mt-0.5 shrink-0 text-red-600" />
+              <span>{formError}</span>
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="role-label" className={labelClass}>Name</label>
+            <input
+              id="role-label"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              maxLength={50}
+              autoFocus
+              disabled={busy}
+              className={fieldClass(errors.label)}
+              placeholder="Branch supervisor"
+            />
+            {errors.label && <p className="mt-1 text-xs text-red-600">{errors.label}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="role-description" className={labelClass}>
+              Description <span className="font-normal text-gray-400 normal-case">(optional)</span>
+            </label>
+            <input
+              id="role-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={255}
+              disabled={busy}
+              className={fieldClass(errors.description)}
+              placeholder="What this person does"
+            />
+            {errors.description && <p className="mt-1 text-xs text-red-600">{errors.description}</p>}
+          </div>
+
+          {!isEdit && (
+            <div>
+              <label htmlFor="role-start" className={labelClass}>Start with</label>
+              <select
+                id="role-start"
+                value={startFrom}
+                onChange={(e) => setStartFrom(e.target.value)}
+                disabled={busy}
+                className={fieldClass(false)}
+              >
+                <option value="">No permissions</option>
+                {roles.map((r) => (
+                  <option key={r.value} value={r.value}>Same as {r.label}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                {startFrom === "admin"
+                  ? "Everything except managing users, which stays with admins."
+                  : "You can change every tick afterwards."}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <ModalFooter>
+          <button type="button" onClick={onClose} disabled={busy} className={secondaryButtonClass}>Cancel</button>
+          <button type="submit" disabled={busy} className={primaryButtonClass}>
+            {busy ? <Spinner /> : <FaSave className="mr-2" />}
+            {busy ? "Saving…" : isEdit ? "Save Name" : "Create Role"}
+          </button>
+        </ModalFooter>
+      </form>
+    </ModalShell>
+  );
+};
+
 const formatWhen = (iso) =>
   new Date(iso).toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -34,6 +192,9 @@ export default function RolesSection({ notify }) {
   const [saving, setSaving] = useState(false);
   const [confirmGrants, setConfirmGrants] = useState(null); // sensitive grants waiting for "Yes"
   const [toReset, setToReset] = useState(null);
+  const [roleForm, setRoleForm] = useState(undefined); // undefined: closed, null: new role, object: rename
+  const [toDelete, setToDelete] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const labelOf = useMemo(() => Object.fromEntries(catalog.map((p) => [p.name, p.label])), [catalog]);
 
@@ -151,6 +312,61 @@ export default function RolesSection({ notify }) {
     }
   };
 
+  const handleRoleSaved = (saved, isEdit) => {
+    if (isEdit) {
+      replaceRole(saved);
+    } else {
+      setRoles((prev) => [...prev, saved]);
+      setDraft((prev) => ({ ...prev, [saved.value]: saved.permissions }));
+    }
+    setRoleForm(undefined);
+    notify(
+      "success",
+      isEdit ? `The role is now called ${saved.label}.` : `${saved.label} is ready. Tick what it may do, then save.`,
+      isEdit ? "Role renamed" : "Role created"
+    );
+    loadChanges();
+  };
+
+  const openDelete = (role) => {
+    setDeleteError("");
+    setToDelete(role);
+  };
+
+  const confirmDelete = async () => {
+    const role = toDelete;
+    setSaving(true);
+    setDeleteError("");
+    try {
+      await http.delete(`/roles/${role.value}`);
+      setRoles((prev) => prev.filter((r) => r.value !== role.value));
+      setDraft((prev) => {
+        const next = { ...prev };
+        delete next[role.value];
+        return next;
+      });
+      setToDelete(null);
+      notify("success", `${role.label} was deleted.`, "Role deleted");
+      loadChanges();
+    } catch (error) {
+      setDeleteError(messageFrom(error, "Could not delete this role."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addRoleButton = (
+    <button
+      type="button"
+      onClick={() => setRoleForm(null)}
+      disabled={saving}
+      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+    >
+      <FaPlus className="text-[11px]" />
+      Add Role
+    </button>
+  );
+
   if (loading) {
     return (
       <Panel title="Roles & permissions" description="Loading…">
@@ -179,6 +395,7 @@ export default function RolesSection({ notify }) {
       <Panel
         title="Roles & permissions"
         description="Tick what each role may do. Admin always has everything. Changes apply to everyone with that role on their next action."
+        action={addRoleButton}
         bodyClass=""
       >
         <div className="overflow-x-auto">
@@ -192,21 +409,45 @@ export default function RolesSection({ notify }) {
                   <th key={role.value} scope="col" className="px-3 py-3 text-center align-bottom border-b border-gray-200 min-w-[7.5rem]">
                     <span className="block text-xs font-semibold text-gray-900">{role.label}</span>
                     <span className="block text-[11px] font-normal text-gray-500">
+                      {role.system ? "" : "Custom · "}
                       {role.users_count} user{role.users_count === 1 ? "" : "s"}
                     </span>
-                    {role.editable ? (
+                    {!role.editable ? (
+                      <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-gray-400">
+                        <FaLock className="text-[9px]" /> Always all
+                      </span>
+                    ) : role.system ? (
                       <button
                         type="button"
                         onClick={() => setToReset(role)}
-                        disabled={saving || sameSet(role.permissions, role.default_permissions)}
+                        disabled={saving || sameSet(role.permissions, role.default_permissions || [])}
                         className="mt-1 text-[11px] font-medium text-blue-600 hover:underline disabled:text-gray-300 disabled:no-underline"
                         title={`Reset ${role.label} to its default permissions`}
                       >
                         Reset to default
                       </button>
                     ) : (
-                      <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-gray-400">
-                        <FaLock className="text-[9px]" /> Always all
+                      <span className="mt-1 inline-flex justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setRoleForm(role)}
+                          disabled={saving}
+                          className="flex items-center justify-center w-7 h-7 text-gray-500 hover:bg-gray-100 hover:text-blue-600 disabled:opacity-40"
+                          title={`Rename ${role.label}`}
+                          aria-label={`Rename ${role.label}`}
+                        >
+                          <FaEdit className="text-xs" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openDelete(role)}
+                          disabled={saving}
+                          className="flex items-center justify-center w-7 h-7 text-gray-500 hover:bg-gray-100 hover:text-red-600 disabled:opacity-40"
+                          title={`Delete ${role.label}`}
+                          aria-label={`Delete ${role.label}`}
+                        >
+                          <FaTrash className="text-xs" />
+                        </button>
                       </span>
                     )}
                   </th>
@@ -281,7 +522,7 @@ export default function RolesSection({ notify }) {
         </div>
       </Panel>
 
-      <Panel title="Change history" description="The latest 50 changes to role permissions" bodyClass="">
+      <Panel title="Change history" description="The latest 50 changes to roles" bodyClass="">
         {changes.length === 0 ? (
           <p className="px-5 py-6 text-sm text-gray-500">No changes yet. Every role still has its default permissions.</p>
         ) : (
@@ -291,8 +532,16 @@ export default function RolesSection({ notify }) {
                 <FaHistory className="mt-1 text-gray-400 shrink-0" />
                 <div className="min-w-0 text-sm">
                   <p className="text-gray-900">
-                    <span className="font-semibold">{change.changed_by?.name || "A deleted user"}</span> changed{" "}
-                    <span className="font-semibold">{change.role_label}</span>
+                    <span className="font-semibold">{change.changed_by?.name || "A deleted user"}</span>{" "}
+                    {HISTORY_VERB[change.action] || "changed"}{" "}
+                    <span className="font-semibold">
+                      {change.action === "renamed" ? change.details?.from?.label || change.role_label : change.role_label}
+                    </span>
+                    {change.action === "renamed" && change.details?.to?.label !== change.details?.from?.label && (
+                      <>
+                        {" "}to <span className="font-semibold">{change.details?.to?.label}</span>
+                      </>
+                    )}
                     <span className="ml-2 text-xs text-gray-500">{formatWhen(change.created_at)}</span>
                   </p>
                   {change.added.length > 0 && (
@@ -359,6 +608,58 @@ export default function RolesSection({ notify }) {
             <button type="button" onClick={confirmReset} disabled={saving} className={primaryButtonClass}>
               {saving ? <Spinner /> : <FaUndo className="mr-2" />}
               {saving ? "Resetting…" : "Reset role"}
+            </button>
+          </ModalFooter>
+        </ModalShell>
+      )}
+      {roleForm !== undefined && (
+        <RoleFormModal
+          role={roleForm}
+          roles={roles}
+          catalog={catalog}
+          onClose={() => setRoleForm(undefined)}
+          onSaved={handleRoleSaved}
+        />
+      )}
+
+      {toDelete && (
+        <ModalShell
+          title={`Delete ${toDelete.label}?`}
+          subtitle="This can't be undone"
+          icon={FaTrash}
+          iconClass="bg-red-600"
+          onClose={() => !saving && setToDelete(null)}
+          busy={saving}
+          maxWidth="max-w-md"
+        >
+          <div className="px-6 py-5 space-y-3 text-sm text-gray-700">
+            {deleteError && (
+              <div role="alert" className="flex items-start gap-3 px-4 py-3 text-red-800 border border-red-200 bg-red-50">
+                <FaExclamationTriangle className="mt-0.5 shrink-0 text-red-600" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+            {toDelete.users_count > 0 ? (
+              <p>
+                {toDelete.users_count} user{toDelete.users_count === 1 ? " still has" : "s still have"} this role. Give
+                them another role in Settings &gt; Users first, then delete it.
+              </p>
+            ) : (
+              <p>Nobody has this role, so deleting it changes no one&apos;s access. The history keeps a record of it.</p>
+            )}
+          </div>
+          <ModalFooter>
+            <button type="button" onClick={() => setToDelete(null)} disabled={saving} className={secondaryButtonClass}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDelete}
+              disabled={saving || toDelete.users_count > 0}
+              className="flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white bg-red-600 border border-red-600 rounded-none transition-colors hover:bg-red-700 disabled:opacity-60"
+            >
+              {saving ? <Spinner /> : <FaTrash className="mr-2 text-xs" />}
+              {saving ? "Deleting…" : "Delete Role"}
             </button>
           </ModalFooter>
         </ModalShell>

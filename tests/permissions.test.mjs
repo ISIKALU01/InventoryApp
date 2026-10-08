@@ -145,6 +145,19 @@ test("senior accountant also sees deleted sales", () => {
   ]);
 });
 
+test("a custom role works from its permissions alone, whatever it is called", () => {
+  const supervisor = { role: "branch_supervisor", role_label: "Branch supervisor", permissions: ["sales.view", "suppliers.view"] };
+  assert.deepEqual(
+    SIDEBAR_PAGES.filter((page) => canAccessPath(supervisor, page)),
+    ["/transaction/sales-list", "/settings", "/folio/supply-management"]
+  );
+  assert.equal(homePathFor(supervisor), "/transaction/sales-list");
+
+  // A role literally named "admin" in the label gets nothing extra
+  const fakeAdmin = { role: "admin_helper", role_label: "Admin", permissions: [] };
+  assert.equal(canAccessPath(fakeAdmin, "/authorizeUser"), false);
+});
+
 test("only admins reach user management", () => {
   for (const role of Object.keys(ROLE_PERMISSIONS)) {
     assert.equal(canAccessPath(userWith(role), "/authorizeUser"), role === "admin", role);
