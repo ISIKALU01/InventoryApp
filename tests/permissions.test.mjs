@@ -13,8 +13,8 @@ import {
   normalizePath,
 } from "../utils/permissions.js";
 
-// Copy of the backend matrix (PGIMS_APP app/Support/Permissions.php), as
-// GET /api/user returns it for each role. Admin holds all of them.
+// Copy of the backend defaults (PGIMS_APP app/Support/Permissions.php, DEFAULTS), as
+// GET /api/user returns them until an admin edits a role. Admin holds all of them.
 const ALL = [
   "users.manage", "dashboard.view", "reports.view", "sales.create", "sales.view", "sales.manage",
   "sales.audit", "customers.view", "customers.manage", "customers.deposit", "expenses.manage",

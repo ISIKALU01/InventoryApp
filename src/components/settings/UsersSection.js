@@ -193,7 +193,7 @@ const RoleGuide = ({ roles, permissionLabels }) => {
   const [open, setOpen] = useState(null);
 
   return (
-    <Panel title="What each role can do" description="Set by the system. Ask your developer to change what a role can do." bodyClass="">
+    <Panel title="What each role can do" description="Change these in Settings > Roles & permissions." bodyClass="">
       <ul className="divide-y divide-gray-200">
         {roles.map((role) => {
           const expanded = open === role.value;
