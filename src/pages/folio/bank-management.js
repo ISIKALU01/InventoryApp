@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import FolioNav from "../../components/FolioNav";
+import { useAuth } from "../../context/AuthContext";
 import {
   FaSearch,
   FaPlus,
@@ -482,6 +483,9 @@ const formatCurrency = (value) => {
 
 // Main Bank Management Component
 export default function BankManagement() {
+  // Junior accountants can look; only the senior accountant (and admins) change bank accounts
+  const { can } = useAuth();
+  const canManage = can("banking.manage");
   const [banks, setBanks] = useState([]);
   const [filteredBanks, setFilteredBanks] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -743,13 +747,15 @@ export default function BankManagement() {
 
             {/* Right side - Action buttons - Hidden on medium screens and below */}
             <div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
-              <button
-                onClick={() => setShowAddBankModal(true)}
-                className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
-              >
-                <FaPlus className="mr-1 text-xs" />
-                Add Bank Account
-              </button>
+              {canManage && (
+                <button
+                  onClick={() => setShowAddBankModal(true)}
+                  className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
+                >
+                  <FaPlus className="mr-1 text-xs" />
+                  Add Bank Account
+                </button>
+              )}
             </div>
           </div>
 
@@ -836,9 +842,11 @@ export default function BankManagement() {
                     <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
                       Description
                     </th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Actions
-                    </th>
+                    {canManage && (
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -865,24 +873,26 @@ export default function BankManagement() {
                       <td className="px-4 py-3 text-sm text-black">
                         {bank.description || "N/A"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEdit(bank)}
-                            className="p-1 text-blue-600 transition-colors hover:text-blue-800"
-                            title="Edit"
-                          >
-                            <FaEdit className="text-sm" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(bank.id)}
-                            className="p-1 text-red-600 transition-colors hover:text-red-800"
-                            title="Delete"
-                          >
-                            <FaTrash className="text-sm" />
-                          </button>
-                        </div>
-                      </td>
+                      {canManage && (
+                        <td className="px-4 py-3 text-sm text-black">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEdit(bank)}
+                              className="p-1 text-blue-600 transition-colors hover:text-blue-800"
+                              title="Edit"
+                            >
+                              <FaEdit className="text-sm" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(bank.id)}
+                              className="p-1 text-red-600 transition-colors hover:text-red-800"
+                              title="Delete"
+                            >
+                              <FaTrash className="text-sm" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -916,20 +926,22 @@ export default function BankManagement() {
                           {bank.description}
                         </div>
                       )}
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={() => handleEdit(bank)}
-                          className="px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded transition-colors hover:bg-blue-50"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(bank.id)}
-                          className="px-2 py-1 text-xs text-red-600 border border-red-600 rounded transition-colors hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {canManage && (
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => handleEdit(bank)}
+                            className="px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded transition-colors hover:bg-blue-50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(bank.id)}
+                            className="px-2 py-1 text-xs text-red-600 border border-red-600 rounded transition-colors hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -946,7 +958,7 @@ export default function BankManagement() {
       </div>
 
       {/* Fixed Action Buttons for Mobile - Placed at bottom of page */}
-      {isMobile && (
+      {isMobile && canManage && (
         <div className="fixed bottom-4 right-4 md:hidden">
           <button
             onClick={() => setShowAddBankModal(true)}

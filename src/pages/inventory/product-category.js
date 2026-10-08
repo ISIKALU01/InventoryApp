@@ -1,4 +1,5 @@
 import InventoryNav from "@/components/InventoryNav";
+import { useAuth } from "@/context/AuthContext";
 import { useState, useEffect } from "react";
 import {
   FaPlus,
@@ -223,6 +224,9 @@ const EditCategoryModal = ({
 
 // Main Product Categories Component
 export default function ProductCategories() {
+  // Store managers and procurement can look; inventory officers (and admins) change categories
+  const { can } = useAuth();
+  const canManage = can("products.manage");
   const [categories, setCategories] = useState([]);
   const [filteredCategories, setFilteredCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -454,14 +458,16 @@ export default function ProductCategories() {
 
             {/* Right side - Action buttons */}
             <div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
-                disabled={isLoading}
-              >
-                <FaPlus className="mr-1 text-xs" />
-                Add Category
-              </button>
+              {canManage && (
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
+                  disabled={isLoading}
+                >
+                  <FaPlus className="mr-1 text-xs" />
+                  Add Category
+                </button>
+              )}
               <button
                 onClick={loadCategories}
                 className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-gray-600 rounded hover:bg-gray-700"
@@ -513,9 +519,11 @@ export default function ProductCategories() {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
                     Product Category
                   </th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                    Actions
-                  </th>
+                  {canManage && (
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
+                      Actions
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -531,26 +539,28 @@ export default function ProductCategories() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditClick(category)}
-                          className="flex items-center px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200"
-                          disabled={isLoading}
-                        >
-                          <FaEdit className="mr-1" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(category.id)}
-                          className="flex items-center px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200"
-                          disabled={isLoading}
-                        >
-                          <FaTrash className="mr-1" />
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+                    {canManage && (
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditClick(category)}
+                            className="flex items-center px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200"
+                            disabled={isLoading}
+                          >
+                            <FaEdit className="mr-1" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCategory(category.id)}
+                            className="flex items-center px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200"
+                            disabled={isLoading}
+                          >
+                            <FaTrash className="mr-1" />
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -571,24 +581,26 @@ export default function ProductCategories() {
                     <div className="mt-1 text-sm text-gray-600">
                       {category.description}
                     </div>
-                    <div className="flex gap-2 mt-3">
-                      <button
-                        onClick={() => handleEditClick(category)}
-                        className="flex-1 px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200 flex items-center justify-center"
-                        disabled={isLoading}
-                      >
-                        <FaEdit className="mr-1" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCategory(category.id)}
-                        className="flex-1 px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200 flex items-center justify-center"
-                        disabled={isLoading}
-                      >
-                        <FaTrash className="mr-1" />
-                        Delete
-                      </button>
-                    </div>
+                    {canManage && (
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => handleEditClick(category)}
+                          className="flex-1 px-2 py-1 text-xs text-blue-600 transition-colors bg-blue-100 rounded hover:bg-blue-200 flex items-center justify-center"
+                          disabled={isLoading}
+                        >
+                          <FaEdit className="mr-1" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(category.id)}
+                          className="flex-1 px-2 py-1 text-xs text-red-600 transition-colors bg-red-100 rounded hover:bg-red-200 flex items-center justify-center"
+                          disabled={isLoading}
+                        >
+                          <FaTrash className="mr-1" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -607,14 +619,16 @@ export default function ProductCategories() {
       {isMobile && (
         <div className="fixed bottom-4 right-4 md:hidden">
           <div className="flex flex-col gap-3">
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-green-600 rounded-full shadow-lg hover:bg-green-700 hover:scale-110"
-              title="Add Category"
-              disabled={isLoading}
-            >
-              <FaPlus className="text-lg" />
-            </button>
+            {canManage && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-green-600 rounded-full shadow-lg hover:bg-green-700 hover:scale-110"
+                title="Add Category"
+                disabled={isLoading}
+              >
+                <FaPlus className="text-lg" />
+              </button>
+            )}
             <button
               onClick={loadCategories}
               className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-gray-600 rounded-full shadow-lg hover:bg-gray-700 hover:scale-110"

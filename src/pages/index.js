@@ -3,11 +3,8 @@ import { useRouter } from "next/router";
 import Image from "next/image";
 import { FaShieldAlt, FaChartBar, FaUsers, FaBox, FaEnvelope, FaLock } from "react-icons/fa";
 import BASE_URL from "../../config";
-import {
-  setLocalStorage,
-  getLocalStorage,
-  verifyToken,
-} from "../../utils/auth";
+import { useAuth } from "../context/AuthContext";
+import { homePathFor } from "../../utils/permissions";
 
 // Loading Component
 const LoadingScreen = () => {
@@ -38,26 +35,14 @@ const LoadingScreen = () => {
   );
 };
 
-// Session verification function (same as in AdminDashboard and StaffDashboard)
-const redirectBasedOnRole = (role, router) => {
-  switch (role) {
-    case "admin":
-      router.push("/dashboard");
-      break;
-    case "staff":
-      router.push("/dashboard"); // Changed from "/sales-dashboard"
-      break;
-    default:
-      console.error("Unknown role:", role);
-      router.push("/unauthorized");
-  }
-};
-
 export default function Login() {
+  const { user, status, startSession } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  // Shown in blue instead of red: the login worked, it is waiting for an admin
+  const [pendingApproval, setPendingApproval] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
   const router = useRouter();
@@ -107,114 +92,50 @@ export default function Login() {
 
 
 
-  // Check if user is already logged in (after loading screen)
+  // Already logged in: go straight to this user's start page
   useEffect(() => {
     if (!isClient || showLoadingScreen) return;
-
-    const checkExistingSession = async () => {
-      console.log("Checking existing session...");
-      const token = getLocalStorage("token");
-
-      if (!token) {
-        console.log("No token found");
-        return;
-      }
-
-      const session = await verifyToken(token);
-      console.log("Session check result:", session);
-
-      if (session?.user?.role) {
-        console.log(
-          "User already logged in, redirecting to:",
-          session.user.role
-        );
-        redirectBasedOnRole(session.user.role, router);
-      }
-    };
-
-    checkExistingSession();
-  }, [router, isClient, showLoadingScreen]);
+    if (status === "ready" && user) {
+      router.replace(homePathFor(user));
+    }
+  }, [router, isClient, showLoadingScreen, status, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+    setPendingApproval(false);
 
     try {
       const response = await fetch(`${BASE_URL}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        setPendingApproval(data.status === "pending_approval");
         setError(data.message || "Invalid email or password");
+        setIsLoading(false);
         return;
       }
 
-      // Save the token
-      if (data.token) {
-        console.log("Saving token...");
-        const saveSuccess = setLocalStorage("token", data.token);
-        const saveUser = setLocalStorage("user", JSON.stringify(data.user));
-
-        if (saveSuccess && saveUser) {
-          console.log("Token and User saved successfully");
-
-          // IMPORTANT: Wait a bit and verify token was saved
-          setTimeout(async () => {
-            const verifyToken = getLocalStorage("token");
-            if (verifyToken) {
-              console.log("Token verified in storage, redirecting...");
-
-              // Use the user data from login response directly
-              if (data.user?.role) {
-                redirectBasedOnRole(data.user.role, router);
-              } else {
-                // Fallback: fetch user data
-                await fetchUserAndRedirect(data.token, router);
-              }
-            } else {
-              setError("Token storage failed. Please try again.");
-              setIsLoading(false);
-            }
-          }, 50);
-        }
-      } else {
+      if (!data.token || !data.user) {
         setError("Authentication failed. No token received.");
         setIsLoading(false);
+        return;
       }
+
+      startSession(data.token, data.user);
+      router.replace(homePathFor(data.user));
     } catch (error) {
       console.error("Login error:", error);
       setError("Network error. Please try again.");
-      setIsLoading(false);
-    }
-  };
-
-  // Enhanced fetch user function
-  const fetchUserAndRedirect = async (token, router) => {
-    try {
-      const response = await fetch(`${BASE_URL}/user`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        redirectBasedOnRole(userData.role, router);
-      } else {
-        setError("Failed to fetch user information.");
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-      setError("Error fetching user information.");
       setIsLoading(false);
     }
   };
@@ -339,7 +260,14 @@ export default function Login() {
               onKeyPress={handleKeyPress}
             >
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
+                <div
+                  role={pendingApproval ? "status" : "alert"}
+                  className={
+                    pendingApproval
+                      ? "bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-md text-sm"
+                      : "bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm"
+                  }
+                >
                   {error}
                 </div>
               )}

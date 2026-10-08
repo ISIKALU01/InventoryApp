@@ -3,69 +3,52 @@ import { raleway } from '../../libs/fonts';
 import Layout from '../components/Layout';
 import '../styles/globals.css'
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
-import { getLocalStorage } from '../../utils/auth';
+import { useEffect } from 'react';
+import { AuthProvider } from '../context/AuthContext';
+import RouteGuard from '../components/RouteGuard';
+import { isPublicPath } from '../../utils/permissions';
+import { APPEARANCE_KEY, applyAppearance, loadAppearance } from '../../utils/appearance';
 
 export default function MyApp({ 
   Component, 
   pageProps: { session, ...pageProps } 
 }) {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
-  
+
+  // Keep appearance in step with the device ("System" theme) and other tabs
   useEffect(() => {
-    const checkAuth = () => {
-      const protectedRoutes = ['/dashboard'];
-      const currentPath = router.pathname;
+    applyAppearance(loadAppearance());
 
-      // Don't check auth for login page
-      if (currentPath === '/') {
-        setIsLoading(false);
-        return;
-      }
-
-      // Check if current route is protected
-      if (protectedRoutes.includes(currentPath)) {
-        const token = getLocalStorage('token');
-        
-        if (!token) {
-          console.log('🚫 No token found, redirecting to login');
-          router.push('/');
-          return;
-        }
-        
-        console.log('✅ Token found, allowing access to protected route');
-      }
-      
-      setIsLoading(false);
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const onSystemChange = () => {
+      if (loadAppearance().theme === 'system') applyAppearance(loadAppearance());
+    };
+    const onStorage = (e) => {
+      if (e.key === APPEARANCE_KEY) applyAppearance(loadAppearance());
     };
 
-    checkAuth();
-  }, [router.pathname, router]);
+    media?.addEventListener?.('change', onSystemChange);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      media?.removeEventListener?.('change', onSystemChange);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
-  // Show loading while checking authentication
-  if (isLoading && router.pathname !== '/') {
-    return (
-      <main className={raleway.className}>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Checking authentication...</p>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
+  // RouteGuard sends guests to login and keeps each page to the roles allowed to open it
   return (
+    <AuthProvider>
       <main className={raleway.className}>
-        {router.pathname === '/' ? (
-          <Component {...pageProps} />
-        ) : (
-          <Layout>
+        <RouteGuard>
+          {isPublicPath(router.pathname) ? (
             <Component {...pageProps} />
-          </Layout>
-        )}
-      </main> 
+          ) : (
+            <Layout>
+              <Component {...pageProps} />
+            </Layout>
+          )}
+        </RouteGuard>
+      </main>
+    </AuthProvider>
   );
 }

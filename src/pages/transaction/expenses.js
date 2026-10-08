@@ -1,199 +1,371 @@
 // pages/transaction/expenses.js
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import TransactionNav from "../../components/TransactionNav";
 import {
-  FaSearch,
-  FaFileExport,
-  FaSlidersH,
-  FaPlus,
-  FaBuilding,
-  FaTimes,
-  FaEdit,
-  FaTrash,
-  FaEye,
-  FaUser,
-} from "react-icons/fa";
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Eye,
+  Loader2,
+  Pencil,
+  Plus,
+  Receipt,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Wallet,
+  X,
+  XCircle,
+} from "lucide-react";
 
 import { expenseAPI, userAPI } from "../../../services/api";
 
+const PAGE_SIZE = 25;
+const TOAST_DURATION = { success: 3000, error: 5000 };
+
+// ---------------------------------------------------------------------------
+// Data helpers
+// ---------------------------------------------------------------------------
+
+const pad = (n) => String(n).padStart(2, "0");
+
+// Calendar day in the user's timezone (an ISO slice of "now" would use UTC)
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const nowTime = () => {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+// Expense dates come back as "YYYY-MM-DD" or a full ISO string; keep the
+// calendar day as written rather than shifting it through UTC
+const dateKeyOf = (value) => String(value || "").slice(0, 10);
+
+const dateOnly = (value) => {
+  const m = dateKeyOf(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+};
+
+const timeKeyOf = (value) => String(value || "").slice(0, 5);
+
+// Sortable "YYYY-MM-DD HH:MM" for newest-first ordering
+const sortKey = (expense) => `${dateKeyOf(expense.date)} ${timeKeyOf(expense.time) || "00:00"}`;
+
+const formatDisplayDate = (value) => {
+  const date = dateOnly(value);
+  return date
+    ? date.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })
+    : value || "N/A";
+};
+
+// "HH:MM" or "HH:MM:SS" to 12-hour time
+const formatDisplayTime = (value) => {
+  const [h, m] = timeKeyOf(value).split(":");
+  if (h === undefined || m === undefined || h === "") return value || "";
+  const hours = Number(h);
+  return `${hours % 12 || 12}:${m} ${hours >= 12 ? "PM" : "AM"}`;
+};
+
+const amountOf = (expense) => parseFloat(expense.amount) || 0;
+
+const formatCurrency = (amount) =>
+  `₦${Number(amount || 0).toLocaleString("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+// "jane.doe@x.com" -> "Jane.doe"
+const usernameFromEmail = (email) => {
+  const name = (email || "").split("@")[0];
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : "";
+};
+
+const toList = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  throw new Error("Unexpected response format");
+};
+
+// ---------------------------------------------------------------------------
+// Shared pieces (same look as the sales list and sales point)
+// ---------------------------------------------------------------------------
+
+// Slim, flat filter field: square corners, no border or focus ring
+const filterFieldClass =
+  "block w-full h-8 px-2.5 text-xs text-gray-800 bg-gray-100 border-0 rounded-none outline-none shadow-none appearance-none transition-colors placeholder:text-gray-400 focus:bg-gray-50 focus:outline-none focus:ring-0";
+
+// Form field in modals: same flat look at a comfortable size
+const fieldClass =
+  "block w-full h-10 px-3 text-sm text-gray-800 bg-gray-100 border-0 rounded-none outline-none shadow-none transition-colors placeholder:text-gray-400 focus:bg-gray-50 focus:outline-none focus:ring-0 read-only:text-gray-500 read-only:cursor-not-allowed";
+
+const labelClass = "block mb-1.5 text-xs font-semibold tracking-wide text-gray-600 uppercase";
+
+const statLabelClass = "text-[10px] font-semibold tracking-wide text-gray-500 uppercase";
+
+const primaryButtonClass =
+  "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-none transition-colors hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed";
+
+const dangerButtonClass =
+  "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-red-600 rounded-none transition-colors hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed";
+
+const secondaryButtonClass =
+  "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-none transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed";
+
+const iconButtonClass =
+  "flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100";
+
+// Borderless dropdown with its own chevron in place of the browser arrow
+const Select = ({ className = "", children, ...props }) => (
+  <div className={`relative ${className}`}>
+    <select {...props} className={`${filterFieldClass} pr-7 cursor-pointer`}>
+      {children}
+    </select>
+    <ChevronDown
+      size={13}
+      className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-2.5 top-1/2"
+    />
+  </div>
+);
+
+const EmptyState = ({ icon: Icon, title, hint, tone = "gray", action }) => (
+  <div className="flex flex-col items-center justify-center px-5 py-14 text-center">
+    <div
+      className={`flex items-center justify-center w-12 h-12 mb-3 ${
+        tone === "red" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-400"
+      }`}
+    >
+      <Icon size={22} />
+    </div>
+    <p className="text-sm font-medium text-gray-700">{title}</p>
+    {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
+    {action && <div className="mt-4">{action}</div>}
+  </div>
+);
+
+const ErrorBox = ({ title, message }) => (
+  <div
+    role="alert"
+    className="flex items-start gap-3 px-4 py-3 text-sm text-red-800 border border-red-200 bg-red-50"
+  >
+    <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-600" />
+    <div>
+      <p className="font-semibold">{title}</p>
+      <p className="mt-0.5 text-red-700">{message}</p>
+    </div>
+  </div>
+);
+
+// Toast for quick confirmations and failures; the bar shows time left
+const Toast = ({ toast, onClose }) => {
+  const isError = toast.type === "error";
+  const Icon = isError ? XCircle : CheckCircle2;
+
+  return (
+    <div
+      role={isError ? "alert" : "status"}
+      className="fixed z-[60] top-4 right-4 left-4 sm:left-auto sm:w-96 toast-in"
+    >
+      <div
+        className={`relative overflow-hidden bg-white border border-gray-200 border-l-4 shadow-xl ${
+          isError ? "border-l-red-600" : "border-l-green-600"
+        }`}
+      >
+        <div className="flex items-start gap-3 px-4 py-3.5">
+          <Icon
+            size={20}
+            className={`mt-0.5 shrink-0 ${isError ? "text-red-600" : "text-green-600"}`}
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900">
+              {toast.title || (isError ? "Something went wrong" : "Done")}
+            </p>
+            <p className="mt-0.5 text-sm text-gray-600 break-words">{toast.message}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Dismiss"
+            className="flex items-center justify-center w-7 h-7 -mr-1 text-gray-400 transition-colors shrink-0 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div
+          className={`h-1 toast-progress ${isError ? "bg-red-600/30" : "bg-green-600/30"}`}
+          style={{ animationDuration: `${TOAST_DURATION[toast.type]}ms` }}
+        />
+      </div>
+    </div>
+  );
+};
+
+// Floating panel over a lightly blurred page
+const ModalShell = ({
+  title,
+  subtitle,
+  icon: Icon,
+  iconClass = "bg-blue-600",
+  onClose,
+  busy = false,
+  maxWidth = "max-w-md",
+  children,
+}) => (
+  <div
+    className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 overflow-y-auto bg-gray-900/20 backdrop-blur-[2px]"
+    onClick={(e) => {
+      if (e.target === e.currentTarget && !busy) onClose();
+    }}
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      className={`relative w-full ${maxWidth} bg-white border border-gray-300 rounded-none shadow-2xl modal-in`}
+    >
+      <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center min-w-0 gap-3">
+          <div className={`flex items-center justify-center w-10 h-10 text-white shrink-0 ${iconClass}`}>
+            <Icon size={20} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold leading-tight text-gray-900 truncate">{title}</h2>
+            {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          aria-label="Close"
+          className="flex items-center justify-center w-8 h-8 text-gray-400 transition-colors shrink-0 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+        >
+          <X size={16} />
+        </button>
+      </div>
+      {children}
+    </div>
+  </div>
+);
+
+const ModalFooter = ({ children, className = "justify-end" }) => (
+  <div className={`flex flex-wrap gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 ${className}`}>
+    {children}
+  </div>
+);
+
+const SummaryRow = ({ label, value, strong = false }) => (
+  <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-white">
+    <span className={strong ? "text-sm font-semibold text-gray-900" : "text-sm text-gray-600"}>
+      {label}
+    </span>
+    <span
+      className={`text-right ${
+        strong ? "text-base font-bold text-gray-900" : "text-sm font-medium text-gray-900"
+      }`}
+    >
+      {value}
+    </span>
+  </div>
+);
+
+const StatTile = ({ icon: Icon, iconClass, label, value }) => (
+  <div className="flex items-center gap-3 px-4 py-4 bg-white">
+    <div className={`flex items-center justify-center w-10 h-10 shrink-0 ${iconClass}`}>
+      <Icon size={18} />
+    </div>
+    <div className="min-w-0">
+      <div className={statLabelClass}>{label}</div>
+      <div className="text-lg font-bold leading-tight text-gray-900 truncate">{value}</div>
+    </div>
+  </div>
+);
+
+const CategoryBadge = ({ category }) =>
+  category ? (
+    <span className="inline-block px-2 py-0.5 text-[11px] font-medium text-blue-800 bg-blue-50 whitespace-nowrap">
+      {category}
+    </span>
+  ) : (
+    <span className="text-gray-400">—</span>
+  );
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+const emptyForm = (postedBy = "") => ({
+  description: "",
+  category: "",
+  amount: "",
+  date: todayKey(),
+  time: nowTime(),
+  posted_by: postedBy,
+  location: "",
+});
+
 export default function Expenses() {
   const [transactions, setTransactions] = useState([]);
-  const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedUser, setSelectedUser] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedExpense, setSelectedExpense] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [page, setPage] = useState(1);
+  const [postedBy, setPostedBy] = useState("");
+
+  // Add / edit form
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [expenseFormData, setExpenseFormData] = useState(emptyForm());
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  // Details and delete
+  const [viewExpense, setViewExpense] = useState(null);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
-  // Expense form data
-  const [expenseFormData, setExpenseFormData] = useState({
-    description: "",
-    category: "",
-    amount: "",
-    date: new Date().toISOString().split('T')[0],
-    time: new Date().toTimeString().slice(0, 5),
-    posted_by: "",
-    location: ""
-  });
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
 
-  // Calculate total expenses
-  const totalExpenses = transactions.reduce((sum, transaction) => {
-    return sum + (parseFloat(transaction.amount) || 0);
-  }, 0);
-
-  // Format date to a more readable format
-  const formatDisplayDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return dateString; // Return original if invalid date
-      
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
-    } catch (error) {
-      return dateString; // Return original if formatting fails
-    }
+  const notify = (type, message, title) => {
+    clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), type, message, title });
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_DURATION[type]);
   };
 
-  // Format time to 12-hour format with AM/PM
-  const formatDisplayTime = (timeString) => {
-    if (!timeString) return 'N/A';
-    
-    try {
-      // Handle both "HH:MM" and "HH:MM:SS" formats
-      const timeParts = timeString.split(':');
-      if (timeParts.length < 2) return timeString;
-      
-      let hours = parseInt(timeParts[0]);
-      const minutes = timeParts[1];
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      
-      hours = hours % 12;
-      hours = hours ? hours : 12; // Convert 0 to 12
-      
-      return `${hours}:${minutes} ${ampm}`;
-    } catch (error) {
-      return timeString; // Return original if formatting fails
-    }
+  const closeToast = () => {
+    clearTimeout(toastTimer.current);
+    setToast(null);
   };
 
-  // Format date and time together for a clean display
-  const formatDateTime = (dateString, timeString) => {
-    const formattedDate = formatDisplayDate(dateString);
-    const formattedTime = formatDisplayTime(timeString);
-    
-    return (
-      <div className="flex flex-col">
-        <span className="text-sm font-medium text-gray-900">{formattedDate}</span>
-        <span className="text-xs text-gray-500">{formattedTime}</span>
-      </div>
-    );
-  };
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  // Format date for mobile view (more compact)
-  const formatMobileDateTime = (dateString, timeString) => {
-    const formattedDate = formatDisplayDate(dateString);
-    const formattedTime = formatDisplayTime(timeString);
-    
-    return `${formattedDate} • ${formattedTime}`;
-  };
-
-  // Extract username from email (everything before @)
-  const extractUsernameFromEmail = (email) => {
-    if (!email) return '';
-    return email.split('@')[0];
-  };
-
-  // Format username to be more readable (capitalize first letter)
-  const formatUsername = (username) => {
-    if (!username) return '';
-    return username.charAt(0).toUpperCase() + username.slice(1);
-  };
-
-  // Fetch current user data
-  const fetchCurrentUser = async () => {
+  // "Posted by" is always the signed-in user, never someone else
+  const fetchPostedBy = async () => {
     try {
       const userData = await userAPI.getCurrentUser();
-      setCurrentUser(userData);
-
-      // Auto-fill the posted_by field with formatted username
-      const username = extractUsernameFromEmail(userData.email);
-      const formattedUsername = formatUsername(username);
-      setExpenseFormData(prev => ({
-        ...prev,
-        posted_by: formattedUsername
-      }));
+      setPostedBy(usernameFromEmail(userData?.email));
     } catch (err) {
       console.error("Error fetching current user:", err);
-      // If we can't get current user, try to get from users list
-      fetchUsers();
     }
   };
-
-  // Fetch all users
-  const fetchUsers = async () => {
-    try {
-      const usersData = await userAPI.getAllUsers();
-      setUsers(usersData);
-
-      // If we don't have current user yet, fall back to the first user
-      if (!currentUser && usersData.length > 0) {
-        const firstUser = usersData[0];
-        const username = extractUsernameFromEmail(firstUser.email);
-        const formattedUsername = formatUsername(username);
-        setExpenseFormData(prev => ({
-          ...prev,
-          posted_by: formattedUsername
-        }));
-      }
-    } catch (err) {
-      console.error("Error fetching users:", err);
-    }
-  };
-
-  // Detect mobile screen size
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkIsMobile();
-    window.addEventListener("resize", checkIsMobile);
-    return () => window.removeEventListener("resize", checkIsMobile);
-  }, []);
 
   // Fetch expenses from API
   const fetchExpenses = async () => {
     try {
       setLoading(true);
       setError("");
-      
-      const data = await expenseAPI.getAllExpenses();
-
-      // Handle both array and object responses
-      if (Array.isArray(data)) {
-        setTransactions(data);
-        setFilteredTransactions(data);
-      } else if (data.data && Array.isArray(data.data)) {
-        // Handle Laravel paginated response
-        setTransactions(data.data);
-        setFilteredTransactions(data.data);
-      } else {
-        throw new Error("Unexpected response format");
-      }
+      setTransactions(toList(await expenseAPI.getAllExpenses()));
     } catch (err) {
       setError(err.message);
       console.error("Error fetching expenses:", err);
@@ -205,94 +377,51 @@ export default function Expenses() {
   // Load expenses and user data on component mount
   useEffect(() => {
     fetchExpenses();
-    fetchCurrentUser();
+    fetchPostedBy();
   }, []);
 
-  // Extract unique locations and posted_by users from transactions
-  const locations = [...new Set(transactions.map(t => t.location).filter(Boolean))];
-  const postedByUsers = [...new Set(transactions.map(t => t.posted_by).filter(Boolean))];
-  const categories = [...new Set(transactions.map(t => t.category).filter(Boolean))];
+  // Newest first by date then time; ties fall back to the higher id
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    const diff = sortKey(b).localeCompare(sortKey(a));
+    return diff !== 0 ? diff : (Number(b.id) || 0) - (Number(a.id) || 0);
+  });
+
+  const locations = [...new Set(transactions.map((t) => t.location).filter(Boolean))].sort();
+  const postedByUsers = [...new Set(transactions.map((t) => t.posted_by).filter(Boolean))].sort();
+  const categories = [...new Set(transactions.map((t) => t.category).filter(Boolean))].sort();
 
   // Filter transactions based on filters
+  const term = searchTerm.trim().toLowerCase();
+  const filteredTransactions = sortedTransactions.filter((t) => {
+    const matchesSearch =
+      term === "" ||
+      [t.description, t.category, t.posted_by, t.location, t.amount].some(
+        (field) => field !== undefined && field !== null && field.toString().toLowerCase().includes(term)
+      );
+    const matchesDate = selectedDate === "" || dateKeyOf(t.date) === selectedDate;
+    const matchesLocation = selectedLocation === "" || t.location === selectedLocation;
+    const matchesUser = selectedUser === "" || t.posted_by === selectedUser;
+    return matchesSearch && matchesDate && matchesLocation && matchesUser;
+  });
+
+  const hasFilters = Boolean(searchTerm || selectedDate || selectedLocation || selectedUser);
+
+  // Back to the first page whenever the result set changes
   useEffect(() => {
-    let filtered = transactions;
+    setPage(1);
+  }, [searchTerm, selectedDate, selectedLocation, selectedUser]);
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (transaction) =>
-          transaction.description
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          transaction.category
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          transaction.posted_by
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          transaction.amount?.toString().includes(searchTerm)
-      );
-    }
+  const pageCount = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filteredTransactions.slice(pageStart, pageStart + PAGE_SIZE);
 
-    // Apply date filter
-    if (selectedDate) {
-      filtered = filtered.filter(
-        (transaction) => transaction.date === selectedDate
-      );
-    }
-
-    // Apply location filter
-    if (selectedLocation) {
-      filtered = filtered.filter(
-        (transaction) => transaction.location === selectedLocation
-      );
-    }
-
-    // Apply user filter
-    if (selectedUser) {
-      filtered = filtered.filter(
-        (transaction) => transaction.posted_by === selectedUser
-      );
-    }
-
-    setFilteredTransactions(filtered);
-  }, [transactions, searchTerm, selectedDate, selectedLocation, selectedUser]);
-
-  const exportToCSV = () => {
-    const headers = [
-      "Description",
-      "Category",
-      "Amount",
-      "Date",
-      "Time",
-      "Posted By",
-      "Location"
-    ];
-    const csvData = filteredTransactions.map((transaction) => [
-      transaction.description,
-      transaction.category,
-      `₦${(parseFloat(transaction.amount) || 0).toFixed(2)}`, // Changed to ₦
-      formatDisplayDate(transaction.date),
-      formatDisplayTime(transaction.time),
-      transaction.posted_by,
-      transaction.location
-    ]);
-
-    const csvContent = [
-      headers.join(","),
-      ...csvData.map((row) => row.join(",")),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `expenses-report-${
-      new Date().toISOString().split("T")[0]
-    }.csv`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-  };
+  // Totals
+  const totalExpenses = transactions.reduce((sum, t) => sum + amountOf(t), 0);
+  const today = todayKey();
+  const todayExpenses = transactions.filter((t) => dateKeyOf(t.date) === today);
+  const todayTotal = todayExpenses.reduce((sum, t) => sum + amountOf(t), 0);
+  const filteredTotal = filteredTransactions.reduce((sum, t) => sum + amountOf(t), 0);
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -301,730 +430,771 @@ export default function Expenses() {
     setSelectedUser("");
   };
 
-  const toggleFilters = () => {
-    setShowFilters(!showFilters);
+  const exportToCSV = () => {
+    if (filteredTransactions.length === 0) {
+      notify("error", "There are no expenses to export.", "Nothing to export");
+      return;
+    }
+
+    const headers = ["Description", "Category", "Amount", "Date", "Time", "Posted By", "Location"];
+    const csvData = filteredTransactions.map((t) => [
+      t.description,
+      t.category,
+      amountOf(t).toFixed(2),
+      dateKeyOf(t.date),
+      timeKeyOf(t.time),
+      t.posted_by,
+      t.location,
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map((row) => row.map((field) => `"${String(field ?? "").replace(/"/g, '""')}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `expenses-report-${todayKey()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    notify(
+      "success",
+      `${filteredTransactions.length} expense${filteredTransactions.length === 1 ? "" : "s"} exported.`,
+      "Export ready"
+    );
   };
 
+  // ---- Add / edit -------------------------------------------------------
+
   const handleMakeExpense = () => {
-    setSelectedExpense(null);
-    setExpenseFormData({
-      description: "",
-      category: "",
-      amount: "",
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toTimeString().slice(0, 5),
-      posted_by: currentUser ? formatUsername(extractUsernameFromEmail(currentUser.email)) : "",
-      location: ""
-    });
+    setEditingExpense(null);
+    setExpenseFormData(emptyForm(postedBy));
+    setFormError("");
     setShowExpenseForm(true);
   };
 
   const handleEditExpense = (expense) => {
-    setSelectedExpense(expense);
+    setViewExpense(null);
+    setEditingExpense(expense);
     setExpenseFormData({
-      description: expense.description,
-      category: expense.category,
-      amount: expense.amount,
-      date: expense.date,
-      time: expense.time,
-      posted_by: expense.posted_by,
-      location: expense.location
+      description: expense.description || "",
+      category: expense.category || "",
+      amount: expense.amount ?? "",
+      date: dateKeyOf(expense.date),
+      time: timeKeyOf(expense.time),
+      posted_by: expense.posted_by || postedBy,
+      location: expense.location || "",
     });
+    setFormError("");
     setShowExpenseForm(true);
-  };
-
-  const handleViewExpense = (expense) => {
-    setSelectedExpense(expense);
-    setExpenseFormData({
-      description: expense.description,
-      category: expense.category,
-      amount: expense.amount,
-      date: expense.date,
-      time: expense.time,
-      posted_by: expense.posted_by,
-      location: expense.location
-    });
-    setShowExpenseForm(true);
-  };
-
-  const handleDeleteExpense = (expense) => {
-    setExpenseToDelete(expense);
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = async () => {
-    try {
-      setError("");
-      await expenseAPI.deleteExpense(expenseToDelete.id);
-
-      // Refresh the expenses list
-      await fetchExpenses();
-      setShowDeleteConfirm(false);
-      setExpenseToDelete(null);
-    } catch (err) {
-      setError(err.message);
-      console.error("Error deleting expense:", err);
-    }
   };
 
   const handleCloseExpenseForm = () => {
+    if (saving) return;
     setShowExpenseForm(false);
-    setSelectedExpense(null);
-    setExpenseFormData({
-      description: "",
-      category: "",
-      amount: "",
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toTimeString().slice(0, 5),
-      posted_by: currentUser ? formatUsername(extractUsernameFromEmail(currentUser.email)) : "",
-      location: ""
-    });
+    setEditingExpense(null);
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setExpenseFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormError("");
+    setExpenseFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmitExpense = async (e) => {
     e.preventDefault();
-    
-    try {
-      setError("");
-      const expenseData = {
-        ...expenseFormData,
-        amount: parseFloat(expenseFormData.amount)
-      };
 
-      if (selectedExpense) {
-        await expenseAPI.updateExpense(selectedExpense.id, expenseData);
+    const amount = parseFloat(expenseFormData.amount);
+    if (!(amount > 0)) {
+      setFormError("Enter an amount greater than zero.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setFormError("");
+      const expenseData = { ...expenseFormData, amount };
+
+      if (editingExpense) {
+        await expenseAPI.updateExpense(editingExpense.id, expenseData);
       } else {
         await expenseAPI.createExpense(expenseData);
       }
 
-      // Refresh the expenses list
       await fetchExpenses();
-      
-      handleCloseExpenseForm();
+      setShowExpenseForm(false);
+      setEditingExpense(null);
+      notify(
+        "success",
+        `${expenseData.description} · ${formatCurrency(amount)}`,
+        editingExpense ? "Expense updated" : "Expense posted"
+      );
     } catch (err) {
-      setError(err.message);
-      console.error(`Error ${selectedExpense ? 'updating' : 'creating'} expense:`, err);
+      console.error(`Error ${editingExpense ? "updating" : "creating"} expense:`, err);
+      setFormError(err.message || "Please try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
+  // ---- Delete -----------------------------------------------------------
+
+  const handleDeleteExpense = (expense) => {
+    setDeleteError("");
+    setExpenseToDelete(expense);
+  };
+
+  const closeDelete = () => {
+    if (!deleting) setExpenseToDelete(null);
+  };
+
+  const confirmDelete = async () => {
+    const expense = expenseToDelete;
+    try {
+      setDeleting(true);
+      setDeleteError("");
+      await expenseAPI.deleteExpense(expense.id);
+      setTransactions((prev) => prev.filter((t) => t.id !== expense.id));
+      setExpenseToDelete(null);
+      if (viewExpense?.id === expense.id) setViewExpense(null);
+      notify("success", `${expense.description || "The expense"} was deleted.`, "Expense deleted");
+    } catch (err) {
+      console.error("Error deleting expense:", err);
+      setDeleteError(err.message || "Could not delete this expense. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Escape closes the top-most dialog
+  useEffect(() => {
+    if (!showExpenseForm && !viewExpense && !expenseToDelete) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (expenseToDelete) closeDelete();
+      else if (showExpenseForm) handleCloseExpenseForm();
+      else setViewExpense(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  const filterFields = (
+    <>
+      <div>
+        <label htmlFor="filter-date" className={`${labelClass} md:sr-only`}>Date</label>
+        <input
+          id="filter-date"
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className={filterFieldClass}
+        />
+      </div>
+      <div>
+        <label htmlFor="filter-location" className={`${labelClass} md:sr-only`}>Location</label>
+        <Select
+          id="filter-location"
+          value={selectedLocation}
+          onChange={(e) => setSelectedLocation(e.target.value)}
+        >
+          <option value="">All Locations</option>
+          {locations.map((location) => (
+            <option key={location} value={location}>{location}</option>
+          ))}
+        </Select>
+      </div>
+      <div>
+        <label htmlFor="filter-user" className={`${labelClass} md:sr-only`}>Posted By</label>
+        <Select id="filter-user" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
+          <option value="">All Users</option>
+          {postedByUsers.map((user) => (
+            <option key={user} value={user}>{user}</option>
+          ))}
+        </Select>
+      </div>
+    </>
+  );
+
   return (
-    <div className="max-w-6xl mx-auto pb-16 md:pb-0">
-      <h1 className="text-xl font-normal font-raleway text-gray-800 mb-6 hidden md:block">
-        Expenses
-      </h1>
+    <div className="pt-0 mt-0 font-raleway">
+      {toast && <Toast key={toast.id} toast={toast} onClose={closeToast} />}
+
+      {/* Expense Details Modal */}
+      {viewExpense && (
+        <ModalShell
+          title="Expense Details"
+          subtitle={`${formatDisplayDate(viewExpense.date)} · ${formatDisplayTime(viewExpense.time)}`}
+          icon={Receipt}
+          onClose={() => setViewExpense(null)}
+        >
+          <div className="px-6 py-5 space-y-4">
+            <div className="px-4 py-5 text-center border border-gray-200 bg-gray-50">
+              <p className={statLabelClass}>Amount</p>
+              <p className="mt-1 text-3xl font-bold text-gray-900">{formatCurrency(amountOf(viewExpense))}</p>
+            </div>
+            <div className="grid gap-px bg-gray-200 border border-gray-200">
+              <SummaryRow label="Description" value={viewExpense.description || "—"} />
+              <SummaryRow label="Category" value={<CategoryBadge category={viewExpense.category} />} />
+              <SummaryRow label="Location" value={viewExpense.location || "—"} />
+              <SummaryRow label="Posted By" value={viewExpense.posted_by || "—"} />
+            </div>
+          </div>
+          <ModalFooter className="justify-between">
+            <button
+              type="button"
+              onClick={() => handleDeleteExpense(viewExpense)}
+              className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setViewExpense(null)} className={secondaryButtonClass}>
+                Close
+              </button>
+              <button type="button" onClick={() => handleEditExpense(viewExpense)} className={primaryButtonClass}>
+                <Pencil size={16} />
+                Edit
+              </button>
+            </div>
+          </ModalFooter>
+        </ModalShell>
+      )}
+
+      {/* Expense Form Modal */}
+      {showExpenseForm && (
+        <ModalShell
+          title={editingExpense ? "Edit Expense" : "Post Expense"}
+          subtitle={editingExpense ? "Update the details of this expense" : "Record money spent from the business"}
+          icon={editingExpense ? Pencil : Plus}
+          onClose={handleCloseExpenseForm}
+          busy={saving}
+          maxWidth="max-w-lg"
+        >
+          <form onSubmit={handleSubmitExpense}>
+            <div className="px-6 py-5 space-y-4">
+              {formError && (
+                <ErrorBox
+                  title={editingExpense ? "Expense not updated" : "Expense not posted"}
+                  message={formError}
+                />
+              )}
+
+              <div>
+                <label htmlFor="expense-description" className={labelClass}>Description</label>
+                <input
+                  id="expense-description"
+                  type="text"
+                  name="description"
+                  value={expenseFormData.description}
+                  onChange={handleInputChange}
+                  className={fieldClass}
+                  required
+                  autoFocus
+                  placeholder="What was the money spent on?"
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="expense-category" className={labelClass}>Category</label>
+                  <input
+                    id="expense-category"
+                    type="text"
+                    name="category"
+                    list="expense-categories"
+                    value={expenseFormData.category}
+                    onChange={handleInputChange}
+                    className={fieldClass}
+                    required
+                    placeholder="e.g. Transport"
+                  />
+                  <datalist id="expense-categories">
+                    {categories.map((category) => (
+                      <option key={category} value={category} />
+                    ))}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label htmlFor="expense-amount" className={labelClass}>Amount</label>
+                  <div className="relative">
+                    <span className="absolute text-sm text-gray-500 -translate-y-1/2 pointer-events-none left-3 top-1/2">
+                      ₦
+                    </span>
+                    <input
+                      id="expense-amount"
+                      type="number"
+                      name="amount"
+                      value={expenseFormData.amount}
+                      onChange={handleInputChange}
+                      className={`${fieldClass} pl-7`}
+                      required
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="expense-date" className={labelClass}>Date</label>
+                  <input
+                    id="expense-date"
+                    type="date"
+                    name="date"
+                    value={expenseFormData.date}
+                    onChange={handleInputChange}
+                    className={fieldClass}
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="expense-time" className={labelClass}>Time</label>
+                  <input
+                    id="expense-time"
+                    type="time"
+                    name="time"
+                    value={expenseFormData.time}
+                    onChange={handleInputChange}
+                    className={fieldClass}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="expense-location" className={labelClass}>Location</label>
+                <input
+                  id="expense-location"
+                  type="text"
+                  name="location"
+                  list="expense-locations"
+                  value={expenseFormData.location}
+                  onChange={handleInputChange}
+                  className={fieldClass}
+                  required
+                  placeholder="Where was it spent?"
+                />
+                <datalist id="expense-locations">
+                  {locations.map((location) => (
+                    <option key={location} value={location} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div>
+                <label htmlFor="expense-posted-by" className={labelClass}>Posted By</label>
+                <input
+                  id="expense-posted-by"
+                  type="text"
+                  name="posted_by"
+                  value={expenseFormData.posted_by}
+                  className={fieldClass}
+                  required
+                  readOnly
+                  placeholder="Auto-filled from your account"
+                />
+                <p className="mt-1.5 text-xs text-gray-500">Filled in from your account.</p>
+              </div>
+            </div>
+
+            <ModalFooter>
+              <button
+                type="button"
+                onClick={handleCloseExpenseForm}
+                disabled={saving}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={saving} className={primaryButtonClass}>
+                {saving && <Loader2 size={16} className="animate-spin" />}
+                {saving ? "Saving…" : editingExpense ? "Update Expense" : "Post Expense"}
+              </button>
+            </ModalFooter>
+          </form>
+        </ModalShell>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {expenseToDelete && (
+        <ModalShell
+          title="Delete Expense"
+          subtitle="This can't be undone"
+          icon={Trash2}
+          iconClass="bg-red-600"
+          onClose={closeDelete}
+          busy={deleting}
+        >
+          <div className="px-6 py-5 space-y-4">
+            {deleteError && <ErrorBox title="Not deleted" message={deleteError} />}
+            <p className="text-sm text-gray-600">
+              You&apos;re about to permanently delete this expense from the records.
+            </p>
+            <div className="grid gap-px bg-gray-200 border border-gray-200">
+              <SummaryRow label="Description" value={expenseToDelete.description || "—"} />
+              <SummaryRow label="Date" value={formatDisplayDate(expenseToDelete.date)} />
+              <SummaryRow label="Amount" value={formatCurrency(amountOf(expenseToDelete))} strong />
+            </div>
+          </div>
+          <ModalFooter>
+            <button type="button" onClick={closeDelete} disabled={deleting} className={secondaryButtonClass}>
+              Cancel
+            </button>
+            <button type="button" onClick={confirmDelete} disabled={deleting} className={dangerButtonClass}>
+              {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              {deleting ? "Deleting…" : "Delete Expense"}
+            </button>
+          </ModalFooter>
+        </ModalShell>
+      )}
+
+      <h1 className="hidden mb-2 text-xl font-normal text-gray-800 md:block">Expenses</h1>
       <TransactionNav />
 
-      <div className="mt-4 space-y-4 px-2 md:px-0">
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-            <p className="text-sm">{error}</p>
-            {error.includes("authentication") && (
-              <button
-                onClick={() => window.location.href = '/login'}
-                className="mt-2 px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-              >
-                Go to Login
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Summary Cards */}
-        <div className="">
-          <div className="bg-white rounded shadow p-3">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded mr-2">
-                <FaBuilding className="text-blue-600 text-sm" />
-              </div>
-              <div>
-                <h3 className="text-xs font-medium text-gray-600">
-                  Total Expenses
-                </h3>
-                <p className="text-lg font-bold text-gray-800">
-                  ₦{totalExpenses.toFixed(2)} {/* Changed to ₦ */}
-                </p>
-              </div>
-            </div>
-          </div>
+      <div className="mt-5 space-y-5">
+        {/* Summary Tiles */}
+        <div className="grid grid-cols-1 gap-px bg-gray-200 border border-gray-200 sm:grid-cols-3">
+          <StatTile
+            icon={Wallet}
+            iconClass="bg-red-50 text-red-700"
+            label="Total Expenses"
+            value={loading ? "…" : formatCurrency(totalExpenses)}
+          />
+          <StatTile
+            icon={CalendarDays}
+            iconClass="bg-amber-50 text-amber-700"
+            label="Spent Today"
+            value={loading ? "…" : formatCurrency(todayTotal)}
+          />
+          <StatTile
+            icon={Receipt}
+            iconClass="bg-blue-50 text-blue-700"
+            label="Expenses Today"
+            value={loading ? "…" : todayExpenses.length}
+          />
         </div>
 
-        {/* Filters and Export */}
-        <div className="bg-white rounded shadow p-3">
-          <div className="flex flex-col md:flex-row items-stretch gap-3 w-full">
-            {/* Left side - Search and filters */}
-            <div className="flex flex-col md:flex-row gap-3 flex-grow">
-              {/* Search bar and filter button for mobile */}
-              {isMobile ? (
-                <div className="flex gap-2 w-full">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      placeholder="Search expenses..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-2 pr-7 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                    />
-                    <FaSearch className="absolute right-2 top-1.5 text-gray-400 text-xs" />
-                  </div>
-
-                  <button
-                    onClick={toggleFilters}
-                    className={`px-3 py-1.5 rounded transition-colors flex items-center text-xs ${
-                      showFilters
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
-                  >
-                    <FaSlidersH className="text-xs" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* Search bar for desktop */}
-                  <div className="w-full md:w-48 relative">
-                    <input
-                      type="text"
-                      placeholder="Search expenses..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-2 pr-7 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                    />
-                    <FaSearch className="absolute right-2 top-1.5 text-gray-400 text-xs" />
-                  </div>
-
-                  {/* Desktop filters */}
-                  <div className="flex gap-3">
-                    {/* Date filter */}
-                    <div className="w-auto">
-                      <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                      />
-                    </div>
-
-                    {/* Location filter */}
-                    <div className="w-auto">
-                      <select
-                        value={selectedLocation}
-                        onChange={(e) => setSelectedLocation(e.target.value)}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                      >
-                        <option value="">All Locations</option>
-                        {locations.map((location) => (
-                          <option key={location} value={location}>
-                            {location}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* User filter */}
-                    <div className="w-auto">
-                      <select
-                        value={selectedUser}
-                        onChange={(e) => setSelectedUser(e.target.value)}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                      >
-                        <option value="">All Users</option>
-                        {postedByUsers.map((user) => (
-                          <option key={user} value={user}>
-                            {user}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </>
-              )}
+        {/* Expenses Log */}
+        <section className="bg-white border border-gray-200">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-200">
+            <div className="flex items-baseline min-w-0 gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Expenses</h2>
+              <span className="text-xs text-gray-500 truncate">
+                {loading
+                  ? "Loading…"
+                  : `${filteredTransactions.length} ${hasFilters ? "matching" : "total"} · ${formatCurrency(filteredTotal)} · newest first`}
+              </span>
             </div>
-
-            {/* Right side - Action buttons (hidden on mobile) */}
-            <div className="hidden md:flex gap-2 w-full md:w-auto justify-start md:justify-end">
+            <div className="flex gap-2">
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                >
+                  <X size={14} />
+                  Clear filters
+                </button>
+              )}
               <button
+                type="button"
                 onClick={exportToCSV}
-                className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center text-xs"
+                disabled={loading}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-green-600 hover:bg-green-700 disabled:opacity-50"
               >
-                <FaFileExport className="mr-1 text-xs" />
+                <Download size={14} />
                 Export
               </button>
               <button
+                type="button"
                 onClick={handleMakeExpense}
-                className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center text-xs"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700"
               >
-                <FaPlus className="mr-1 text-xs" />
+                <Plus size={14} />
                 Post Expense
               </button>
             </div>
           </div>
 
-          {/* Filter dropdown for mobile */}
-          {isMobile && showFilters && (
-            <div className="mt-3 grid grid-cols-1 gap-2 p-2 bg-gray-50 rounded">
-              {/* Date filter */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Date
-                </label>
+          {/* Filters */}
+          <div className="px-5 py-3 border-b border-gray-200">
+            <div className="flex gap-2 md:grid md:grid-cols-[minmax(0,1fr)_9rem_11rem_11rem]">
+              <div className="relative flex-1 min-w-0">
+                <Search
+                  size={13}
+                  className="absolute text-gray-400 -translate-y-1/2 pointer-events-none left-2.5 top-1/2"
+                />
                 <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
+                  type="search"
+                  placeholder="Search by description, category, location or amount"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={`${filterFieldClass} pl-8`}
                 />
               </div>
-
-              {/* Location filter */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Location
-                </label>
-                <select
-                  value={selectedLocation}
-                  onChange={(e) => setSelectedLocation(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                >
-                  <option value="">All Locations</option>
-                  {locations.map((location) => (
-                    <option key={location} value={location}>
-                      {location}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* User filter */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  User
-                </label>
-                <select
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                >
-                  <option value="">All Users</option>
-                  {postedByUsers.map((user) => (
-                    <option key={user} value={user}>
-                      {user}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={clearFilters}
-                  className="flex-1 px-2 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-xs"
-                >
-                  Clear Filters
-                </button>
-                <button
-                  onClick={toggleFilters}
-                  className="flex-1 px-2 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs"
-                >
-                  Apply Filters
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Expenses Log Table */}
-        <div className="bg-white rounded shadow overflow-hidden">
-          {/* Loading State */}
-          {loading && (
-            <div className="text-center py-6">
-              <p className="text-black text-xs">Loading expenses...</p>
-            </div>
-          )}
-
-          {/* Desktop Table */}
-          {!loading && (
-            <div className="hidden md:block text-black overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Date & Time
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Category
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Posted by
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Location
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredTransactions.map((transaction) => (
-                    <tr key={transaction.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {formatDateTime(transaction.date, transaction.time)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {transaction.description}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {transaction.category}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {transaction.posted_by}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {transaction.location}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-black">
-                        <span className="font-semibold text-green-600">
-                          ₦{(parseFloat(transaction.amount) || 0).toFixed(2)} {/* Changed to ₦ */}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleViewExpense(transaction)}
-                            className="text-blue-600 hover:text-blue-800 transition-colors"
-                            title="View"
-                          >
-                            <FaEye className="text-sm" />
-                          </button>
-                          <button
-                            onClick={() => handleEditExpense(transaction)}
-                            className="text-green-600 hover:text-green-800 transition-colors"
-                            title="Edit"
-                          >
-                            <FaEdit className="text-sm" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteExpense(transaction)}
-                            className="text-red-600 hover:text-red-800 transition-colors"
-                            title="Delete"
-                          >
-                            <FaTrash className="text-sm" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Mobile Cards */}
-          {!loading && (
-            <div className="md:hidden text-black">
-              {filteredTransactions.map((transaction) => (
-                <div
-                  key={transaction.id}
-                  className="border-b border-gray-200 p-4"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <span className="font-semibold text-green-600 text-base">
-                          ₦{(parseFloat(transaction.amount) || 0).toFixed(2)} {/* Changed to ₦ */}
-                        </span>
-                        <div className="text-right">
-                          <div className="text-xs text-gray-500">
-                            {formatMobileDateTime(transaction.date, transaction.time)}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-sm font-medium text-gray-900 mt-1">
-                        {transaction.description}
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                          {transaction.category}
-                        </span>
-                        <span className="text-xs text-gray-600">
-                          {transaction.location}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-2">
-                        Posted by: {transaction.posted_by}
-                      </div>
-                      <div className="flex space-x-3 mt-3">
-                        <button
-                          onClick={() => handleViewExpense(transaction)}
-                          className="text-blue-600 hover:text-blue-800 transition-colors text-xs flex items-center"
-                        >
-                          <FaEye className="mr-1" />
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleEditExpense(transaction)}
-                          className="text-green-600 hover:text-green-800 transition-colors text-xs flex items-center"
-                        >
-                          <FaEdit className="mr-1" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteExpense(transaction)}
-                          className="text-red-600 hover:text-red-800 transition-colors text-xs flex items-center"
-                        >
-                          <FaTrash className="mr-1" />
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!loading && filteredTransactions.length === 0 && (
-            <div className="text-center py-6">
-              <p className="text-black text-xs">There is no data</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Floating Action Button for Mobile */}
-      {isMobile && (
-        <div className="fixed bottom-6 right-6 z-10 md:hidden">
-          <button
-            onClick={handleMakeExpense}
-            className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors"
-          >
-            <FaPlus className="text-xl" />
-          </button>
-        </div>
-      )}
-
-      {/* Expense Form Modal */}
-      {showExpenseForm && (
-        <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-md mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {selectedExpense ? (selectedExpense.id ? 'Edit Expense' : 'View Expense') : 'Add New Expense'}
-              </h2>
               <button
-                onClick={handleCloseExpenseForm}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                type="button"
+                onClick={() => setShowFilters((open) => !open)}
+                aria-expanded={showFilters}
+                className={`flex items-center h-8 gap-1.5 px-2.5 text-xs font-medium transition-colors md:hidden ${
+                  showFilters || selectedDate || selectedLocation || selectedUser
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
               >
-                <FaTimes className="w-5 h-5" />
+                {showFilters ? <X size={13} /> : <SlidersHorizontal size={13} />}
+                Filters
               </button>
+              <div className="hidden md:contents">{filterFields}</div>
             </div>
+            {showFilters && <div className="grid gap-2 mt-2 md:hidden">{filterFields}</div>}
+          </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmitExpense} className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description *
-                  </label>
-                  <input
-                    type="text"
-                    name="description"
-                    value={expenseFormData.description}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                    required
-                    placeholder="Enter expense description"
-                    readOnly={selectedExpense && !selectedExpense.id}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Category *
-                    </label>
-                    <input
-                      type="text"
-                      name="category"
-                      value={expenseFormData.category}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                      required
-                      placeholder="Category"
-                      readOnly={selectedExpense && !selectedExpense.id}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Amount *
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                        ₦ {/* Changed to ₦ */}
-                      </span>
-                      <input
-                        type="number"
-                        name="amount"
-                        value={expenseFormData.amount}
-                        onChange={handleInputChange}
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                        required
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
-                        readOnly={selectedExpense && !selectedExpense.id}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date *
-                    </label>
-                    <input
-                      type="date"
-                      name="date"
-                      value={expenseFormData.date}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                      required
-                      readOnly={selectedExpense && !selectedExpense.id}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Time *
-                    </label>
-                    <input
-                      type="time"
-                      name="time"
-                      value={expenseFormData.time}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                      required
-                      readOnly={selectedExpense && !selectedExpense.id}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Posted By *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaUser className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <input
-                      type="text"
-                      name="posted_by"
-                      value={expenseFormData.posted_by}
-                      onChange={handleInputChange}
-                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                      required
-                      readOnly
-                      placeholder="Auto-filled from your account"
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    This field is automatically filled with your username and cannot be changed
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Location *
-                  </label>
-                  <input
-                    type="text"
-                    name="location"
-                    value={expenseFormData.location}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                    required
-                    placeholder="Enter expense location"
-                    readOnly={selectedExpense && !selectedExpense.id}
-                  />
-                </div>
+          {loading ? (
+            <div className="flex items-center justify-center gap-3 py-14 text-sm text-gray-500">
+              <Loader2 size={20} className="text-blue-600 animate-spin" />
+              Loading expenses…
+            </div>
+          ) : error ? (
+            <EmptyState
+              icon={AlertTriangle}
+              tone="red"
+              title="Couldn't load expenses"
+              hint={error}
+              action={
+                <button type="button" onClick={fetchExpenses} className={secondaryButtonClass}>
+                  Try again
+                </button>
+              }
+            />
+          ) : filteredTransactions.length === 0 ? (
+            <EmptyState
+              icon={Receipt}
+              title={transactions.length === 0 ? "No expenses yet" : "No expenses match your filters"}
+              hint={transactions.length === 0 ? "Posted expenses will appear here" : "Try a different search or filter"}
+              action={
+                hasFilters ? (
+                  <button type="button" onClick={clearFilters} className={secondaryButtonClass}>
+                    Clear filters
+                  </button>
+                ) : (
+                  <button type="button" onClick={handleMakeExpense} className={primaryButtonClass}>
+                    <Plus size={16} />
+                    Post Expense
+                  </button>
+                )
+              }
+            />
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-gray-200 bg-gray-50">
+                    <tr className="text-left">
+                      <th className={`px-5 py-2.5 ${statLabelClass}`}>Date &amp; Time</th>
+                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Description</th>
+                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Category</th>
+                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Posted By</th>
+                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Location</th>
+                      <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Amount</th>
+                      <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pageRows.map((t) => (
+                      <tr
+                        key={t.id}
+                        onClick={() => setViewExpense(t)}
+                        className="transition-colors cursor-pointer hover:bg-blue-50/50"
+                      >
+                        <td className="px-5 py-3 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">{formatDisplayDate(t.date)}</div>
+                          <div className="text-xs text-gray-500">{formatDisplayTime(t.time)}</div>
+                        </td>
+                        <td className="max-w-[16rem] px-3 py-3 text-gray-900 truncate">{t.description}</td>
+                        <td className="px-3 py-3">
+                          <CategoryBadge category={t.category} />
+                        </td>
+                        <td className="max-w-[10rem] px-3 py-3 text-gray-700 truncate">{t.posted_by}</td>
+                        <td className="max-w-[10rem] px-3 py-3 text-gray-700 truncate">{t.location}</td>
+                        <td className="px-3 py-3 font-semibold text-right text-gray-900 whitespace-nowrap">
+                          {formatCurrency(amountOf(t))}
+                        </td>
+                        <td className="px-5 py-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setViewExpense(t)}
+                              className={`${iconButtonClass} hover:text-blue-600`}
+                              title="View"
+                              aria-label={`View ${t.description}`}
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEditExpense(t)}
+                              className={`${iconButtonClass} hover:text-green-600`}
+                              title="Edit"
+                              aria-label={`Edit ${t.description}`}
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteExpense(t)}
+                              className={`${iconButtonClass} hover:text-red-600`}
+                              title="Delete"
+                              aria-label={`Delete ${t.description}`}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={handleCloseExpenseForm}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                {(!selectedExpense || selectedExpense.id) && (
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    {selectedExpense ? 'Update Expense' : 'Add Expense'}
-                  </button>
+              {/* Mobile Cards */}
+              <ul className="divide-y divide-gray-100 md:hidden">
+                {pageRows.map((t) => (
+                  <li key={t.id} className="px-5 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{t.description}</p>
+                        <p className="text-xs text-gray-500">
+                          {formatDisplayDate(t.date)} · {formatDisplayTime(t.time)}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-gray-900 whitespace-nowrap">
+                        {formatCurrency(amountOf(t))}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center mt-2 text-xs text-gray-600 gap-x-3 gap-y-1">
+                      <CategoryBadge category={t.category} />
+                      {t.location && <span>{t.location}</span>}
+                      {t.posted_by && <span>By {t.posted_by}</span>}
+                    </div>
+
+                    <div className="grid grid-cols-3 mt-3 border border-gray-200 divide-x divide-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => setViewExpense(t)}
+                        className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <Eye size={14} /> View
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEditExpense(t)}
+                        className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <Pencil size={14} /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteExpense(t)}
+                        className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Pagination */}
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-gray-200 bg-gray-50">
+                <span className="text-xs text-gray-500">
+                  Showing {pageStart + 1}–{pageStart + pageRows.length} of {filteredTransactions.length}
+                </span>
+                {pageCount > 1 && (
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      aria-label="Previous page"
+                      className="flex items-center justify-center w-8 h-8 text-gray-600 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="flex items-center h-8 px-3 text-xs font-medium text-gray-700 bg-white border-gray-300 border-y">
+                      Page {currentPage} of {pageCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPage(currentPage + 1)}
+                      disabled={currentPage === pageCount}
+                      aria-label="Next page"
+                      className="flex items-center justify-center w-8 h-8 text-gray-600 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
                 )}
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </>
+          )}
+        </section>
+      </div>
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-sm mx-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
-                <FaTrash className="w-6 h-6 text-red-600" />
-              </div>
-              <div className="mt-3 text-center">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Delete Expense
-                </h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  Are you sure you want to delete this expense? This action cannot be undone.
-                </p>
-              </div>
-              <div className="mt-4 flex space-x-3">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <style jsx global>{`
+        @keyframes toast-in {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes toast-progress {
+          from {
+            width: 100%;
+          }
+          to {
+            width: 0%;
+          }
+        }
+        @keyframes modal-in {
+          from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        .toast-in {
+          animation: toast-in 0.2s ease-out;
+        }
+        .toast-progress {
+          animation-name: toast-progress;
+          animation-timing-function: linear;
+          animation-fill-mode: forwards;
+        }
+        .modal-in {
+          animation: modal-in 0.18s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

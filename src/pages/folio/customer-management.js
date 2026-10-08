@@ -1,4 +1,5 @@
 import FolioNav from "../../components/FolioNav";
+import { useAuth } from "../../context/AuthContext";
 import {
   FaSearch,
   FaPlus,
@@ -541,6 +542,9 @@ const formatNaira = (amount) => {
 
 // Main Customer Management Component
 export default function CustomerManagement() {
+  // Accountants open this page to record deposits; only admins add, edit or delete customers
+  const { can } = useAuth();
+  const canManage = can("customers.manage");
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -854,13 +858,15 @@ export default function CustomerManagement() {
 
             {/* Right side - Action buttons - Hidden on medium screens and below */}
             <div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
-              <button
-                onClick={() => setShowAddCustomerModal(true)}
-                className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
-              >
-                <FaPlus className="mr-1 text-xs" />
-                Add Customer
-              </button>
+              {canManage && (
+                <button
+                  onClick={() => setShowAddCustomerModal(true)}
+                  className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
+                >
+                  <FaPlus className="mr-1 text-xs" />
+                  Add Customer
+                </button>
+              )}
             </div>
           </div>
 
@@ -941,9 +947,11 @@ export default function CustomerManagement() {
                     <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
                       Birthday
                     </th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Actions
-                    </th>
+                    {canManage && (
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -991,30 +999,32 @@ export default function CustomerManagement() {
                       <td className="px-4 py-3 text-sm text-black">
                         {customer.birthday ? new Date(customer.birthday).toLocaleDateString() : 'N/A'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(customer);
-                            }}
-                            className="p-1 text-blue-600 transition-colors hover:text-blue-800"
-                            title="Edit"
-                          >
-                            <FaEdit className="text-sm" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(customer.id);
-                            }}
-                            className="p-1 text-red-600 transition-colors hover:text-red-800"
-                            title="Delete"
-                          >
-                            <FaTrash className="text-sm" />
-                          </button>
-                        </div>
-                      </td>
+                      {canManage && (
+                        <td className="px-4 py-3 text-sm text-black">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(customer);
+                              }}
+                              className="p-1 text-blue-600 transition-colors hover:text-blue-800"
+                              title="Edit"
+                            >
+                              <FaEdit className="text-sm" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(customer.id);
+                              }}
+                              className="p-1 text-red-600 transition-colors hover:text-red-800"
+                              title="Delete"
+                            >
+                              <FaTrash className="text-sm" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -1071,26 +1081,28 @@ export default function CustomerManagement() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(customer);
-                          }}
-                          className="px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded transition-colors hover:bg-blue-50"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(customer.id);
-                          }}
-                          className="px-2 py-1 text-xs text-red-600 border border-red-600 rounded transition-colors hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {canManage && (
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(customer);
+                            }}
+                            className="px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded transition-colors hover:bg-blue-50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(customer.id);
+                            }}
+                            className="px-2 py-1 text-xs text-red-600 border border-red-600 rounded transition-colors hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1107,7 +1119,7 @@ export default function CustomerManagement() {
       </div>
 
       {/* Fixed Action Buttons for Mobile - Placed at bottom of page */}
-      {isMobile && (
+      {isMobile && canManage && (
         <div className="fixed bottom-4 right-4 md:hidden">
           <button
             onClick={() => setShowAddCustomerModal(true)}
