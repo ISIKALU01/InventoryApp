@@ -1,15 +1,18 @@
 // components/CustomerNav.js
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { useAuth } from '../context/AuthContext';
+import { canAccessPath } from '../../utils/permissions';
 import { FaEllipsisV } from "react-icons/fa";
 import { useState, useEffect } from "react";
 
 export default function CustomerNav() {
   const router = useRouter();
+  const { user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMedium, setIsMedium] = useState(false);
 
-  const navItems = [
+  const allNavItems = [
     {
       name: "Bank Management",
       path: "/folio/bank-management",
@@ -23,6 +26,8 @@ export default function CustomerNav() {
       path: "/folio/supply-management",
     }
   ];
+  // Only the tabs this user may open
+  const navItems = allNavItems.filter((item) => canAccessPath(user, item.path));
 
   // Check screen size on mount and resize
   useEffect(() => {

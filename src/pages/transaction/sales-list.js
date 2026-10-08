@@ -1,6 +1,7 @@
 // pages/transaction/sales-list.js
 import { useState, useEffect, useRef } from 'react';
 import TransactionNav from '../../components/TransactionNav';
+import { useAuth } from '../../context/AuthContext';
 import http from "../../../services/http";
 import {
   AlertTriangle,
@@ -293,6 +294,9 @@ const PaymentBadge = ({ method }) => (
 // ---------------------------------------------------------------------------
 
 export default function SalesList() {
+  // Deleting a completed sale puts stock back and changes takings: admins only
+  const { can } = useAuth();
+  const canDelete = can('sales.manage');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
@@ -666,15 +670,17 @@ export default function SalesList() {
             </div>
           </div>
 
-          <ModalFooter className="justify-between">
-            <button
-              type="button"
-              onClick={() => openDelete(viewOrder)}
-              className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
-            >
-              <Trash2 size={16} />
-              Delete
-            </button>
+          <ModalFooter className={canDelete ? "justify-between" : "justify-end"}>
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => openDelete(viewOrder)}
+                className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+              >
+                <Trash2 size={16} />
+                Delete
+              </button>
+            )}
             <div className="flex gap-3">
               <button type="button" onClick={() => setViewOrder(null)} className={secondaryButtonClass}>
                 Close
@@ -923,15 +929,17 @@ export default function SalesList() {
                               >
                                 <Printer size={16} />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => openDelete(order)}
-                                className={`${iconButtonClass} hover:text-red-600`}
-                                title="Delete transaction"
-                                aria-label={`Delete transaction ${orderRef(order)}`}
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  onClick={() => openDelete(order)}
+                                  className={`${iconButtonClass} hover:text-red-600`}
+                                  title="Delete transaction"
+                                  aria-label={`Delete transaction ${orderRef(order)}`}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -966,7 +974,7 @@ export default function SalesList() {
                         <span>By {userOf(order) || 'System'}</span>
                       </div>
 
-                      <div className="grid grid-cols-3 mt-3 border border-gray-200 divide-x divide-gray-200">
+                      <div className={`grid ${canDelete ? "grid-cols-3" : "grid-cols-2"} mt-3 border border-gray-200 divide-x divide-gray-200`}>
                         <button
                           type="button"
                           onClick={() => setViewOrder(order)}
@@ -981,13 +989,15 @@ export default function SalesList() {
                         >
                           <Printer size={14} /> Print
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => openDelete(order)}
-                          className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 size={14} /> Delete
-                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => openDelete(order)}
+                            className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        )}
                       </div>
                     </li>
                   );

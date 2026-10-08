@@ -350,21 +350,13 @@ export default function Expenses() {
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  // "Posted by" is the signed-in user; fall back to the first user
+  // "Posted by" is always the signed-in user, never someone else
   const fetchPostedBy = async () => {
     try {
       const userData = await userAPI.getCurrentUser();
       setPostedBy(usernameFromEmail(userData?.email));
     } catch (err) {
       console.error("Error fetching current user:", err);
-      try {
-        const usersData = await userAPI.getAllUsers();
-        if (Array.isArray(usersData) && usersData.length > 0) {
-          setPostedBy(usernameFromEmail(usersData[0].email));
-        }
-      } catch (usersErr) {
-        console.error("Error fetching users:", usersErr);
-      }
     }
   };
 

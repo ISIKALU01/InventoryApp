@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import InventoryNav from "../../components/InventoryNav";
+import { useAuth } from "../../context/AuthContext";
 import {
 	FaSearch,
 	FaPlus,
@@ -1039,6 +1040,9 @@ const DeleteProductModal = ({ product, onClose, onConfirm, isLoading }) => {
 
 // Main Products Component
 export default function Products() {
+	// Store managers and procurement can look; inventory officers (and admins) change products
+	const { can } = useAuth();
+	const canManage = can("products.manage");
 	const [products, setProducts] = useState([]);
 	const [filteredProducts, setFilteredProducts] = useState([]);
 	const [searchTerm, setSearchTerm] = useState("");
@@ -1403,22 +1407,26 @@ export default function Products() {
 								<FaSyncAlt className={`text-[11px] ${isLoading ? "animate-spin" : ""}`} />
 								{isLoading ? "Refreshing…" : "Refresh"}
 							</button>
-							<button
-								onClick={() => setShowImportModal(true)}
-								disabled={isLoading}
-								className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
-							>
-								<FaFileImport className="text-[11px]" />
-								Import CSV
-							</button>
-							<button
-								onClick={() => setShowAddProductModal(true)}
-								disabled={isLoading}
-								className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-							>
-								<FaPlus className="text-[11px]" />
-								Add Product
-							</button>
+							{canManage && (
+							  <button
+  								onClick={() => setShowImportModal(true)}
+  								disabled={isLoading}
+  								className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
+  							>
+  								<FaFileImport className="text-[11px]" />
+  								Import CSV
+  							</button>
+							)}
+							{canManage && (
+							  <button
+  								onClick={() => setShowAddProductModal(true)}
+  								disabled={isLoading}
+  								className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+  							>
+  								<FaPlus className="text-[11px]" />
+  								Add Product
+  							</button>
+							)}
 						</div>
 					</div>
 
@@ -1485,13 +1493,17 @@ export default function Products() {
 							<div className="flex flex-wrap justify-center gap-3 mt-4">
 								{products.length === 0 ? (
 									<>
-										<button onClick={() => setShowImportModal(true)} className={secondaryButtonClass}>
-											Import from CSV
-										</button>
-										<button onClick={() => setShowAddProductModal(true)} className={primaryButtonClass()}>
-											<FaPlus className="mr-2 text-xs" />
-											Add Your First Product
-										</button>
+										{canManage && (
+										  <button onClick={() => setShowImportModal(true)} className={secondaryButtonClass}>
+  											Import from CSV
+  										</button>
+										)}
+										{canManage && (
+										  <button onClick={() => setShowAddProductModal(true)} className={primaryButtonClass()}>
+  											<FaPlus className="mr-2 text-xs" />
+  											Add Your First Product
+  										</button>
+										)}
 									</>
 								) : (
 									<button onClick={clearFilters} className={secondaryButtonClass}>
@@ -1513,7 +1525,9 @@ export default function Products() {
 											<th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Price</th>
 											<th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Cost Price</th>
 											<th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Margin</th>
-											<th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+											{canManage && (
+											  <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+											)}
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-gray-100">
@@ -1547,28 +1561,30 @@ export default function Products() {
 													>
 														{margin.hasCost ? formatPercent(margin.marginPercent) : "—"}
 													</td>
-													<td className="px-5 py-2">
-														<div className="flex justify-end gap-1">
-															<button
-																onClick={() => handleEditClick(product)}
-																className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 disabled:opacity-50"
-																title="Edit"
-																aria-label={`Edit ${product.name || "product"}`}
-																disabled={isLoading}
-															>
-																<FaEdit className="text-sm" />
-															</button>
-															<button
-																onClick={() => setProductToDelete(product)}
-																className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600 disabled:opacity-50"
-																title="Delete"
-																aria-label={`Delete ${product.name || "product"}`}
-																disabled={isLoading}
-															>
-																<FaTrash className="text-sm" />
-															</button>
-														</div>
-													</td>
+													{canManage && (
+													  <td className="px-5 py-2">
+  														<div className="flex justify-end gap-1">
+  															<button
+  																onClick={() => handleEditClick(product)}
+  																className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 disabled:opacity-50"
+  																title="Edit"
+  																aria-label={`Edit ${product.name || "product"}`}
+  																disabled={isLoading}
+  															>
+  																<FaEdit className="text-sm" />
+  															</button>
+  															<button
+  																onClick={() => setProductToDelete(product)}
+  																className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600 disabled:opacity-50"
+  																title="Delete"
+  																aria-label={`Delete ${product.name || "product"}`}
+  																disabled={isLoading}
+  															>
+  																<FaTrash className="text-sm" />
+  															</button>
+  														</div>
+  													</td>
+													)}
 												</tr>
 											);
 										})}
@@ -1614,22 +1630,24 @@ export default function Products() {
 												</div>
 											</div>
 
-											<div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
-												<button
-													onClick={() => handleEditClick(product)}
-													className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-													disabled={isLoading}
-												>
-													<FaEdit className="text-[11px]" /> Edit
-												</button>
-												<button
-													onClick={() => setProductToDelete(product)}
-													className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-													disabled={isLoading}
-												>
-													<FaTrash className="text-[11px]" /> Delete
-												</button>
-											</div>
+											{canManage && (
+											  <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
+  												<button
+  													onClick={() => handleEditClick(product)}
+  													className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+  													disabled={isLoading}
+  												>
+  													<FaEdit className="text-[11px]" /> Edit
+  												</button>
+  												<button
+  													onClick={() => setProductToDelete(product)}
+  													className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+  													disabled={isLoading}
+  												>
+  													<FaTrash className="text-[11px]" /> Delete
+  												</button>
+  											</div>
+											)}
 										</li>
 									);
 								})}

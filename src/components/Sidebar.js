@@ -26,15 +26,18 @@ import {
   FaMoneyCheck,
   FaUniversity,
   FaWallet,
-  FaLock
+  FaLock,
+  FaSignOutAlt
 } from 'react-icons/fa';
+import { useAuth } from '../context/AuthContext';
+import { canAccessPath } from '../../utils/permissions';
 
 export default function Sidebar({ onToggle }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
-  const [userRole, setUserRole] = useState(null);
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     // Check if window is available (client-side)
@@ -50,23 +53,8 @@ export default function Sidebar({ onToggle }) {
         }
       };
       
-      // Get user role from localStorage
-      const getUserRole = () => {
-        try {
-          const userData = localStorage.getItem('user');
-          if (userData) {
-            const user = JSON.parse(userData);
-            return user.role || 'staff'; // default to staff if no role
-          }
-        } catch (error) {
-          console.error('Error parsing user data:', error);
-        }
-        return 'staff'; // default fallback
-      };
-
       // Initial checks
       checkIfMobile();
-      setUserRole(getUserRole());
       
       // Add event listener for window resize
       window.addEventListener('resize', checkIfMobile);
@@ -96,77 +84,61 @@ export default function Sidebar({ onToggle }) {
     }
   };
 
-  // Get the correct dashboard path based on user role
-  const getDashboardPath = () => {
-    if (userRole === 'admin') {
-      return '/dashboard';
-    } else {
-      return '/dashboard';
-    }
-  };
-
-  // Check if current path is a dashboard path
-  const isDashboardActive = () => {
-    return router.pathname === '/admin-dashboard' || router.pathname === '/staff-dashboard';
-  };
-
+  // Each item needs a permission (see utils/permissions.js). Items the user
+  // can't use are hidden; a group shows only when one of its items is visible.
   const menuItems = [
-    { 
-      name: 'Dashboard', 
-      path: getDashboardPath(), // This will be dynamically set
-      icon: <FaChartPie className="w-5 h-5" />, 
-      roles: ['admin', 'staff'] 
-    },
-    { 
-      name: 'Authorize users', 
-      path: '/authorizeUser' , // This will be dynamically set
-      icon: <FaUsers className="w-5 h-5" />, 
-      roles: ['admin'] 
-    },
-    { 
-      name: 'Transaction', 
+    { name: 'Dashboard', path: '/dashboard', icon: <FaChartPie className="w-5 h-5" /> },
+    { name: 'Authorize users', path: '/authorizeUser', icon: <FaUsers className="w-5 h-5" /> },
+    {
+      name: 'Transaction',
       icon: <FaMoneyBill className="w-5 h-5" />,
-      roles: ['admin', 'staff'],
       submenu: [
-          { name: 'Sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'Expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'Sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" />, roles: ['admin', 'staff'] },
-          { name: 'Sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, roles: [] },
-          { name: 'Payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, roles: [] }
+        { name: 'Sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" /> },
+        { name: 'Expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" /> },
+        { name: 'Sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" /> },
+        // Still showing sample data: hidden until connected to the backend
+        { name: 'Sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, hidden: true },
+        { name: 'Payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, hidden: true },
       ]
     },
-    { 
-      name: 'Inventory', 
+    {
+      name: 'Inventory',
       icon: <FaBoxes className="w-5 h-5" />,
-      roles: ['admin'],
       submenu: [
-        { name: 'Product Category', path: '/inventory/product-category', icon: <FaTag className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'View Adjustment', path: '/inventory/view-adjustment', icon: <FaSlidersH className="w-4 h-4" />, roles: [''] },
-        { name: 'Stock Requisition', path: '/inventory/stock-requisition', icon: <FaTruck className="w-4 h-4" />, roles: [''] },
-        { name: 'Manage Product/Service', path: '/inventory/manage-products', icon: <FaCube className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Inventory', path: '/inventory/inventory', icon: <FaBoxes className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Purchase Log', path: '/inventory/purchase-log', icon: <FaShoppingCart className="w-4 h-4" />, roles: ['admin'] },
+        { name: 'Product Category', path: '/inventory/product-category', icon: <FaTag className="w-4 h-4" /> },
+        // Pages not built yet
+        { name: 'View Adjustment', path: '/inventory/view-adjustment', icon: <FaSlidersH className="w-4 h-4" />, hidden: true },
+        { name: 'Stock Requisition', path: '/inventory/stock-requisition', icon: <FaTruck className="w-4 h-4" />, hidden: true },
+        { name: 'Manage Product/Service', path: '/inventory/manage-products', icon: <FaCube className="w-4 h-4" /> },
+        { name: 'Inventory', path: '/inventory/inventory', icon: <FaBoxes className="w-4 h-4" /> },
+        { name: 'Purchase Log', path: '/inventory/purchase-log', icon: <FaShoppingCart className="w-4 h-4" /> },
       ]
     },
-    { name: 'Deleted Transactions', path: '/deletedTransactions', icon: <FaTrash className="w-5 h-5" />, roles: ['admin'] },
-    { name: 'Settings', path: '/settings', icon: <FaCog className="w-5 h-5" />, roles: ['admin', 'staff'] },
-    { 
-      name: 'Folio', 
+    { name: 'Deleted Transactions', path: '/deletedTransactions', icon: <FaTrash className="w-5 h-5" /> },
+    { name: 'Settings', path: '/settings', icon: <FaCog className="w-5 h-5" /> },
+    {
+      name: 'Folio',
       icon: <FaFolder className="w-5 h-5" />,
-      roles: ['admin', 'staff'],
       submenu: [
-        { name: 'Bank Management', path: '/folio/bank-management', icon: <FaUniversity className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Manage Customer', path: '/folio/customer-management', icon: <FaUsers className="w-4 h-4" />, roles: ['admin'] },
-        { name: 'Manage Supplier', path: '/folio/supply-management', icon: <FaUsers className="w-4 h-4" />, roles: ['admin', 'staff'] },
+        { name: 'Bank Management', path: '/folio/bank-management', icon: <FaUniversity className="w-4 h-4" /> },
+        { name: 'Manage Customer', path: '/folio/customer-management', icon: <FaUsers className="w-4 h-4" /> },
+        { name: 'Manage Supplier', path: '/folio/supply-management', icon: <FaUsers className="w-4 h-4" /> },
       ]
     },
   ];
 
-  // Check if user has access to a menu item
-  const hasAccess = (item) => {
-    if (!userRole) return false;
-    return item.roles.includes(userRole);
-  };
+  const visibleMenu = menuItems
+    .map((item) => item.submenu
+      ? { ...item, submenu: item.submenu.filter((sub) => !sub.hidden && canAccessPath(user, sub.path)) }
+      : item)
+    .filter((item) => item.submenu ? item.submenu.length > 0 : canAccessPath(user, item.path));
+
+  const initials = (user?.name || 'U')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('');
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
@@ -183,16 +155,13 @@ export default function Sidebar({ onToggle }) {
   // Check if a menu item or any of its submenu items is active
   const isMenuItemActive = (item) => {
     if (item.path) {
-      return router.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive());
+      return router.pathname === item.path;
     }
     if (item.submenu) {
       return item.submenu.some(subItem => router.pathname === subItem.path);
     }
     return false;
   };
-
-  // Get current dashboard path (recalculate each render)
-  const currentDashboardPath = getDashboardPath();
 
   return (
     <>
@@ -224,30 +193,23 @@ export default function Sidebar({ onToggle }) {
         {/* Navigation items - Scrollable area */}
         <nav className="mt-6 flex-1 overflow-y-auto">
           <ul className="space-y-2 px-2">
-            {menuItems.map((item) => {
-              const userHasAccess = hasAccess(item);
+            {visibleMenu.map((item) => {
               const isActive = isMenuItemActive(item);
-              
-              // Use the current dashboard path for Dashboard item
-              const itemPath = item.name === 'Dashboard' ? currentDashboardPath : item.path;
-              
+
               return (
                 <li key={item.name}>
                   {item.submenu ? (
                     /* Dropdown menu item */
                     <div>
-                      <div 
+                      <div
                         className={`
-                          flex items-center justify-between p-3 rounded-lg transition-all duration-200 ease-in-out
-                          ${isActive 
-                            ? 'bg-indigo-900 text-white shadow-lg' 
-                            : userHasAccess 
-                              ? 'text-indigo-100 hover:bg-indigo-700 hover:text-white' 
-                              : 'text-indigo-400 cursor-not-allowed'
+                          flex items-center justify-between p-3 rounded-lg transition-all duration-200 ease-in-out cursor-pointer
+                          ${isActive
+                            ? 'bg-indigo-900 text-white shadow-lg'
+                            : 'text-indigo-100 hover:bg-indigo-700 hover:text-white'
                           }
-                          ${userHasAccess ? 'cursor-pointer' : 'cursor-not-allowed'}
                         `}
-                        onClick={() => userHasAccess && toggleDropdown(item.name)}
+                        onClick={() => toggleDropdown(item.name)}
                       >
                         <div className="flex items-center">
                           <span className="flex-shrink-0">
@@ -259,105 +221,62 @@ export default function Sidebar({ onToggle }) {
                             </span>
                           )}
                         </div>
-                        {isOpen && userHasAccess && (
-                          <FaChevronDown 
-                            className={`w-4 h-4 transition-transform duration-300 ${openDropdown === item.name ? 'rotate-180' : ''}`} 
+                        {isOpen && (
+                          <FaChevronDown
+                            className={`w-4 h-4 transition-transform duration-300 ${openDropdown === item.name ? 'rotate-180' : ''}`}
                           />
                         )}
                       </div>
-                      
+
                       {/* Submenu items with smooth transition */}
-                      {isOpen && userHasAccess && (
+                      {isOpen && (
                         <div className={`
                           overflow-hidden transition-all duration-500 ease-in-out
                           ${openDropdown === item.name ? 'max-h-96' : 'max-h-0'}
                         `}>
                           <ul className="ml-8 mt-1 space-y-1">
-                            {item.submenu.map((subItem) => {
-                              const subUserHasAccess = hasAccess(subItem);
-                              
-                              return (
-                                <li key={subItem.name}>
-                                  {subUserHasAccess ? (
-                                    <Link href={subItem.path}>
-                                      <div 
-                                        className={`
-                                          flex items-center p-2 rounded-lg transition-all duration-200 ease-in-out
-                                          transform origin-left
-                                          ${router.pathname === subItem.path 
-                                            ? 'bg-indigo-900 text-white shadow-lg scale-105' 
-                                            : 'text-indigo-100 hover:bg-indigo-700 hover:text-white hover:scale-105'
-                                          }
-                                        `}
-                                        onClick={handleMenuItemClick}
-                                      >
-                                        <span className="flex-shrink-0">{subItem.icon}</span>
-                                        <span className="ml-3 text-sm font-medium overflow-hidden whitespace-nowrap">
-                                          {subItem.name}
-                                        </span>
-                                      </div>
-                                    </Link>
-                                  ) : (
-                                    <div 
-                                      className={`
-                                        flex items-center p-2 rounded-lg transition-all duration-200
-                                        text-indigo-400 cursor-not-allowed
-                                      `}
-                                    >
-                                      <span className="flex-shrink-0">{subItem.icon}</span>
-                                      <span className="ml-3 text-sm font-medium overflow-hidden whitespace-nowrap">
-                                        {subItem.name}
-                                      </span>
-                                    </div>
-                                  )}
-                                </li>
-                              );
-                            })}
+                            {item.submenu.map((subItem) => (
+                              <li key={subItem.name}>
+                                <Link href={subItem.path}>
+                                  <div
+                                    className={`
+                                      flex items-center p-2 rounded-lg transition-all duration-200 ease-in-out
+                                      transform origin-left
+                                      ${router.pathname === subItem.path
+                                        ? 'bg-indigo-900 text-white shadow-lg scale-105'
+                                        : 'text-indigo-100 hover:bg-indigo-700 hover:text-white hover:scale-105'
+                                      }
+                                    `}
+                                    onClick={handleMenuItemClick}
+                                  >
+                                    <span className="flex-shrink-0">{subItem.icon}</span>
+                                    <span className="ml-3 text-sm font-medium overflow-hidden whitespace-nowrap">
+                                      {subItem.name}
+                                    </span>
+                                  </div>
+                                </Link>
+                              </li>
+                            ))}
                           </ul>
                         </div>
                       )}
                     </div>
                   ) : (
                     /* Regular menu item */
-                    userHasAccess ? (
-                      <Link href={itemPath}>
-                        <div 
-                          className={`
-                            flex items-center p-3 rounded-lg transition-all duration-200 ease-in-out
-                            transform
-                            ${isActive 
-                              ? 'bg-indigo-900 text-white shadow-lg scale-105' 
-                              : 'text-indigo-100 hover:bg-indigo-700 hover:text-white hover:scale-105'
-                            }
-                            group
-                          `}
-                          onClick={handleMenuItemClick}
-                        >
-                          <span className="flex-shrink-0">{item.icon}</span>
-                          {isOpen && (
-                            <span className="ml-3 font-medium overflow-hidden whitespace-nowrap">
-                              {item.name}
-                            </span>
-                          )}
-                          {/* Tooltip for collapsed state */}
-                          {!isOpen && !isMobile && (
-                            <div className="absolute left-full ml-3 px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-lg z-40">
-                              {item.name}
-                            </div>
-                          )}
-                        </div>
-                      </Link>
-                    ) : (
-                      <div 
+                    <Link href={item.path}>
+                      <div
                         className={`
-                          flex items-center p-3 rounded-lg transition-all duration-200
-                          text-indigo-400 cursor-not-allowed
+                          flex items-center p-3 rounded-lg transition-all duration-200 ease-in-out
+                          transform
+                          ${isActive
+                            ? 'bg-indigo-900 text-white shadow-lg scale-105'
+                            : 'text-indigo-100 hover:bg-indigo-700 hover:text-white hover:scale-105'
+                          }
                           group
                         `}
+                        onClick={handleMenuItemClick}
                       >
-                        <span className="flex-shrink-0">
-                          {item.icon}
-                        </span>
+                        <span className="flex-shrink-0">{item.icon}</span>
                         {isOpen && (
                           <span className="ml-3 font-medium overflow-hidden whitespace-nowrap">
                             {item.name}
@@ -370,7 +289,7 @@ export default function Sidebar({ onToggle }) {
                           </div>
                         )}
                       </div>
-                    )
+                    </Link>
                   )}
                 </li>
               );
@@ -378,19 +297,29 @@ export default function Sidebar({ onToggle }) {
           </ul>
         </nav>
 
-        {/* User info at bottom */}
+        {/* Logged-in user and logout */}
         <div className="p-4 border-t border-indigo-700 bg-indigo-800 flex-shrink-0">
           <div className="flex items-center">
-            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0">
-              <span className="font-bold">U</span>
+            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0" title={user?.name}>
+              <span className="font-bold">{initials}</span>
             </div>
             {isOpen && (
-              <div className="ml-3 overflow-hidden">
-                <p className="text-sm font-medium truncate">User Name</p>
-                <p className="text-xs text-indigo-300 truncate capitalize">{userRole || 'User'}</p>
+              <div className="ml-3 overflow-hidden flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+                <p className="text-xs text-indigo-300 truncate">{user?.role_label || user?.role || ''}</p>
               </div>
             )}
           </div>
+          <button
+            type="button"
+            onClick={logout}
+            className={`mt-3 w-full flex items-center ${isOpen ? 'justify-start px-3' : 'justify-center'} py-2 rounded-lg text-indigo-100 hover:bg-indigo-700 hover:text-white transition-colors duration-200`}
+            aria-label="Log out"
+            title="Log out"
+          >
+            <FaSignOutAlt className="w-4 h-4 flex-shrink-0" />
+            {isOpen && <span className="ml-3 text-sm font-medium">Log out</span>}
+          </button>
         </div>
       </div>
 

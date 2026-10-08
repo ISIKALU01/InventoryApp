@@ -16,6 +16,7 @@ import {
 } from "react-icons/fa";
 
 import { customerAPI } from "../../services/api";
+import { useAuth } from "../context/AuthContext";
 
 // Helper function to format currency in Naira
 const formatCurrency = (amount) => {
@@ -31,6 +32,9 @@ const formatNaira = (amount) => {
 };
 
 const CustomerProfile = ({ customerId, onBack }) => {
+  // Deposits are money in: accountants and admins only
+  const { can } = useAuth();
+  const canDeposit = can("customers.deposit");
   const [customer, setCustomer] = useState(null);
   const [deposits, setDeposits] = useState([]);
   const [showAddDeposit, setShowAddDeposit] = useState(false);
@@ -227,13 +231,15 @@ const CustomerProfile = ({ customerId, onBack }) => {
                 <FaHistory className="mr-2 text-gray-400" />
                 Deposit History
               </h2>
-              <button
-                onClick={() => setShowAddDeposit(true)}
-                className="flex items-center px-4 py-2 text-sm text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors"
-              >
-                <FaPlus className="mr-2" />
-                Add Deposit
-              </button>
+              {canDeposit && (
+                <button
+                  onClick={() => setShowAddDeposit(true)}
+                  className="flex items-center px-4 py-2 text-sm text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors"
+                >
+                  <FaPlus className="mr-2" />
+                  Add Deposit
+                </button>
+              )}
             </div>
 
             {deposits.length === 0 ? (

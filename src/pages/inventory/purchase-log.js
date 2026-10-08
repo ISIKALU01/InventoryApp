@@ -1,6 +1,7 @@
 // pages/transaction/purchases.js
 import { useState, useEffect } from "react";
 import InventoryNav from "../../components/InventoryNav";
+import { useAuth } from "../../context/AuthContext";
 import {
   FaSearch,
   FaFileExport,
@@ -22,6 +23,9 @@ import {
 import { purchaseOrderAPI, supplierAPI } from "../../../services/api";
 
 export default function Purchases() {
+  // Many roles can look at purchase orders; only procurement (and admins) raise or change them
+  const { can } = useAuth();
+  const canManage = can("purchase-orders.manage");
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -555,13 +559,15 @@ export default function Purchases() {
                 <FaFileExport className="mr-1 text-xs" />
                 Export
               </button>
-              <button
-                onClick={handleCreateOrder}
-                className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center text-xs"
-              >
-                <FaPlus className="mr-1 text-xs" />
-                New Order
-              </button>
+              {canManage && (
+                <button
+                  onClick={handleCreateOrder}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center text-xs"
+                >
+                  <FaPlus className="mr-1 text-xs" />
+                  New Order
+                </button>
+              )}
             </div>
           </div>
 
@@ -725,20 +731,24 @@ export default function Purchases() {
                           >
                             <FaEye className="text-sm" />
                           </button>
-                          <button
-                            onClick={() => handleEditOrder(order)}
-                            className="text-green-600 hover:text-green-800 transition-colors"
-                            title="Edit"
-                          >
-                            <FaEdit className="text-sm" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteOrder(order)}
-                            className="text-red-600 hover:text-red-800 transition-colors"
-                            title="Delete"
-                          >
-                            <FaTrash className="text-sm" />
-                          </button>
+                          {canManage && (
+                            <button
+                              onClick={() => handleEditOrder(order)}
+                              className="text-green-600 hover:text-green-800 transition-colors"
+                              title="Edit"
+                            >
+                              <FaEdit className="text-sm" />
+                            </button>
+                          )}
+                          {canManage && (
+                            <button
+                              onClick={() => handleDeleteOrder(order)}
+                              className="text-red-600 hover:text-red-800 transition-colors"
+                              title="Delete"
+                            >
+                              <FaTrash className="text-sm" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -810,20 +820,24 @@ export default function Purchases() {
                           <FaEye className="mr-1" />
                           View
                         </button>
-                        <button
-                          onClick={() => handleEditOrder(order)}
-                          className="text-green-600 hover:text-green-800 transition-colors text-xs flex items-center"
-                        >
-                          <FaEdit className="mr-1" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteOrder(order)}
-                          className="text-red-600 hover:text-red-800 transition-colors text-xs flex items-center"
-                        >
-                          <FaTrash className="mr-1" />
-                          Delete
-                        </button>
+                        {canManage && (
+                          <button
+                            onClick={() => handleEditOrder(order)}
+                            className="text-green-600 hover:text-green-800 transition-colors text-xs flex items-center"
+                          >
+                            <FaEdit className="mr-1" />
+                            Edit
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => handleDeleteOrder(order)}
+                            className="text-red-600 hover:text-red-800 transition-colors text-xs flex items-center"
+                          >
+                            <FaTrash className="mr-1" />
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -841,7 +855,7 @@ export default function Purchases() {
       </div>
 
       {/* Floating Action Button for Mobile */}
-      {isMobile && (
+      {isMobile && canManage && (
         <div className="fixed bottom-6 right-6 z-10 md:hidden">
           <button
             onClick={handleCreateOrder}

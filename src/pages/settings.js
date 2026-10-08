@@ -28,6 +28,18 @@ import {
 } from "react-icons/fa";
 
 import { storeAPI } from "../../services/api";
+import { useAuth } from "../context/AuthContext";
+import UsersSection from "../components/settings/UsersSection";
+import {
+  ModalFooter,
+  ModalShell,
+  Panel,
+  Spinner,
+  TOAST_DURATION,
+  Toast,
+  secondaryButtonClass,
+  statLabelClass,
+} from "../components/settings/ui";
 import {
   ACCENTS,
   DEFAULT_APPEARANCE,
@@ -37,113 +49,6 @@ import {
   loadAppearance,
   saveAppearance,
 } from "../../utils/appearance";
-
-// ---------------------------------------------------------------------------
-// Shared pieces (same boxy look as the transaction and inventory pages)
-// ---------------------------------------------------------------------------
-
-const TOAST_DURATION = { success: 3000, error: 5000 };
-
-const statLabelClass = "text-[10px] font-semibold tracking-wide text-gray-500 uppercase";
-
-const secondaryButtonClass =
-  "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-none transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed";
-
-const Spinner = () => (
-  <div className="w-4 h-4 mr-2 border-2 border-white rounded-full border-t-transparent animate-spin"></div>
-);
-
-const Toast = ({ toast, onClose }) => {
-  const isError = toast.type === "error";
-  const Icon = isError ? FaTimesCircle : FaCheckCircle;
-
-  return (
-    <div
-      role={isError ? "alert" : "status"}
-      className="fixed z-[60] top-4 right-4 left-4 sm:left-auto sm:w-96 toast-in"
-    >
-      <div
-        className={`relative overflow-hidden bg-white border border-gray-200 border-l-4 shadow-xl ${
-          isError ? "border-l-red-600" : "border-l-green-600"
-        }`}
-      >
-        <div className="flex items-start gap-3 px-4 py-3.5">
-          <Icon className={`mt-0.5 shrink-0 text-lg ${isError ? "text-red-600" : "text-green-600"}`} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-900">
-              {toast.title || (isError ? "Something went wrong" : "Done")}
-            </p>
-            <p className="mt-0.5 text-sm text-gray-600 break-words">{toast.message}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Dismiss"
-            className="flex items-center justify-center -mr-1 text-gray-400 transition-colors w-7 h-7 shrink-0 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <FaTimes className="text-xs" />
-          </button>
-        </div>
-        <div
-          className={`h-1 toast-progress ${isError ? "bg-red-600/30" : "bg-green-600/30"}`}
-          style={{ animationDuration: `${TOAST_DURATION[toast.type]}ms` }}
-        />
-      </div>
-    </div>
-  );
-};
-
-// Floating panel over a lightly blurred page
-const ModalShell = ({ title, subtitle, icon: Icon, iconClass = "bg-blue-600", onClose, busy, maxWidth = "max-w-lg", children }) => (
-  <div
-    className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-20 overflow-y-auto bg-gray-900/10 backdrop-blur-[2px]"
-    onClick={(e) => {
-      if (e.target === e.currentTarget && !busy) onClose();
-    }}
-  >
-    <div role="dialog" aria-modal="true" className={`relative w-full ${maxWidth} bg-white border border-gray-300 rounded-none shadow-2xl`}>
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          <div className={`flex items-center justify-center w-10 h-10 ${iconClass}`}>
-            <Icon className="text-base text-white" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold leading-tight text-gray-900">{title}</h2>
-            {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={busy}
-          aria-label="Close"
-          className="flex items-center justify-center w-8 h-8 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
-        >
-          <FaTimes className="text-sm" />
-        </button>
-      </div>
-      {children}
-    </div>
-  </div>
-);
-
-const ModalFooter = ({ children }) => (
-  <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">{children}</div>
-);
-
-// Boxy panel with a header bar
-const Panel = ({ title, description, action, children, bodyClass = "p-5" }) => (
-  <section className="bg-white border border-gray-200">
-    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-200">
-      <div className="min-w-0">
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        {description && <p className="text-xs text-gray-500">{description}</p>}
-      </div>
-      {action}
-    </div>
-    <div className={bodyClass}>{children}</div>
-  </section>
-);
 
 // ---------------------------------------------------------------------------
 // Store form modal
@@ -384,12 +289,16 @@ const SECTIONS = [
   { id: "appearance", name: "Appearance", icon: FaPalette, description: "Theme, colour and size" },
   { id: "notifications", name: "Notifications", icon: FaBell, description: "Alerts and reminders" },
   { id: "security", name: "Security", icon: FaShieldAlt, description: "Security and privacy" },
-  { id: "users", name: "Users", icon: FaUserCog, description: "Accounts and permissions" },
+  { id: "users", name: "Users", icon: FaUserCog, description: "Accounts and roles", permission: "users.manage" },
   { id: "data", name: "Data Management", icon: FaDatabase, description: "Backup and data handling" },
 ];
 
 export default function Settings() {
   const router = useRouter();
+  const { can } = useAuth();
+  const canManageStores = can("stores.manage");
+  // Every user can open Settings (appearance is personal); some sections need a permission
+  const sections = SECTIONS.filter((section) => !section.permission || can(section.permission));
   const [activeSection, setActiveSection] = useState("general");
   const [stores, setStores] = useState([]);
   const [showStoreForm, setShowStoreForm] = useState(false);
@@ -424,8 +333,9 @@ export default function Settings() {
     if (!router.isReady) return;
     const requested = router.query.section;
     if (requested === "stores") setActiveSection("general");
-    else if (SECTIONS.some((s) => s.id === requested)) setActiveSection(requested);
-  }, [router.isReady, router.query.section]);
+    else if (sections.some((s) => s.id === requested)) setActiveSection(requested);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sections only changes with the user's permissions
+  }, [router.isReady, router.query.section, sections.length]);
 
   const openSection = (id) => {
     setActiveSection(id);
@@ -539,7 +449,8 @@ export default function Settings() {
 
   // ---- Sections ------------------------------------------------------------
 
-  const addStoreButton = (
+  // Only admins add, edit or delete stores; everyone else sees the list
+  const addStoreButton = canManageStores && (
     <button
       onClick={() => openStoreForm()}
       className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700"
@@ -583,8 +494,12 @@ export default function Settings() {
               <FaStore className="text-xl" />
             </div>
             <p className="text-sm font-medium text-gray-700">No stores yet</p>
-            <p className="mt-1 text-xs text-gray-500">Create your first store location to start stocking products.</p>
-            <div className="mt-4">{addStoreButton}</div>
+            <p className="mt-1 text-xs text-gray-500">
+              {canManageStores
+                ? "Create your first store location to start stocking products."
+                : "An admin needs to add the first store."}
+            </p>
+            {canManageStores && <div className="mt-4">{addStoreButton}</div>}
           </div>
         ) : (
           <ul className="grid gap-px bg-gray-200 sm:grid-cols-2">
@@ -596,6 +511,7 @@ export default function Settings() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="text-sm font-semibold text-gray-900 truncate">{store.name}</h3>
+                    {canManageStores && (
                     <div className="flex -mt-1 -mr-1 shrink-0">
                       <button
                         onClick={() => openStoreForm(store)}
@@ -617,6 +533,7 @@ export default function Settings() {
                         <FaTrash className="text-sm" />
                       </button>
                     </div>
+                    )}
                   </div>
                   <div className="mt-1 space-y-1 text-xs text-gray-600">
                     {store.address && (
@@ -831,8 +748,9 @@ export default function Settings() {
   const renderSectionContent = () => {
     if (activeSection === "general") return renderGeneralSection();
     if (activeSection === "appearance") return renderAppearanceSection();
+    if (activeSection === "users" && can("users.manage")) return <UsersSection notify={notify} />;
 
-    const section = SECTIONS.find((s) => s.id === activeSection);
+    const section = sections.find((s) => s.id === activeSection);
     return (
       <Panel title={section?.name || "Settings"} description={section?.description}>
         <div className="flex flex-col items-center py-10 text-center">
@@ -858,7 +776,7 @@ export default function Settings() {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         {/* Section navigation: a row that scrolls on phones, a column from lg */}
         <nav className="flex overflow-x-auto bg-white border border-gray-200 lg:flex-col lg:w-60 lg:shrink-0 lg:sticky lg:top-4">
-          {SECTIONS.map((section) => {
+          {sections.map((section) => {
             const active = activeSection === section.id;
             return (
               <button

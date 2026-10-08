@@ -1,16 +1,19 @@
 // components/InventoryNav.js
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { useAuth } from '../context/AuthContext';
+import { canAccessPath } from '../../utils/permissions';
 import { FaEllipsisV } from "react-icons/fa";
 import { useState, useEffect } from "react";
 
 export default function InventoryNav() {
   const router = useRouter();
+  const { user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isMedium, setIsMedium] = useState(false);
 
-  const navItems = [
+  const allNavItems = [
     {
       name: "Product Category",
       path: "/inventory/product-category",
@@ -36,6 +39,8 @@ export default function InventoryNav() {
       path: "/inventory/purchase-log",
     },
   ];
+  // Only the tabs this user may open
+  const navItems = allNavItems.filter((item) => canAccessPath(user, item.path));
 
   // Check screen size on mount and resize
   useEffect(() => {
