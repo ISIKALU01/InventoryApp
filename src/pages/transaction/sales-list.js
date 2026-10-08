@@ -62,6 +62,13 @@ const itemQty = (item) =>
 
 const itemPrice = (item) => parseFloat(item.unit_price ?? item.product_price ?? item.price) || 0;
 
+const itemName = (item) => item.product_name || item.product?.name || item.name || 'Unknown product';
+
+// Store the item was sold from; null for sales made before stores were recorded
+const itemStore = (item) => item.store?.name || (typeof item.store === 'string' ? item.store : '');
+
+const orderItems = (order) => (Array.isArray(order.items) ? order.items : []);
+
 const orderQty = (order) => {
   if (Array.isArray(order.items)) return order.items.reduce((sum, item) => sum + itemQty(item), 0);
   return Number(order.total_quantity) || Number(order.items_count) || Number(order.quantity) || 0;
@@ -76,7 +83,13 @@ const orderAmount = (order) =>
 
 const orderRef = (order) => order.transaction_id || order.id;
 const customerOf = (order) => order.customer_name || order.customer?.name || 'Walk-in Customer';
-const locationOf = (order) => order.store?.name || order.store || order.location || '';
+// Every store an order sold from (one sale can draw from several)
+const locationsOf = (order) => {
+  const own = order.store?.name || (typeof order.store === 'string' ? order.store : '') || order.location;
+  if (own) return [own];
+  return [...new Set(orderItems(order).map(itemStore).filter(Boolean))];
+};
+const locationOf = (order) => locationsOf(order).join(', ');
 const userOf = (order) => order.processed_by || order.user_name || '';
 
 const paymentLabel = (method) =>
@@ -289,6 +302,41 @@ const PaymentBadge = ({ method }) => (
   </span>
 );
 
+// Product names with the quantity sold, first few only; the details modal lists the rest
+const PRODUCTS_SHOWN = 2;
+
+const ProductsSold = ({ order }) => {
+  const items = orderItems(order);
+  if (items.length === 0) return <span className="text-gray-400">—</span>;
+
+  const hidden = items.length - PRODUCTS_SHOWN;
+  return (
+    <div className="space-y-0.5 text-sm text-gray-700">
+      {items.slice(0, PRODUCTS_SHOWN).map((item, index) => (
+        <div key={item.id ?? index} className="flex items-baseline min-w-0 gap-1.5">
+          <span className="truncate max-w-[12rem]">{itemName(item)}</span>
+          <span className="text-xs font-medium text-gray-500 whitespace-nowrap">× {itemQty(item)}</span>
+        </div>
+      ))}
+      {hidden > 0 && <div className="text-xs text-blue-600">+{hidden} more</div>}
+    </div>
+  );
+};
+
+const StoreNames = ({ order }) => {
+  const stores = locationsOf(order);
+  if (stores.length === 0) {
+    return <span className="text-xs text-gray-400" title="Sold before stores were recorded on sales">Not recorded</span>;
+  }
+  return (
+    <div className="space-y-0.5 text-sm">
+      {stores.map((store) => (
+        <div key={store} className="truncate">{store}</div>
+      ))}
+    </div>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -363,7 +411,7 @@ export default function SalesList() {
     return diff !== 0 ? diff : (Number(b.id) || 0) - (Number(a.id) || 0);
   });
 
-  const locations = [...new Set(orders.map(locationOf).filter(Boolean))].sort();
+  const locations = [...new Set(orders.flatMap(locationsOf))].sort();
   const users = [...new Set(orders.map(userOf).filter(Boolean))].sort();
 
   // Filter orders based on search and filters
@@ -371,12 +419,17 @@ export default function SalesList() {
   const filteredTransactions = sortedOrders.filter((order) => {
     const matchesSearch =
       term === '' ||
-      [orderRef(order), customerOf(order), userOf(order), paymentLabel(order.payment_method)].some(
-        (field) => field && field.toString().toLowerCase().includes(term)
-      );
+      [
+        orderRef(order),
+        customerOf(order),
+        userOf(order),
+        paymentLabel(order.payment_method),
+        locationOf(order),
+        ...orderItems(order).map(itemName),
+      ].some((field) => field && field.toString().toLowerCase().includes(term));
 
     const matchesDate = selectedDate === '' || dayKey(toDate(order.created_at)) === selectedDate;
-    const matchesLocation = selectedLocation === '' || locationOf(order) === selectedLocation;
+    const matchesLocation = selectedLocation === '' || locationsOf(order).includes(selectedLocation);
     const matchesUser = selectedUser === '' || userOf(order) === selectedUser;
 
     return matchesSearch && matchesDate && matchesLocation && matchesUser;
@@ -414,16 +467,18 @@ export default function SalesList() {
       return;
     }
 
-    const headers = ['Date', 'Transaction ID', 'Customer', 'Payment Method', 'Items', 'Subtotal', 'Tax', 'Discount', 'Total', 'Processed By'];
+    const headers = ['Date', 'Transaction ID', 'Customer', 'Payment Method', 'Products', 'Quantity', 'Store', 'Subtotal', 'Tax', 'Discount', 'Total', 'Processed By'];
 
     const csvData = filteredTransactions.map((order) => [
       order.created_at || '',
       orderRef(order) || '',
       customerOf(order),
       order.payment_method || '',
-      Array.isArray(order.items)
-        ? order.items.map((item) => `${item.product_name || item.name} (${itemQty(item)})`).join('; ')
-        : '',
+      orderItems(order)
+        .map((item) => `${itemName(item)} x${itemQty(item)}${itemStore(item) ? ` (${itemStore(item)})` : ''}`)
+        .join('; '),
+      orderQty(order),
+      locationOf(order),
       order.subtotal ?? '',
       order.tax_amount ?? '',
       order.discount_amount ?? '',
@@ -461,7 +516,7 @@ export default function SalesList() {
     }
 
     const date = toDate(order.created_at) || new Date();
-    const items = Array.isArray(order.items) ? order.items : [];
+    const items = orderItems(order);
     const row = (label, value, cls = '') =>
       `<tr class="${cls}"><td>${label}</td><td class="r">${value}</td></tr>`;
 
@@ -492,6 +547,7 @@ export default function SalesList() {
           <table>
             ${row('Customer', escapeHtml(customerOf(order)))}
             ${row('Payment', escapeHtml(paymentLabel(order.payment_method)))}
+            ${locationOf(order) ? row('Store', escapeHtml(locationOf(order))) : ''}
           </table>
           <div class="rule"></div>
           <table>
@@ -500,7 +556,7 @@ export default function SalesList() {
                 ? items
                     .map(
                       (item) => `
-                <tr><td colspan="2">${escapeHtml(item.product_name || item.name)}</td></tr>
+                <tr><td colspan="2">${escapeHtml(itemName(item))}</td></tr>
                 <tr class="muted"><td>${itemQty(item)} × ${formatCurrency(itemPrice(item))}</td>
                   <td class="r">${formatCurrency(itemQty(item) * itemPrice(item))}</td></tr>`
                     )
@@ -603,7 +659,7 @@ export default function SalesList() {
     </>
   );
 
-  const viewItems = viewOrder && Array.isArray(viewOrder.items) ? viewOrder.items : [];
+  const viewItems = viewOrder ? orderItems(viewOrder) : [];
   const viewDate = viewOrder ? toDate(viewOrder.created_at) : null;
 
   return (
@@ -647,10 +703,10 @@ export default function SalesList() {
                   {viewItems.map((item, index) => (
                     <li key={item.id ?? index} className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2.5 items-center">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {item.product_name || item.name || 'Unknown product'}
+                        <p className="text-sm font-medium text-gray-900 truncate">{itemName(item)}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {formatCurrency(itemPrice(item))} each · {itemStore(item) || 'Store not recorded'}
                         </p>
-                        <p className="text-xs text-gray-500">{formatCurrency(itemPrice(item))} each</p>
                       </div>
                       <span className="w-12 text-sm text-right text-gray-700">{itemQty(item)}</span>
                       <span className="w-24 text-sm font-medium text-right text-gray-900">
@@ -813,7 +869,7 @@ export default function SalesList() {
                 />
                 <input
                   type="search"
-                  placeholder="Search by transaction, customer, user or payment"
+                  placeholder="Search by transaction, customer, product, store or user"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className={`${fieldClass} pl-8`}
@@ -878,7 +934,8 @@ export default function SalesList() {
                       <th className={`px-3 py-2.5 ${statLabelClass}`}>Transaction</th>
                       <th className={`px-3 py-2.5 ${statLabelClass}`}>Customer</th>
                       <th className={`px-3 py-2.5 ${statLabelClass}`}>Payment</th>
-                      <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Items</th>
+                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Products Sold</th>
+                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Store</th>
                       <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Total</th>
                       <th className={`px-3 py-2.5 ${statLabelClass}`}>Processed By</th>
                       <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
@@ -904,7 +961,12 @@ export default function SalesList() {
                           <td className="px-3 py-3">
                             <PaymentBadge method={order.payment_method} />
                           </td>
-                          <td className="px-3 py-3 text-right text-gray-700">{orderQty(order)}</td>
+                          <td className="px-3 py-3">
+                            <ProductsSold order={order} />
+                          </td>
+                          <td className="max-w-[10rem] px-3 py-3 text-gray-700">
+                            <StoreNames order={order} />
+                          </td>
                           <td className="px-3 py-3 font-semibold text-right text-gray-900 whitespace-nowrap">
                             {formatCurrency(orderAmount(order))}
                           </td>
@@ -971,8 +1033,15 @@ export default function SalesList() {
                         <span className="truncate">{customerOf(order)}</span>
                         <PaymentBadge method={order.payment_method} />
                         <span>{orderQty(order)} item{orderQty(order) === 1 ? '' : 's'}</span>
+                        {locationOf(order) && <span>{locationOf(order)}</span>}
                         <span>By {userOf(order) || 'System'}</span>
                       </div>
+
+                      {orderItems(order).length > 0 && (
+                        <div className="mt-2">
+                          <ProductsSold order={order} />
+                        </div>
+                      )}
 
                       <div className={`grid ${canDelete ? "grid-cols-3" : "grid-cols-2"} mt-3 border border-gray-200 divide-x divide-gray-200`}>
                         <button
