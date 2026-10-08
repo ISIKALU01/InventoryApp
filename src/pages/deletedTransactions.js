@@ -1,22 +1,241 @@
-// pages/deleted-transactions.js
-import { useState, useEffect } from "react";
+// pages/deletedTransactions.js
+import { useState, useEffect, useRef } from "react";
 import http from "../../services/http";
-import { 
-  Search, 
-  Filter, 
-  Trash2, 
-  RefreshCw, 
-  Calendar,
-  User,
-  FileText,
-  Clock,
-  Eye,
+import {
+  AlertTriangle,
+  Archive,
+  CalendarDays,
+  CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Download,
-  Archive,
-  MoreVertical
+  Eye,
+  FileText,
+  Loader2,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Users,
+  Wallet,
+  X,
+  XCircle,
 } from "lucide-react";
+
+const PAGE_SIZE = 25;
+const TOAST_DURATION = { success: 3000, error: 5000 };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const toList = (body) => (Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : []);
+
+// Laravel can send "2026-10-07 13:25:00", which Safari won't parse
+const toDate = (value) => {
+  if (!value) return null;
+  const date = new Date(typeof value === "string" ? value.replace(" ", "T") : value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatDay = (value) =>
+  toDate(value)?.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }) || "N/A";
+
+const formatClock = (value) =>
+  toDate(value)?.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) || "";
+
+const formatDateTime = (value) => {
+  const day = formatDay(value);
+  const clock = formatClock(value);
+  return clock ? `${day} · ${clock}` : day;
+};
+
+const formatCurrency = (amount) =>
+  `₦${Number(amount || 0).toLocaleString("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const amountOf = (t) => parseFloat(t.total_amount) || 0;
+
+const label = (value) =>
+  value
+    ? value
+        .toString()
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+    : "Unknown";
+
+const startOfToday = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
+// Deleted-at date range filter (local calendar days)
+const inDateRange = (value, range) => {
+  if (range === "all") return true;
+  const date = toDate(value);
+  if (!date) return false;
+  const today = startOfToday();
+  const daysAgo = (n) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - n);
+    return d;
+  };
+  if (range === "today") return date >= today;
+  if (range === "yesterday") return date >= daysAgo(1) && date < today;
+  if (range === "week") return date >= daysAgo(7);
+  if (range === "month") return date >= daysAgo(30);
+  return true;
+};
+
+const DATE_RANGES = [
+  { id: "all", label: "All Time" },
+  { id: "today", label: "Today" },
+  { id: "yesterday", label: "Yesterday" },
+  { id: "week", label: "Last 7 Days" },
+  { id: "month", label: "Last 30 Days" },
+];
+
+const STATUS_BADGE = {
+  completed: "bg-green-50 text-green-700",
+  pending: "bg-amber-50 text-amber-700",
+  failed: "bg-red-50 text-red-700",
+  cancelled: "bg-gray-100 text-gray-600",
+};
+
+const itemName = (item, index) => item.name || item.product_name || `Item ${index + 1}`;
+const itemQty = (item) => Number(item.quantity) || Number(item.qty) || 0;
+const itemPrice = (item) => parseFloat(item.price ?? item.unit_price ?? item.product_price) || 0;
+
+// ---------------------------------------------------------------------------
+// Shared pieces (same look as the other redesigned pages)
+// ---------------------------------------------------------------------------
+
+const filterFieldClass =
+  "block w-full h-8 px-2.5 text-xs text-gray-800 bg-gray-100 border-0 rounded-none outline-none shadow-none appearance-none transition-colors placeholder:text-gray-400 focus:bg-gray-50 focus:outline-none focus:ring-0";
+
+const statLabelClass = "text-[10px] font-semibold tracking-wide text-gray-500 uppercase";
+
+const secondaryButtonClass =
+  "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-none transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed";
+
+const FilterSelect = ({ className = "", children, ...props }) => (
+  <div className={`relative ${className}`}>
+    <select {...props} className={`${filterFieldClass} pr-7 cursor-pointer`}>
+      {children}
+    </select>
+    <ChevronDown
+      size={13}
+      className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-2.5 top-1/2"
+    />
+  </div>
+);
+
+const Badge = ({ className, children }) => (
+  <span className={`inline-block px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${className}`}>
+    {children}
+  </span>
+);
+
+const StatusBadge = ({ status }) => (
+  <Badge className={STATUS_BADGE[status?.toLowerCase()] || "bg-gray-100 text-gray-600"}>{label(status)}</Badge>
+);
+
+const PaymentBadge = ({ method }) => <Badge className="text-gray-700 bg-gray-100">{label(method)}</Badge>;
+
+const Toast = ({ toast, onClose }) => {
+  const isError = toast.type === "error";
+  const Icon = isError ? XCircle : CheckCircle2;
+
+  return (
+    <div
+      role={isError ? "alert" : "status"}
+      className="fixed z-[60] top-4 right-4 left-4 sm:left-auto sm:w-96 toast-in"
+    >
+      <div
+        className={`relative overflow-hidden bg-white border border-gray-200 border-l-4 shadow-xl ${
+          isError ? "border-l-red-600" : "border-l-green-600"
+        }`}
+      >
+        <div className="flex items-start gap-3 px-4 py-3.5">
+          <Icon size={20} className={`mt-0.5 shrink-0 ${isError ? "text-red-600" : "text-green-600"}`} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900">
+              {toast.title || (isError ? "Something went wrong" : "Done")}
+            </p>
+            <p className="mt-0.5 text-sm text-gray-600 break-words">{toast.message}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Dismiss"
+            className="flex items-center justify-center -mr-1 text-gray-400 transition-colors w-7 h-7 shrink-0 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div
+          className={`h-1 toast-progress ${isError ? "bg-red-600/30" : "bg-green-600/30"}`}
+          style={{ animationDuration: `${TOAST_DURATION[toast.type]}ms` }}
+        />
+      </div>
+    </div>
+  );
+};
+
+const EmptyState = ({ icon: Icon, title, hint, tone = "gray", action }) => (
+  <div className="flex flex-col items-center justify-center px-5 text-center py-14">
+    <div
+      className={`flex items-center justify-center w-12 h-12 mb-3 ${
+        tone === "red" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-400"
+      }`}
+    >
+      <Icon size={22} />
+    </div>
+    <p className="text-sm font-medium text-gray-700">{title}</p>
+    {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
+    {action && <div className="mt-4">{action}</div>}
+  </div>
+);
+
+const SummaryRow = ({ label: rowLabel, value, strong = false }) => (
+  <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-white">
+    <span className={strong ? "text-sm font-semibold text-gray-900" : "text-sm text-gray-600"}>{rowLabel}</span>
+    <span className={`text-right ${strong ? "text-base font-bold text-gray-900" : "text-sm font-medium text-gray-900"}`}>
+      {value}
+    </span>
+  </div>
+);
+
+// Clickable column header with a sort arrow
+const SortHeader = ({ column, sortBy, sortOrder, onSort, align = "left", className = "", children }) => {
+  const active = sortBy === column;
+  return (
+    <th className={`py-2.5 ${className} ${align === "right" ? "text-right" : "text-left"}`}>
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={`inline-flex items-center gap-1 ${statLabelClass} hover:text-gray-800 ${
+          active ? "text-gray-800" : ""
+        }`}
+      >
+        {children}
+        {active ? (
+          sortOrder === "asc" ? <ChevronUp size={11} /> : <ChevronDown size={11} />
+        ) : (
+          <ChevronDown size={11} className="opacity-0" />
+        )}
+      </button>
+    </th>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function DeletedTransactions() {
   const [transactions, setTransactions] = useState([]);
@@ -29,24 +248,24 @@ export default function DeletedTransactions() {
   const [sortBy, setSortBy] = useState("deleted_at");
   const [sortOrder, setSortOrder] = useState("desc");
   const [selectedTransaction, setSelectedTransaction] = useState(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [exportLoading, setExportLoading] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(1);
 
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
 
-  // Check screen size
-  useEffect(() => {
-    const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+  const notify = (type, message, title) => {
+    clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), type, message, title });
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_DURATION[type]);
+  };
 
-    checkScreenSize();
-    window.addEventListener('resize', checkScreenSize);
-    
-    return () => {
-      window.removeEventListener('resize', checkScreenSize);
-    };
-  }, []);
+  const closeToast = () => {
+    clearTimeout(toastTimer.current);
+    setToast(null);
+  };
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   // Fetch deleted transactions
   const fetchDeletedTransactions = async () => {
@@ -54,15 +273,7 @@ export default function DeletedTransactions() {
       setLoading(true);
       setError(null);
       const response = await http.get("/view-deleted-transaction");
-
-      console.log("Deleted Transactions Response:", response.data);
-      
-      // Handle different response formats
-      const transactionsData = Array.isArray(response.data) 
-        ? response.data 
-        : response.data?.data || [];
-        
-      setTransactions(transactionsData);
+      setTransactions(toList(response.data));
     } catch (err) {
       console.error("Failed to fetch deleted transactions:", err);
       setError(err.response?.data?.message || "Failed to load deleted transactions");
@@ -71,666 +282,593 @@ export default function DeletedTransactions() {
     }
   };
 
-  // Export to CSV
-  const handleExportCSV = async () => {
-    try {
-      setExportLoading(true);
-      const filtered = filteredTransactions;
-      const headers = ["ID", "Amount", "Status", "Payment Method", "Processed By", "Customer ID", "Deleted At", "Created At"];
-      const csvContent = [
-        headers.join(","),
-        ...filtered.map(transaction => [
-          transaction.id || "",
-          transaction.total_amount || "",
-          transaction.status || "",
-          transaction.payment_method || "",
-          `"${(transaction.processed_by || "").replace(/"/g, '""')}"`,
-          transaction.customer_id || "",
-          transaction.deleted_at || "",
-          transaction.created_at || ""
-        ].join(","))
-      ].join("\n");
+  useEffect(() => {
+    fetchDeletedTransactions();
+  }, []);
 
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `deleted-transactions-${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Export failed:", err);
-      alert("Failed to export transactions");
-    } finally {
-      setExportLoading(false);
-    }
-  };
+  // ---- Filter + sort -------------------------------------------------------
 
-  // Filter transactions based on actual API data structure
-  const filteredTransactions = transactions.filter((transaction) => {
-    const matchesSearch = 
-      transaction.id?.toString().includes(searchTerm.toLowerCase()) ||
-      transaction.total_amount?.toString().includes(searchTerm) ||
-      transaction.processed_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      transaction.customer_id?.toString().includes(searchTerm) ||
-      transaction.payment_method?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = 
-      statusFilter === "all" || 
-      transaction.status?.toLowerCase() === statusFilter.toLowerCase();
-
-    const matchesPaymentMethod = 
-      paymentMethodFilter === "all" || 
-      transaction.payment_method?.toLowerCase() === paymentMethodFilter.toLowerCase();
-
-    const matchesDate = dateFilter === "all" || applyDateFilter(transaction.deleted_at, dateFilter);
-
-    return matchesSearch && matchesStatus && matchesPaymentMethod && matchesDate;
+  const term = searchTerm.trim().toLowerCase();
+  const filteredTransactions = transactions.filter((t) => {
+    const matchesSearch =
+      term === "" ||
+      [t.id, t.total_amount, t.processed_by, t.customer_id, t.payment_method, t.status].some((field) =>
+        field?.toString().toLowerCase().includes(term)
+      );
+    const matchesStatus = statusFilter === "all" || t.status?.toLowerCase() === statusFilter.toLowerCase();
+    const matchesPayment =
+      paymentMethodFilter === "all" || t.payment_method?.toLowerCase() === paymentMethodFilter.toLowerCase();
+    return matchesSearch && matchesStatus && matchesPayment && inDateRange(t.deleted_at, dateFilter);
   });
 
-  // Apply date filtering
-  const applyDateFilter = (dateString, filter) => {
-    if (!dateString) return false;
-    const date = new Date(dateString);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    switch (filter) {
-      case "today":
-        return date >= today;
-      case "yesterday":
-        return date >= yesterday && date < today;
-      case "week":
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        return date >= weekAgo;
-      case "month":
-        const monthAgo = new Date(today);
-        monthAgo.setMonth(monthAgo.getMonth() - 1);
-        return date >= monthAgo;
-      default:
-        return true;
-    }
-  };
-
-  // Sort transactions based on actual API fields
-  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
-    let aValue, bValue;
-    
+  const sortValue = (t) => {
     switch (sortBy) {
       case "total_amount":
-        aValue = parseFloat(a.total_amount) || 0;
-        bValue = parseFloat(b.total_amount) || 0;
-        break;
+        return amountOf(t);
       case "deleted_at":
-        aValue = new Date(a.deleted_at || 0);
-        bValue = new Date(b.deleted_at || 0);
-        break;
       case "created_at":
-        aValue = new Date(a.created_at || 0);
-        bValue = new Date(b.created_at || 0);
-        break;
-      case "customer_id":
-        aValue = a.customer_id || "";
-        bValue = b.customer_id || "";
-        break;
+        return toDate(t[sortBy])?.getTime() || 0;
+      case "id":
+        return Number(t.id) || 0;
       default:
-        aValue = a[sortBy] || "";
-        bValue = b[sortBy] || "";
+        return (t[sortBy] ?? "").toString().toLowerCase();
     }
+  };
 
-    if (sortOrder === "asc") {
-      return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-    } else {
-      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-    }
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    const av = sortValue(a);
+    const bv = sortValue(b);
+    const diff = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortOrder === "asc" ? diff : -diff;
   });
 
-  // Handle sort
   const handleSort = (column) => {
     if (sortBy === column) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+      setSortOrder((order) => (order === "asc" ? "desc" : "asc"));
     } else {
       setSortBy(column);
       setSortOrder("desc");
     }
   };
 
-  // View transaction details
-  const viewTransactionDetails = (transaction) => {
-    setSelectedTransaction(transaction);
-    setShowDetailsModal(true);
-  };
-
-  // Format currency
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency: 'NGN',
-    }).format(amount || 0);
-  };
-
-  // Format date for mobile
-  const formatDate = (dateString, mobile = false) => {
-    if (!dateString) return "N/A";
-    
-    if (mobile) {
-      return new Date(dateString).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    }
-    
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  // Get status badge
-  const getStatusBadge = (status) => {
-    const statusColors = {
-      completed: "bg-green-100 text-green-800",
-      pending: "bg-yellow-100 text-yellow-800",
-      failed: "bg-red-100 text-red-800",
-      cancelled: "bg-gray-100 text-gray-800",
-    };
-
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full capitalize ${statusColors[status] || "bg-gray-100 text-gray-800"}`}>
-        {status || "unknown"}
-      </span>
-    );
-  };
-
-  // Get payment method badge
-  const getPaymentMethodBadge = (method) => {
-    const methodColors = {
-      cash: "bg-green-100 text-green-800",
-      card: "bg-blue-100 text-blue-800",
-      transfer: "bg-purple-100 text-purple-800",
-      digital: "bg-orange-100 text-orange-800",
-    };
-
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full capitalize ${methodColors[method] || "bg-gray-100 text-gray-800"}`}>
-        {method || "unknown"}
-      </span>
-    );
-  };
-
-  // Get unique values for filters based on actual data
-  const uniqueStatuses = [...new Set(transactions.map(t => t.status).filter(Boolean))];
-  const uniquePaymentMethods = [...new Set(transactions.map(t => t.payment_method).filter(Boolean))];
-
-  // Mobile transaction card component
-  const MobileTransactionCard = ({ transaction }) => (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-3 shadow-sm">
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm font-semibold text-gray-900">#{transaction.id}</span>
-            {getStatusBadge(transaction.status)}
-          </div>
-          <div className="text-lg font-bold text-gray-900">
-            {formatCurrency(transaction.total_amount)}
-          </div>
-        </div>
-        <button
-          onClick={() => viewTransactionDetails(transaction)}
-          className="text-indigo-600 hover:text-indigo-900 p-1"
-        >
-          <Eye size={16} />
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <span className="text-gray-500 text-xs">Payment Method</span>
-          <div className="mt-1">{getPaymentMethodBadge(transaction.payment_method)}</div>
-        </div>
-        <div>
-          <span className="text-gray-500 text-xs">Customer ID</span>
-          <p className="mt-1 font-medium">{transaction.customer_id || "N/A"}</p>
-        </div>
-        <div>
-          <span className="text-gray-500 text-xs">Processed By</span>
-          <p className="mt-1 font-medium truncate">{transaction.processed_by || "System"}</p>
-        </div>
-        <div>
-          <span className="text-gray-500 text-xs">Deleted</span>
-          <div className="mt-1 flex items-center gap-1 text-gray-700">
-            <Clock size={12} />
-            <span className="text-xs">{formatDate(transaction.deleted_at, true)}</span>
-          </div>
-        </div>
-      </div>
-    </div>
+  const hasFilters = Boolean(
+    searchTerm || statusFilter !== "all" || paymentMethodFilter !== "all" || dateFilter !== "all"
   );
 
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setPaymentMethodFilter("all");
+    setDateFilter("all");
+  };
+
+  // Back to the first page whenever the result set or order changes
   useEffect(() => {
-    fetchDeletedTransactions();
-  }, []);
+    setPage(1);
+  }, [searchTerm, statusFilter, paymentMethodFilter, dateFilter, sortBy, sortOrder]);
+
+  const pageCount = Math.max(1, Math.ceil(sortedTransactions.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = sortedTransactions.slice(pageStart, pageStart + PAGE_SIZE);
+
+  const uniqueStatuses = [...new Set(transactions.map((t) => t.status).filter(Boolean))].sort();
+  const uniquePaymentMethods = [...new Set(transactions.map((t) => t.payment_method).filter(Boolean))].sort();
+
+  const totalAmount = transactions.reduce((sum, t) => sum + amountOf(t), 0);
+  const filteredAmount = filteredTransactions.reduce((sum, t) => sum + amountOf(t), 0);
+  const deletedToday = transactions.filter((t) => inDateRange(t.deleted_at, "today")).length;
+  const processorCount = new Set(transactions.map((t) => t.processed_by).filter(Boolean)).size;
+
+  // ---- Export --------------------------------------------------------------
+
+  const handleExportCSV = () => {
+    if (sortedTransactions.length === 0) {
+      notify("error", "There are no transactions to export.", "Nothing to export");
+      return;
+    }
+    try {
+      const headers = ["ID", "Amount", "Status", "Payment Method", "Processed By", "Customer ID", "Deleted At", "Created At"];
+      const cell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+      const csvContent = [
+        headers.join(","),
+        ...sortedTransactions.map((t) =>
+          [t.id, t.total_amount, t.status, t.payment_method, t.processed_by, t.customer_id, t.deleted_at, t.created_at]
+            .map(cell)
+            .join(",")
+        ),
+      ].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const today = startOfToday();
+      link.href = url;
+      link.download = `deleted-transactions-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+        today.getDate()
+      ).padStart(2, "0")}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      notify(
+        "success",
+        `${sortedTransactions.length} transaction${sortedTransactions.length === 1 ? "" : "s"} exported.`,
+        "Export ready"
+      );
+    } catch (err) {
+      console.error("Export failed:", err);
+      notify("error", "Could not export the transactions.", "Export failed");
+    }
+  };
+
+  // Escape closes the details modal
+  useEffect(() => {
+    if (!selectedTransaction) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setSelectedTransaction(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedTransaction]);
+
+  // ---- Render --------------------------------------------------------------
+
+  const tiles = [
+    { icon: Trash2, iconClass: "bg-red-50 text-red-700", label: "Total Deleted", value: transactions.length },
+    { icon: Wallet, iconClass: "bg-blue-50 text-blue-700", label: "Total Amount", value: formatCurrency(totalAmount) },
+    { icon: CalendarDays, iconClass: "bg-amber-50 text-amber-700", label: "Deleted Today", value: deletedToday },
+    { icon: Users, iconClass: "bg-purple-50 text-purple-700", label: "Processed By", value: `${processorCount} ${processorCount === 1 ? "person" : "people"}` },
+  ];
+
+  const filterFields = (
+    <>
+      <FilterSelect value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+        <option value="all">All Statuses</option>
+        {uniqueStatuses.map((status) => (
+          <option key={status} value={status}>
+            {label(status)}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect
+        value={paymentMethodFilter}
+        onChange={(e) => setPaymentMethodFilter(e.target.value)}
+        aria-label="Filter by payment method"
+      >
+        <option value="all">All Payment Methods</option>
+        {uniquePaymentMethods.map((method) => (
+          <option key={method} value={method}>
+            {label(method)}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} aria-label="Filter by date deleted">
+        {DATE_RANGES.map((range) => (
+          <option key={range.id} value={range.id}>
+            {range.label}
+          </option>
+        ))}
+      </FilterSelect>
+    </>
+  );
+
+  const sortProps = { sortBy, sortOrder, onSort: handleSort };
+  const selected = selectedTransaction;
+  const selectedItems = Array.isArray(selected?.items) ? selected.items : [];
 
   return (
-    <div className="min-h-screen bg-gray-50 py-4 px-3 sm:px-4 lg:px-6 font-raleway">
-      {/* Header */}
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col gap-4 mb-6">
-          
-
-          {/* Stats Cards */}
-          {!loading && transactions.length > 0 && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
-              <div className="bg-white rounded-lg shadow-xs border p-3 sm:p-4">
-                <div className="flex items-center">
-                  <div className="p-1 sm:p-2 bg-red-100 rounded-lg">
-                    <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
-                  </div>
-                  <div className="ml-2 sm:ml-3">
-                    <p className="text-xs sm:text-sm font-medium text-gray-500">Total Deleted</p>
-                    <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{transactions.length}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-lg shadow-xs border p-3 sm:p-4">
-                <div className="flex items-center">
-                  <div className="p-1 sm:p-2 bg-blue-100 rounded-lg">
-                    <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                  </div>
-                  <div className="ml-2 sm:ml-3">
-                    <p className="text-xs sm:text-sm font-medium text-gray-500">Total Amount</p>
-                    <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
-                      {formatCurrency(transactions.reduce((sum, t) => sum + (parseFloat(t.total_amount) || 0), 0))}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-lg shadow-xs border p-3 sm:p-4">
-                <div className="flex items-center">
-                  <div className="p-1 sm:p-2 bg-green-100 rounded-lg">
-                    <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-                  </div>
-                  <div className="ml-2 sm:ml-3">
-                    <p className="text-xs sm:text-sm font-medium text-gray-500">Showing</p>
-                    <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{filteredTransactions.length}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-lg shadow-xs border p-3 sm:p-4">
-                <div className="flex items-center">
-                  <div className="p-1 sm:p-2 bg-purple-100 rounded-lg">
-                    <User className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
-                  </div>
-                  <div className="ml-2 sm:ml-3">
-                    <p className="text-xs sm:text-sm font-medium text-gray-500">Unique Processors</p>
-                    <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
-                      {new Set(transactions.map(t => t.processed_by).filter(Boolean)).size}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Filters and Search */}
-        <div className="bg-white rounded-lg shadow-sm border p-3 sm:p-4 lg:p-6 mb-4 sm:mb-6">
-          <div className="flex flex-col gap-3 sm:gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search by ID, amount, processed by, customer ID, or payment method..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full px-3 py-2 sm:px-4 sm:py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black outline-none"
-              />
-            </div>
-
-            {/* Filters */}
-            <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Filter className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
-                </div>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="pl-9 sm:pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black outline-none appearance-none"
-                >
-                  <option value="all">All Status</option>
-                  {uniqueStatuses.map(status => (
-                    <option key={status} value={status}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
-                </div>
-                <select
-                  value={paymentMethodFilter}
-                  onChange={(e) => setPaymentMethodFilter(e.target.value)}
-                  className="pl-9 sm:pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black outline-none appearance-none"
-                >
-                  <option value="all">All Payment Methods</option>
-                  {uniquePaymentMethods.map(method => (
-                    <option key={method} value={method}>
-                      {method.charAt(0).toUpperCase() + method.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="relative xs:col-span-2 lg:col-span-1">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
-                </div>
-                <select
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="pl-9 sm:pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-black outline-none appearance-none"
-                >
-                  <option value="all">All Time</option>
-                  <option value="today">Today</option>
-                  <option value="yesterday">Yesterday</option>
-                  <option value="week">Last 7 Days</option>
-                  <option value="month">Last 30 Days</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Transactions Table/Cards */}
-        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-          {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-indigo-600"></div>
-              <span className="ml-2 sm:ml-3 text-gray-600 text-sm sm:text-base">Loading deleted transactions...</span>
-            </div>
-          ) : error ? (
-            <div className="text-center py-6 sm:py-8">
-              <div className="text-red-500 mb-4">
-                <Trash2 className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 text-red-300" />
-                <p className="text-sm font-medium">Error loading transactions</p>
-                <p className="text-xs mt-1 text-gray-600 px-4">{error}</p>
-              </div>
-              <button
-                onClick={fetchDeletedTransactions}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm"
-              >
-                Try Again
-              </button>
-            </div>
-          ) : sortedTransactions.length === 0 ? (
-            <div className="text-center py-8 sm:py-12">
-              <div className="text-gray-400 mb-4">
-                <Archive className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3" />
-                <p className="text-base sm:text-lg font-medium text-gray-600">No deleted transactions found</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1 px-4">
-                  {transactions.length === 0 
-                    ? "No transactions have been deleted yet"
-                    : "Try adjusting your search or filters"
-                  }
-                </p>
-              </div>
-            </div>
-          ) : isMobile ? (
-            // Mobile Cards View
-            <div className="p-3 sm:p-4">
-              {sortedTransactions.map((transaction) => (
-                <MobileTransactionCard 
-                  key={transaction.id} 
-                  transaction={transaction} 
-                />
-              ))}
-            </div>
-          ) : (
-            // Desktop Table View
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th 
-                      className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSort("id")}
-                    >
-                      <div className="flex items-center gap-1">
-                        ID
-                        {sortBy === "id" && (
-                          sortOrder === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                        )}
-                      </div>
-                    </th>
-                    <th 
-                      className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSort("total_amount")}
-                    >
-                      <div className="flex items-center gap-1">
-                        Amount
-                        {sortBy === "total_amount" && (
-                          sortOrder === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                        )}
-                      </div>
-                    </th>
-                    <th className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Payment Method
-                    </th>
-                    <th 
-                      className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSort("customer_id")}
-                    >
-                      <div className="flex items-center gap-1">
-                        Customer ID
-                        {sortBy === "customer_id" && (
-                          sortOrder === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                        )}
-                      </div>
-                    </th>
-                    <th 
-                      className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSort("processed_by")}
-                    >
-                      <div className="flex items-center gap-1">
-                        Processed By
-                        {sortBy === "processed_by" && (
-                          sortOrder === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                        )}
-                      </div>
-                    </th>
-                    <th 
-                      className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSort("deleted_at")}
-                    >
-                      <div className="flex items-center gap-1">
-                        Deleted At
-                        {sortBy === "deleted_at" && (
-                          sortOrder === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                        )}
-                      </div>
-                    </th>
-                    <th className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {sortedTransactions.map((transaction) => (
-                    <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        #{transaction.id}
-                      </td>
-                      <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        {formatCurrency(transaction.total_amount)}
-                      </td>
-                      <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap">
-                        {getStatusBadge(transaction.status)}
-                      </td>
-                      <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap">
-                        {getPaymentMethodBadge(transaction.payment_method)}
-                      </td>
-                      <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap text-sm text-gray-500">
-                        {transaction.customer_id || "N/A"}
-                      </td>
-                      <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap text-sm text-gray-500">
-                        {transaction.processed_by || "System"}
-                      </td>
-                      <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <Clock size={12} />
-                          {formatDate(transaction.deleted_at)}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => viewTransactionDetails(transaction)}
-                          className="text-indigo-600 hover:text-indigo-900 flex items-center gap-1"
-                        >
-                          <Eye size={14} />
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="pt-0 mt-0 font-raleway">
+      {toast && <Toast key={toast.id} toast={toast} onClose={closeToast} />}
 
       {/* Transaction Details Modal */}
-      {showDetailsModal && selectedTransaction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="px-4 py-3 sm:px-6 sm:py-4 border-b">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base sm:text-lg font-medium text-gray-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-                  Transaction Details
-                </h3>
-                <button
-                  onClick={() => setShowDetailsModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1"
-                >
-                  <span className="sr-only">Close</span>
-                  <span className="text-xl sm:text-2xl">×</span>
-                </button>
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 overflow-y-auto bg-gray-900/20 backdrop-blur-[2px]"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedTransaction(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-xl bg-white border border-gray-300 rounded-none shadow-2xl modal-in"
+          >
+            <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center min-w-0 gap-3">
+                <div className="flex items-center justify-center w-10 h-10 text-white bg-red-600 shrink-0">
+                  <FileText size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold leading-tight text-gray-900 truncate">Transaction #{selected.id}</h2>
+                  <p className="text-xs text-gray-500">Deleted {formatDateTime(selected.deleted_at)}</p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTransaction(null)}
+                aria-label="Close"
+                className="flex items-center justify-center w-8 h-8 text-gray-400 transition-colors shrink-0 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <X size={16} />
+              </button>
             </div>
-            <div className="px-4 py-3 sm:px-6 sm:py-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                <div>
-                  <h4 className="text-sm font-medium text-gray-500 mb-2 sm:mb-3">Basic Information</h4>
-                  <dl className="space-y-2">
-                    <div>
-                      <dt className="text-xs text-gray-500">Transaction ID</dt>
-                      <dd className="text-sm font-medium">#{selectedTransaction.id}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-gray-500">Amount</dt>
-                      <dd className="text-base sm:text-lg font-semibold">{formatCurrency(selectedTransaction.total_amount)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-gray-500">Status</dt>
-                      <dd>{getStatusBadge(selectedTransaction.status)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-gray-500">Payment Method</dt>
-                      <dd>{getPaymentMethodBadge(selectedTransaction.payment_method)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-gray-500">Customer ID</dt>
-                      <dd className="text-sm">{selectedTransaction.customer_id || "N/A"}</dd>
-                    </div>
-                  </dl>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-500 mb-2 sm:mb-3">Timeline</h4>
-                  <dl className="space-y-2">
-                    <div>
-                      <dt className="text-xs text-gray-500">Created At</dt>
-                      <dd className="text-sm">{formatDate(selectedTransaction.created_at)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-gray-500">Deleted At</dt>
-                      <dd className="text-sm">{formatDate(selectedTransaction.deleted_at)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-gray-500">Processed By</dt>
-                      <dd className="text-sm font-medium">{selectedTransaction.processed_by || "System"}</dd>
-                    </div>
-                  </dl>
+
+            <div className="px-6 py-5 space-y-5">
+              <div className="px-4 py-5 text-center border border-gray-200 bg-gray-50">
+                <p className={statLabelClass}>Amount</p>
+                <p className="mt-1 text-3xl font-bold text-gray-900">{formatCurrency(amountOf(selected))}</p>
+                <div className="flex justify-center gap-2 mt-2">
+                  <StatusBadge status={selected.status} />
+                  <PaymentBadge method={selected.payment_method} />
                 </div>
               </div>
-              
-              {/* Items Section */}
-              {selectedTransaction.items && selectedTransaction.items.length > 0 && (
-                <div className="mt-4 sm:mt-6">
-                  <h4 className="text-sm font-medium text-gray-500 mb-2 sm:mb-3">Items</h4>
-                  <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                    <div className="space-y-2 sm:space-y-3">
-                      {selectedTransaction.items.map((item, index) => (
-                        <div key={index} className="flex justify-between items-center border-b pb-2 last:border-b-0">
-                          <div>
-                            <p className="text-sm font-medium">{item.name || `Item ${index + 1}`}</p>
-                            {item.description && (
-                              <p className="text-xs text-gray-500">{item.description}</p>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium">{formatCurrency(item.price)}</p>
-                            {item.quantity && (
-                              <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+
+              <div className="grid grid-cols-2 gap-px bg-gray-200 border border-gray-200">
+                {[
+                  ["Customer ID", selected.customer_id || "N/A"],
+                  ["Processed By", selected.processed_by || "System"],
+                  ["Created", formatDateTime(selected.created_at)],
+                  ["Deleted", formatDateTime(selected.deleted_at)],
+                ].map(([rowLabel, value]) => (
+                  <div key={rowLabel} className="px-3 py-2.5 bg-white">
+                    <div className={statLabelClass}>{rowLabel}</div>
+                    <div className="mt-0.5 text-sm font-medium text-gray-900 truncate">{value}</div>
                   </div>
+                ))}
+              </div>
+
+              {selectedItems.length > 0 && (
+                <div className="border border-gray-200">
+                  <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2 border-b border-gray-200 bg-gray-50">
+                    <span className={statLabelClass}>Item</span>
+                    <span className={`${statLabelClass} w-12 text-right`}>Qty</span>
+                    <span className={`${statLabelClass} w-24 text-right`}>Price</span>
+                  </div>
+                  <ul className="overflow-y-auto divide-y divide-gray-100 max-h-64">
+                    {selectedItems.map((item, index) => (
+                      <li key={item.id ?? index} className="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2.5">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{itemName(item, index)}</p>
+                          {item.description && <p className="text-xs text-gray-500 truncate">{item.description}</p>}
+                        </div>
+                        <span className="w-12 text-sm text-right text-gray-700">{itemQty(item) || "—"}</span>
+                        <span className="w-24 text-sm font-medium text-right text-gray-900">{formatCurrency(itemPrice(item))}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
-              {selectedTransaction.notes && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Notes</h4>
-                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">
-                    {selectedTransaction.notes}
-                  </p>
+              {selected.notes && (
+                <div>
+                  <p className={`${statLabelClass} mb-1.5`}>Notes</p>
+                  <p className="px-4 py-3 text-sm text-gray-700 border border-gray-200 bg-gray-50">{selected.notes}</p>
+                </div>
+              )}
+
+              {selectedItems.length === 0 && !selected.notes && (
+                <div className="grid gap-px bg-gray-200 border border-gray-200">
+                  <SummaryRow label="Items" value="No item details on this record" />
                 </div>
               )}
             </div>
-            <div className="px-4 py-3 sm:px-6 sm:py-4 border-t bg-gray-50 flex justify-end">
-              <button
-                onClick={() => setShowDetailsModal(false)}
-                className="px-3 py-2 sm:px-4 sm:py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 text-sm font-medium transition-colors"
-              >
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <button type="button" onClick={() => setSelectedTransaction(null)} className={secondaryButtonClass}>
                 Close
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <h1 className="hidden mb-1 text-xl font-normal text-gray-800 md:block">Deleted Transactions</h1>
+      <p className="hidden mb-5 text-sm text-gray-500 md:block">An audit trail of sales that were removed from the records</p>
+
+      <div className="space-y-5">
+        {/* Summary Tiles */}
+        <div className="grid grid-cols-2 gap-px bg-gray-200 border border-gray-200 lg:grid-cols-4">
+          {tiles.map(({ icon: Icon, iconClass, label: tileLabel, value }) => (
+            <div key={tileLabel} className="flex items-center gap-3 px-4 py-4 bg-white">
+              <div className={`flex items-center justify-center w-10 h-10 shrink-0 ${iconClass}`}>
+                <Icon size={18} />
+              </div>
+              <div className="min-w-0">
+                <div className={statLabelClass}>{tileLabel}</div>
+                <div className="text-lg font-bold leading-tight text-gray-900 truncate">{loading ? "…" : value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <section className="bg-white border border-gray-200">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-200">
+            <div className="flex items-baseline min-w-0 gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Deleted Records</h2>
+              <span className="text-xs text-gray-500 truncate">
+                {loading
+                  ? "Loading…"
+                  : `${filteredTransactions.length} ${hasFilters ? "matching" : "total"} · ${formatCurrency(filteredAmount)}`}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {hasFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                >
+                  <X size={14} />
+                  Clear filters
+                </button>
+              )}
+              <button
+                onClick={fetchDeletedTransactions}
+                disabled={loading}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-60"
+              >
+                <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+                Refresh
+              </button>
+              <button
+                onClick={handleExportCSV}
+                disabled={loading}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-green-600 hover:bg-green-700 disabled:opacity-50"
+              >
+                <Download size={13} />
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="px-5 py-3 border-b border-gray-200">
+            <div className="flex gap-2 md:grid md:grid-cols-[minmax(0,1fr)_10rem_12rem_9rem]">
+              <div className="relative flex-1 min-w-0">
+                <Search
+                  size={13}
+                  className="absolute text-gray-400 -translate-y-1/2 pointer-events-none left-2.5 top-1/2"
+                />
+                <input
+                  type="search"
+                  placeholder="Search by ID, amount, processor, customer or payment"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={`${filterFieldClass} pl-8`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFilters((open) => !open)}
+                aria-expanded={showFilters}
+                className={`flex items-center h-8 gap-1.5 px-2.5 text-xs font-medium transition-colors md:hidden ${
+                  showFilters || statusFilter !== "all" || paymentMethodFilter !== "all" || dateFilter !== "all"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+              >
+                {showFilters ? <X size={13} /> : <SlidersHorizontal size={13} />}
+                Filters
+              </button>
+              <div className="hidden md:contents">{filterFields}</div>
+            </div>
+            {showFilters && <div className="grid gap-2 mt-2 md:hidden">{filterFields}</div>}
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center gap-3 text-sm text-gray-500 py-14">
+              <Loader2 size={20} className="text-blue-600 animate-spin" />
+              Loading deleted transactions…
+            </div>
+          ) : error ? (
+            <EmptyState
+              icon={AlertTriangle}
+              tone="red"
+              title="Couldn't load deleted transactions"
+              hint={error}
+              action={
+                <button onClick={fetchDeletedTransactions} className={secondaryButtonClass}>
+                  Try again
+                </button>
+              }
+            />
+          ) : sortedTransactions.length === 0 ? (
+            <EmptyState
+              icon={Archive}
+              title={transactions.length === 0 ? "No deleted transactions" : "No transactions match your filters"}
+              hint={transactions.length === 0 ? "Sales removed from the sales list will appear here" : "Try a different search or filter"}
+              action={
+                hasFilters && (
+                  <button onClick={clearFilters} className={secondaryButtonClass}>
+                    Clear filters
+                  </button>
+                )
+              }
+            />
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col className="w-[9%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[10%]" />
+                    <col />
+                    <col className="w-[17%]" />
+                    <col className="w-[4.5rem]" />
+                  </colgroup>
+                  <thead className="border-b border-gray-200 bg-gray-50">
+                    <tr>
+                      <SortHeader column="id" className="px-5" {...sortProps}>ID</SortHeader>
+                      <SortHeader column="total_amount" className="px-3" align="right" {...sortProps}>Amount</SortHeader>
+                      <SortHeader column="status" className="px-3" {...sortProps}>Status</SortHeader>
+                      <SortHeader column="payment_method" className="px-3" {...sortProps}>Payment</SortHeader>
+                      <SortHeader column="customer_id" className="px-3" {...sortProps}>Customer</SortHeader>
+                      <SortHeader column="processed_by" className="px-3" {...sortProps}>Processed By</SortHeader>
+                      <SortHeader column="deleted_at" className="px-3" {...sortProps}>Deleted</SortHeader>
+                      <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>View</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {pageRows.map((t) => (
+                      <tr
+                        key={t.id}
+                        onClick={() => setSelectedTransaction(t)}
+                        className="transition-colors cursor-pointer hover:bg-blue-50/50"
+                      >
+                        <td className="px-5 py-3 font-medium text-gray-900 truncate">#{t.id}</td>
+                        <td className="px-3 py-3 font-semibold text-right text-gray-900 truncate">
+                          {formatCurrency(amountOf(t))}
+                        </td>
+                        <td className="px-3 py-3">
+                          <StatusBadge status={t.status} />
+                        </td>
+                        <td className="px-3 py-3">
+                          <PaymentBadge method={t.payment_method} />
+                        </td>
+                        <td className="px-3 py-3 text-gray-700 truncate">{t.customer_id || "—"}</td>
+                        <td className="px-3 py-3 text-gray-700 truncate" title={t.processed_by}>
+                          {t.processed_by || "System"}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="text-gray-900 truncate">{formatDay(t.deleted_at)}</div>
+                          <div className="text-xs text-gray-500">{formatClock(t.deleted_at)}</div>
+                        </td>
+                        <td className="px-5 py-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => setSelectedTransaction(t)}
+                              className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+                              title="View details"
+                              aria-label={`View transaction ${t.id}`}
+                            >
+                              <Eye size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <ul className="divide-y divide-gray-100 md:hidden">
+                {pageRows.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTransaction(t)}
+                      className="w-full px-5 py-4 text-left transition-colors hover:bg-gray-50"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">#{t.id}</p>
+                          <p className="text-xs text-gray-500">Deleted {formatDateTime(t.deleted_at)}</p>
+                        </div>
+                        <p className="text-sm font-bold text-gray-900 whitespace-nowrap">{formatCurrency(amountOf(t))}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <StatusBadge status={t.status} />
+                        <PaymentBadge method={t.payment_method} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-px mt-3 bg-gray-200 border border-gray-200">
+                        <div className="px-2.5 py-2 bg-white">
+                          <div className={statLabelClass}>Customer</div>
+                          <div className="text-xs font-semibold text-gray-900 truncate">{t.customer_id || "N/A"}</div>
+                        </div>
+                        <div className="px-2.5 py-2 bg-white">
+                          <div className={statLabelClass}>Processed By</div>
+                          <div className="text-xs font-semibold text-gray-900 truncate">{t.processed_by || "System"}</div>
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Pagination */}
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-gray-200 bg-gray-50">
+                <span className="text-xs text-gray-500">
+                  Showing {pageStart + 1}–{pageStart + pageRows.length} of {sortedTransactions.length}
+                </span>
+                {pageCount > 1 && (
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      aria-label="Previous page"
+                      className="flex items-center justify-center w-8 h-8 text-gray-600 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="flex items-center h-8 px-3 text-xs font-medium text-gray-700 bg-white border-gray-300 border-y">
+                      Page {currentPage} of {pageCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPage(currentPage + 1)}
+                      disabled={currentPage === pageCount}
+                      aria-label="Next page"
+                      className="flex items-center justify-center w-8 h-8 text-gray-600 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+
+      <style jsx global>{`
+        @keyframes toast-in {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes toast-progress {
+          from {
+            width: 100%;
+          }
+          to {
+            width: 0%;
+          }
+        }
+        @keyframes modal-in {
+          from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        .toast-in {
+          animation: toast-in 0.2s ease-out;
+        }
+        .toast-progress {
+          animation-name: toast-progress;
+          animation-timing-function: linear;
+          animation-fill-mode: forwards;
+        }
+        .modal-in {
+          animation: modal-in 0.18s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

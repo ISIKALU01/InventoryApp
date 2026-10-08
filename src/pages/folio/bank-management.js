@@ -1,507 +1,80 @@
 import { useState, useEffect } from "react";
 import FolioNav from "../../components/FolioNav";
-import {
-  FaSearch,
-  FaPlus,
-  FaSlidersH,
-  FaUniversity,
-  FaMoneyBillWave,
-  FaTimes,
-} from "react-icons/fa";
-import { FaEdit, FaTrash } from "react-icons/fa";
+import { AlertTriangle, Landmark, Layers, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from "lucide-react";
 
 import { bankAPI } from "../../../services/api";
+import {
+  Badge,
+  ConfirmDeleteModal,
+  EmptyState,
+  FilterBar,
+  FilterSelect,
+  FormModal,
+  LoadingState,
+  PageTitle,
+  Pagination,
+  PanelHeader,
+  StatTiles,
+  formatNaira,
+  iconButtonClass,
+  matchesTerm,
+  secondaryButtonClass,
+  statLabelClass,
+  toList,
+  toolbarButtonClass,
+  unwrap,
+  usePagination,
+  useToast,
+} from "../../components/ui/Boxy";
 
-// Add Bank Modal Component
-const AddBankModal = ({ isOpen, onClose, onAdd }) => {
-  const [formData, setFormData] = useState({
-    bank_name: "",
-    account_number: "",
-    account_name: "",
-    branch: "",
-    account_type: "",
-    balance: "",
-    description: "",
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+const ACCOUNT_TYPES = ["Checking", "Savings", "Business", "Investment"];
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+const BANK_FIELDS = [
+  { name: "bank_name", label: "Bank Name", required: true, placeholder: "e.g. GTBank" },
+  { name: "account_number", label: "Account Number", required: true, placeholder: "10-digit account number", span: "half" },
+  { name: "account_name", label: "Account Name", required: true, placeholder: "Name on the account", span: "half" },
+  {
+    name: "account_type",
+    label: "Account Type",
+    type: "select",
+    required: true,
+    span: "half",
+    options: [{ value: "", label: "Select type" }, ...ACCOUNT_TYPES.map((t) => ({ value: t, label: t }))],
+  },
+  { name: "branch", label: "Branch", placeholder: "e.g. Ikeja", span: "half" },
+  { name: "balance", label: "Balance", type: "number", required: true, prefix: "₦", placeholder: "0.00" },
+  { name: "description", label: "Description", type: "textarea", placeholder: "What this account is used for" },
+];
 
-    try {
-      const bankData = {
-        ...formData,
-        balance: parseFloat(formData.balance) || 0,
-      };
-
-      const newBank = await bankAPI.createBank(bankData);
-      onAdd(newBank);
-      onClose();
-
-      // Reset form
-      setFormData({
-        bank_name: "",
-        account_number: "",
-        account_name: "",
-        branch: "",
-        account_type: "",
-        balance: "",
-        description: "",
-      });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-50">
-      <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">
-            Add Bank Account
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 transition-colors hover:text-gray-600"
-            disabled={loading}
-          >
-            <FaTimes className="text-sm" />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          {error && (
-            <div className="p-2 text-sm text-red-600 bg-red-100 rounded-md">
-              {error}
-            </div>
-          )}
-
-          {/* Bank Name */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Bank Name *
-            </label>
-            <input
-              type="text"
-              name="bank_name"
-              value={formData.bank_name}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Enter bank name"
-            />
-          </div>
-
-          {/* Account Number */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Account Number *
-            </label>
-            <input
-              type="text"
-              name="account_number"
-              value={formData.account_number}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Enter account number"
-            />
-          </div>
-
-          {/* Account Name */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Account Name *
-            </label>
-            <input
-              type="text"
-              name="account_name"
-              value={formData.account_name}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Enter account name"
-            />
-          </div>
-
-          {/* Account Type and Branch */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block mb-1 text-sm font-medium text-gray-700">
-                Account Type *
-              </label>
-              <select
-                name="account_type"
-                value={formData.account_type}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              >
-                <option value="">Select Type</option>
-                <option value="Checking">Checking</option>
-                <option value="Savings">Savings</option>
-                <option value="Business">Business</option>
-                <option value="Investment">Investment</option>
-              </select>
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium text-gray-700">
-                Branch
-              </label>
-              <input
-                type="text"
-                name="branch"
-                value={formData.branch}
-                onChange={handleChange}
-                disabled={loading}
-                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                placeholder="Enter branch"
-              />
-            </div>
-          </div>
-
-          {/* Balance */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Initial Balance *
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              name="balance"
-              value={formData.balance}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="0.00"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Description
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={3}
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Enter account description"
-            />
-          </div>
-
-          {/* Buttons */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1 px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md transition-colors hover:bg-gray-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 text-sm text-white bg-green-600 rounded-md transition-colors hover:bg-green-700 disabled:opacity-50"
-            >
-              {loading ? "Adding..." : "Add Account"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+const EMPTY_BANK = {
+  bank_name: "",
+  account_number: "",
+  account_name: "",
+  branch: "",
+  account_type: "",
+  balance: "",
+  description: "",
 };
 
-// Edit Bank Modal Component
-const EditBankModal = ({ isOpen, onClose, onUpdate, bank }) => {
-  const [formData, setFormData] = useState({
-    bank_name: "",
-    account_number: "",
-    account_name: "",
-    branch: "",
-    account_type: "",
-    balance: "",
-    description: "",
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  // Initialize form data when bank changes
-  useEffect(() => {
-    if (bank) {
-      setFormData({
-        bank_name: bank.bank_name || "",
-        account_number: bank.account_number || "",
-        account_name: bank.account_name || "",
-        branch: bank.branch || "",
-        account_type: bank.account_type || "",
-        balance: bank.balance || "",
-        description: bank.description || "",
-      });
-    }
-  }, [bank]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    try {
-      const bankData = {
-        ...formData,
-        balance: parseFloat(formData.balance) || 0,
-      };
-
-      const updatedBank = await bankAPI.updateBank(bank.id, bankData);
-      onUpdate(updatedBank);
-      onClose();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  if (!isOpen || !bank) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-50">
-      <div className="relative w-full max-w-md mx-4 bg-white rounded-lg shadow-xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">
-            Edit Bank Account
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 transition-colors hover:text-gray-600"
-            disabled={loading}
-          >
-            <FaTimes className="text-sm" />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          {error && (
-            <div className="p-2 text-sm text-red-600 bg-red-100 rounded-md">
-              {error}
-            </div>
-          )}
-
-          {/* Bank Name */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Bank Name *
-            </label>
-            <input
-              type="text"
-              name="bank_name"
-              value={formData.bank_name}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Enter bank name"
-            />
-          </div>
-
-          {/* Account Number */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Account Number *
-            </label>
-            <input
-              type="text"
-              name="account_number"
-              value={formData.account_number}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Enter account number"
-            />
-          </div>
-
-          {/* Account Name */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Account Name *
-            </label>
-            <input
-              type="text"
-              name="account_name"
-              value={formData.account_name}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Enter account name"
-            />
-          </div>
-
-          {/* Account Type and Branch */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block mb-1 text-sm font-medium text-gray-700">
-                Account Type *
-              </label>
-              <select
-                name="account_type"
-                value={formData.account_type}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              >
-                <option value="">Select Type</option>
-                <option value="Checking">Checking</option>
-                <option value="Savings">Savings</option>
-                <option value="Business">Business</option>
-                <option value="Investment">Investment</option>
-              </select>
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium text-gray-700">
-                Branch
-              </label>
-              <input
-                type="text"
-                name="branch"
-                value={formData.branch}
-                onChange={handleChange}
-                disabled={loading}
-                className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                placeholder="Enter branch"
-              />
-            </div>
-          </div>
-
-          {/* Balance */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Balance *
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              name="balance"
-              value={formData.balance}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="0.00"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
-              Description
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={3}
-              disabled={loading}
-              className="w-full px-3 py-2 text-sm text-black border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              placeholder="Enter account description"
-            />
-          </div>
-
-          {/* Buttons */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1 px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md transition-colors hover:bg-gray-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-md transition-colors hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? "Updating..." : "Update Account"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// Helper function to safely format numbers
-const formatCurrency = (value) => {
-  if (value === null || value === undefined) return `N0.00`;
-  const num = typeof value === "string" ? parseFloat(value) : value;
-
-  if (isNaN(num)) return `N0.00`;
-
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-  }).format(num);
-};
+const balanceOf = (bank) => parseFloat(bank.balance) || 0;
 
 // Main Bank Management Component
 export default function BankManagement() {
   const [banks, setBanks] = useState([]);
-  const [filteredBanks, setFilteredBanks] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showAddBankModal, setShowAddBankModal] = useState(false);
-  const [showEditBankModal, setShowEditBankModal] = useState(false);
-  const [selectedBank, setSelectedBank] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [formBank, setFormBank] = useState(null); // {} = new, bank = edit
+  const [bankToDelete, setBankToDelete] = useState(null);
+  const { notify, toastElement } = useToast();
 
   // Fetch banks from API
   const fetchBanks = async () => {
     setLoading(true);
     setError("");
     try {
-      const banksData = await bankAPI.getAllBanks();
-      setBanks(banksData);
-      setFilteredBanks(banksData);
+      setBanks(toList(await bankAPI.getAllBanks()));
     } catch (err) {
       setError(err.message);
       console.error("Error fetching banks:", err);
@@ -510,471 +83,323 @@ export default function BankManagement() {
     }
   };
 
-  // Handle edit bank
-  const handleEdit = (bank) => {
-    setSelectedBank(bank);
-    setShowEditBankModal(true);
-  };
-
-  // Handle delete bank
-  const handleDelete = async (bankId) => {
-    if (!window.confirm('Are you sure you want to delete this bank account? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await bankAPI.deleteBank(bankId);
-      
-      // Remove the bank from local state
-      setBanks(prevBanks => prevBanks.filter(bank => bank.id !== bankId));
-      
-      // Show success message
-      alert('Bank account deleted successfully');
-      
-    } catch (err) {
-      console.error('Error deleting bank:', err);
-      alert(`Error deleting bank: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle bank update
-  const handleUpdate = (updatedBank) => {
-    setBanks(prevBanks => 
-      prevBanks.map(bank => 
-        bank.id === updatedBank.id ? updatedBank : bank
-      )
-    );
-    setShowEditBankModal(false);
-    setSelectedBank(null);
-  };
-
-  // Calculate summary metrics
-  const calculateSummary = () => {
-    const bankAccounts = banks.length;
-    const totalBalance = banks.reduce((sum, bank) => {
-      const balance =
-        typeof bank.balance === "string"
-          ? parseFloat(bank.balance)
-          : bank.balance;
-      return sum + (isNaN(balance) ? 0 : balance);
-    }, 0);
-
-    return {
-      bankAccounts,
-      totalBalance,
-    };
-  };
-
-  const summary = calculateSummary();
-
-  // Account types for filters
-  const accountTypes = [...new Set(banks.map((bank) => bank.account_type))];
-
-  // Detect mobile screen size
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkIsMobile();
-    window.addEventListener("resize", checkIsMobile);
-    return () => window.removeEventListener("resize", checkIsMobile);
-  }, []);
-
-  // Filter banks based on filters
-  useEffect(() => {
-    let filtered = banks;
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (bank) =>
-          bank.bank_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          bank.account_number
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          bank.account_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          bank.branch?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (selectedType) {
-      filtered = filtered.filter((bank) => bank.account_type === selectedType);
-    }
-
-    setFilteredBanks(filtered);
-  }, [banks, searchTerm, selectedType]);
-
-  // Fetch banks on component mount
   useEffect(() => {
     fetchBanks();
   }, []);
 
+  // ---- Save / delete -------------------------------------------------------
+
+  const isEditing = Boolean(formBank?.id);
+
+  const handleSave = async (values) => {
+    const bankData = { ...values, balance: parseFloat(values.balance) || 0 };
+    if (isEditing) {
+      const saved = unwrap(await bankAPI.updateBank(formBank.id, bankData), "bank");
+      // Merge so a wrapped or partial response can't blank the row
+      setBanks((prev) =>
+        prev.map((b) => (b.id === formBank.id ? { ...b, ...bankData, ...(saved?.id ? saved : {}) } : b))
+      );
+      notify("success", `${bankData.bank_name} · ${bankData.account_number} was saved.`, "Account updated");
+    } else {
+      await bankAPI.createBank(bankData);
+      await fetchBanks();
+      notify("success", `${bankData.bank_name} · ${bankData.account_number} was added.`, "Account added");
+    }
+    setFormBank(null);
+  };
+
+  const handleDelete = async () => {
+    const bank = bankToDelete;
+    await bankAPI.deleteBank(bank.id);
+    setBanks((prev) => prev.filter((b) => b.id !== bank.id));
+    setBankToDelete(null);
+    notify("success", `${bank.bank_name} · ${bank.account_number} was removed.`, "Account deleted");
+  };
+
+  // ---- Filtering -------------------------------------------------------------
+
+  const term = searchTerm.trim().toLowerCase();
+  const filteredBanks = banks.filter(
+    (bank) =>
+      matchesTerm(term, [bank.bank_name, bank.account_number, bank.account_name, bank.branch, bank.description]) &&
+      (!selectedType || bank.account_type === selectedType)
+  );
+
+  const hasFilters = Boolean(searchTerm || selectedType);
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedType("");
   };
 
-  const toggleFilters = () => {
-    setShowFilters(!showFilters);
-  };
+  const pager = usePagination(filteredBanks, 25, `${searchTerm}|${selectedType}`);
 
-  const handleAddBank = (newBank) => {
-    setBanks((prevBanks) => [...prevBanks, newBank]);
-    fetchBanks(); // Refresh the list to ensure consistency
-  };
+  const accountTypes = [...new Set([...ACCOUNT_TYPES, ...banks.map((b) => b.account_type).filter(Boolean)])];
+  const totalBalance = banks.reduce((sum, b) => sum + balanceOf(b), 0);
+  const filteredBalance = filteredBanks.reduce((sum, b) => sum + balanceOf(b), 0);
+  const largest = banks.reduce((top, b) => (!top || balanceOf(b) > balanceOf(top) ? b : top), null);
 
-  return (
-    <div className="relative max-w-6xl mx-auto pb-16 md:pb-0">
-      <h1 className="hidden mb-6 text-xl font-normal text-gray-800 md:block font-raleway">
-        Bank Management
-      </h1>
-      <FolioNav />
+  const tiles = [
+    {
+      icon: Landmark,
+      iconClass: "bg-blue-50 text-blue-700",
+      label: "Bank Accounts",
+      value: banks.length,
+      hint: `${new Set(banks.map((b) => b.bank_name).filter(Boolean)).size} banks`,
+    },
+    { icon: Wallet, iconClass: "bg-green-50 text-green-700", label: "Total Balance", value: formatNaira(totalBalance) },
+    {
+      icon: Layers,
+      iconClass: "bg-purple-50 text-purple-700",
+      label: "Largest Balance",
+      value: largest ? formatNaira(balanceOf(largest)) : "—",
+      hint: largest ? `${largest.bank_name} · ${largest.account_type || "Account"}` : null,
+    },
+  ];
 
-      <div className="mt-4 space-y-4 px-2 md:px-0">
-        {/* Summary Cards */}
-        <div className="">
-          <div className="p-2 bg-white rounded shadow">
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:overflow-x-auto sm:justify-between sm:space-x-1 md:space-x-2">
-              {/* BANK ACCOUNTS */}
-              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-                <div className="flex items-center">
-                  <div className="p-1 mr-1 rounded bg-blue-100 md:mr-2 md:p-1.5">
-                    <FaUniversity className="text-xs text-blue-600 md:text-sm" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Bank Accounts
-                    </h3>
-                    <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {summary.bankAccounts}
-                    </p>
-                  </div>
-                </div>
-              </div>
+  // ---- Render ----------------------------------------------------------------
 
-              {/* TOTAL BALANCE */}
-              <div className="flex-1 p-2 rounded sm:flex-shrink-0 sm:min-w-[120px] md:min-w-[140px] md:p-3">
-                <div className="flex items-center">
-                  <div className="p-1 mr-1 rounded bg-green-100 md:mr-2 md:p-1.5">
-                    <FaMoneyBillWave className="text-xs text-green-600 md:text-sm" />
-                  </div>
-                  <div>
-                    <h3 className="text-[10px] font-medium text-gray-600 md:text-xs">
-                      Total Balance
-                    </h3>
-                    <p className="text-sm font-bold text-gray-800 md:text-lg">
-                      {formatCurrency(summary.totalBalance)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+  const actions = (bank) => (
+    <div className="flex justify-end gap-1">
+      <button onClick={() => setFormBank(bank)} className={iconButtonClass()} title="Edit" aria-label={`Edit ${bank.bank_name}`}>
+        <Pencil size={15} />
+      </button>
+      <button
+        onClick={() => setBankToDelete(bank)}
+        className={iconButtonClass("red")}
+        title="Delete"
+        aria-label={`Delete ${bank.bank_name}`}
+      >
+        <Trash2 size={15} />
+      </button>
+    </div>
+  );
 
-        {/* Filters and Actions */}
-        <div className="p-3 bg-white rounded shadow">
-          <div className="flex flex-col w-full gap-3 md:flex-row items-stretch">
-            {/* Left side - Search and filters */}
-            <div className="flex flex-col flex-grow gap-3 md:flex-row">
-              {/* Search bar and filter button for mobile */}
-              {isMobile ? (
-                <div className="flex w-full gap-2">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      placeholder="Search banks..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    <FaSearch className="absolute right-2 top-1.5 text-xs text-gray-400" />
-                  </div>
-
-                  <button
-                    onClick={toggleFilters}
-                    className={`px-3 py-1.5 rounded transition-colors flex items-center text-xs ${
-                      showFilters
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+  let body;
+  if (loading && banks.length === 0) {
+    body = <LoadingState label="Loading bank accounts…" />;
+  } else if (error && banks.length === 0) {
+    body = (
+      <EmptyState
+        icon={AlertTriangle}
+        tone="red"
+        title="Couldn't load bank accounts"
+        hint={error}
+        action={
+          <button onClick={fetchBanks} className={secondaryButtonClass}>
+            Try again
+          </button>
+        }
+      />
+    );
+  } else if (filteredBanks.length === 0) {
+    body = (
+      <EmptyState
+        icon={Landmark}
+        title={banks.length === 0 ? "No bank accounts yet" : "No accounts match your filters"}
+        hint={banks.length === 0 ? "Add the accounts your business pays into and from" : "Try a different search or account type"}
+        action={
+          hasFilters ? (
+            <button onClick={clearFilters} className={secondaryButtonClass}>
+              Clear filters
+            </button>
+          ) : (
+            <button onClick={() => setFormBank({})} className={toolbarButtonClass.primary}>
+              <Plus size={14} />
+              Add Bank Account
+            </button>
+          )
+        }
+      />
+    );
+  } else {
+    body = (
+      <>
+        {/* Desktop Table */}
+        <div className="hidden md:block">
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[24%]" />
+              <col className="w-[12%]" />
+              <col className="w-[16%]" />
+              <col />
+              <col className="w-[5.5rem]" />
+            </colgroup>
+            <thead className="border-b border-gray-200 bg-gray-50">
+              <tr className="text-left">
+                <th className={`px-5 py-2.5 ${statLabelClass}`}>Bank</th>
+                <th className={`px-3 py-2.5 ${statLabelClass}`}>Account</th>
+                <th className={`px-3 py-2.5 ${statLabelClass}`}>Type</th>
+                <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Balance</th>
+                <th className={`px-3 py-2.5 ${statLabelClass}`}>Description</th>
+                <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {pager.pageRows.map((bank) => (
+                <tr key={bank.id} className="transition-colors hover:bg-blue-50/50">
+                  <td className="px-5 py-3">
+                    <div className="font-medium text-gray-900 truncate">{bank.bank_name}</div>
+                    <div className="text-xs text-gray-500 truncate">{bank.branch || "No branch"}</div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="font-mono text-gray-900 truncate">{bank.account_number}</div>
+                    <div className="text-xs text-gray-500 truncate">{bank.account_name}</div>
+                  </td>
+                  <td className="px-3 py-3">{bank.account_type ? <Badge>{bank.account_type}</Badge> : "—"}</td>
+                  <td
+                    className={`px-3 py-3 font-semibold text-right truncate ${
+                      balanceOf(bank) < 0 ? "text-red-600" : "text-gray-900"
                     }`}
                   >
-                    <FaSlidersH className="text-xs" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* Search bar for desktop */}
-                  <div className="relative w-full md:w-48">
-                    <input
-                      type="text"
-                      placeholder="Search banks..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    <FaSearch className="absolute right-2 top-1.5 text-xs text-gray-400" />
-                  </div>
-
-                  {/* Desktop filters */}
-                  <div className="flex gap-3">
-                    {/* Account Type filter */}
-                    <div className="w-auto">
-                      <select
-                        value={selectedType}
-                        onChange={(e) => setSelectedType(e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="">All Account Types</option>
-                        {accountTypes.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Right side - Action buttons - Hidden on medium screens and below */}
-            <div className="hidden md:flex justify-start w-full gap-2 md:justify-end md:w-auto">
-              <button
-                onClick={() => setShowAddBankModal(true)}
-                className="flex items-center px-3 py-1.5 text-xs text-white transition-colors bg-green-600 rounded hover:bg-green-700"
-              >
-                <FaPlus className="mr-1 text-xs" />
-                Add Bank Account
-              </button>
-            </div>
-          </div>
-
-          {/* Filter dropdown for mobile */}
-          {isMobile && showFilters && (
-            <div className="grid grid-cols-1 gap-2 p-2 mt-3 bg-gray-50 rounded">
-              {/* Account Type filter */}
-              <div>
-                <label className="block mb-1 text-xs font-medium text-gray-700">
-                  Account Type
-                </label>
-                <select
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">All Account Types</option>
-                  {accountTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={clearFilters}
-                  className="flex-1 px-2 py-1.5 text-xs text-gray-700 transition-colors bg-gray-200 rounded hover:bg-gray-300"
-                >
-                  Clear Filters
-                </button>
-                <button
-                  onClick={toggleFilters}
-                  className="flex-1 px-2 py-1.5 text-xs text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
-                >
-                  Apply Filters
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-100 rounded-md">
-            Error: {error}
-          </div>
-        )}
-
-        {/* Banks Table */}
-        <div className="overflow-hidden bg-white rounded shadow">
-          {/* Loading State */}
-          {loading && (
-            <div className="py-6 text-center">
-              <p className="text-xs text-black">Loading banks...</p>
-            </div>
-          )}
-
-          {/* Desktop Table */}
-          {!loading && (
-            <div className="hidden overflow-x-auto text-black md:block">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Bank Name
-                    </th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Account Number
-                    </th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Account Name
-                    </th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Branch
-                    </th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Account Type
-                    </th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Balance
-                    </th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Description
-                    </th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-black uppercase">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredBanks.map((bank) => (
-                    <tr key={bank.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-black">
-                        {bank.bank_name}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {bank.account_number}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {bank.account_name}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {bank.branch || "N/A"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {bank.account_type}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {formatCurrency(bank.balance)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {bank.description || "N/A"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEdit(bank)}
-                            className="p-1 text-blue-600 transition-colors hover:text-blue-800"
-                            title="Edit"
-                          >
-                            <FaEdit className="text-sm" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(bank.id)}
-                            className="p-1 text-red-600 transition-colors hover:text-red-800"
-                            title="Delete"
-                          >
-                            <FaTrash className="text-sm" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Mobile Cards */}
-          {!loading && (
-            <div className="text-black md:hidden">
-              {filteredBanks.map((bank) => (
-                <div key={bank.id} className="p-4 border-b border-gray-200">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-black">
-                          {bank.bank_name}
-                        </span>
-                        <span className="text-sm font-semibold text-green-600">
-                          {formatCurrency(bank.balance)}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-sm text-gray-600">
-                        {bank.account_number} • {bank.account_name}
-                      </div>
-                      <div className="mt-1 text-sm text-gray-600">
-                        {bank.branch || "No branch"} • {bank.account_type}
-                      </div>
-                      {bank.description && (
-                        <div className="mt-1 text-sm text-gray-600">
-                          {bank.description}
-                        </div>
-                      )}
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={() => handleEdit(bank)}
-                          className="px-2 py-1 text-xs text-blue-600 border border-blue-600 rounded transition-colors hover:bg-blue-50"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(bank.id)}
-                          className="px-2 py-1 text-xs text-red-600 border border-red-600 rounded transition-colors hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                    {formatNaira(bank.balance)}
+                  </td>
+                  <td className="px-3 py-3 text-gray-600 truncate" title={bank.description}>
+                    {bank.description || "—"}
+                  </td>
+                  <td className="px-5 py-2">{actions(bank)}</td>
+                </tr>
               ))}
-            </div>
-          )}
-
-          {!loading && filteredBanks.length === 0 && (
-            <div className="py-6 text-center">
-              <p className="text-xs text-black">No bank accounts found</p>
-            </div>
-          )}
+            </tbody>
+          </table>
         </div>
+
+        {/* Mobile Cards */}
+        <ul className="divide-y divide-gray-100 md:hidden">
+          {pager.pageRows.map((bank) => (
+            <li key={bank.id} className="px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{bank.bank_name}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    <span className="font-mono">{bank.account_number}</span> · {bank.account_name}
+                  </p>
+                </div>
+                <p
+                  className={`text-sm font-bold whitespace-nowrap ${
+                    balanceOf(bank) < 0 ? "text-red-600" : "text-gray-900"
+                  }`}
+                >
+                  {formatNaira(bank.balance)}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-600">
+                {bank.account_type && <Badge>{bank.account_type}</Badge>}
+                <span>{bank.branch || "No branch"}</span>
+              </div>
+              {bank.description && <p className="mt-2 text-xs text-gray-600">{bank.description}</p>}
+              <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
+                <button
+                  onClick={() => setFormBank(bank)}
+                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <Pencil size={13} /> Edit
+                </button>
+                <button
+                  onClick={() => setBankToDelete(bank)}
+                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 size={13} /> Delete
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <Pagination {...pager} shown={pager.pageRows.length} />
+      </>
+    );
+  }
+
+  return (
+    <div className="pt-0 mt-0 font-raleway">
+      {toastElement}
+
+      <PageTitle title="Bank Management" description="The accounts your business banks with" />
+      <FolioNav />
+
+      <div className="mt-5 space-y-5">
+        <StatTiles tiles={tiles} loading={loading && banks.length === 0} />
+
+        <section className="bg-white border border-gray-200">
+          <PanelHeader
+            title="Bank Accounts"
+            meta={
+              loading && banks.length === 0
+                ? "Loading…"
+                : `${filteredBanks.length} ${hasFilters ? "matching" : "accounts"} · ${formatNaira(filteredBalance)}`
+            }
+          >
+            {hasFilters && (
+              <button onClick={clearFilters} className={toolbarButtonClass.ghost}>
+                <X size={14} />
+                Clear filters
+              </button>
+            )}
+            <button onClick={fetchBanks} disabled={loading} className={toolbarButtonClass.secondary}>
+              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+              Refresh
+            </button>
+            <button onClick={() => setFormBank({})} className={toolbarButtonClass.primary}>
+              <Plus size={14} />
+              Add Bank Account
+            </button>
+          </PanelHeader>
+
+          <FilterBar
+            search={searchTerm}
+            onSearch={setSearchTerm}
+            placeholder="Search by bank, account number, name or branch"
+            filtersActive={Boolean(selectedType)}
+            filters={
+              <FilterSelect value={selectedType} onChange={(e) => setSelectedType(e.target.value)} aria-label="Filter by account type">
+                <option value="">All Account Types</option>
+                {accountTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </FilterSelect>
+            }
+          />
+
+          {body}
+        </section>
       </div>
 
-      {/* Fixed Action Buttons for Mobile - Placed at bottom of page */}
-      {isMobile && (
-        <div className="fixed bottom-4 right-4 md:hidden">
-          <button
-            onClick={() => setShowAddBankModal(true)}
-            className="flex items-center justify-center w-12 h-12 text-white transition-transform bg-green-600 rounded-full shadow-lg hover:bg-green-700 hover:scale-110"
-            title="Add Bank Account"
-          >
-            <FaPlus className="text-lg" />
-          </button>
-        </div>
+      {formBank && (
+        <FormModal
+          key={formBank.id || "new"}
+          title={isEditing ? "Edit Bank Account" : "Add Bank Account"}
+          subtitle={isEditing ? `${formBank.bank_name} · ${formBank.account_number}` : "Record an account the business uses"}
+          icon={isEditing ? Pencil : Landmark}
+          fields={BANK_FIELDS}
+          initialValues={
+            isEditing
+              ? Object.fromEntries(Object.keys(EMPTY_BANK).map((k) => [k, formBank[k] ?? ""]))
+              : EMPTY_BANK
+          }
+          submitLabel={isEditing ? "Update Account" : "Add Account"}
+          errorTitle={isEditing ? "Account not updated" : "Account not added"}
+          onSubmit={handleSave}
+          onClose={() => setFormBank(null)}
+        />
       )}
 
-      {/* Add Bank Modal */}
-      <AddBankModal
-        isOpen={showAddBankModal}
-        onClose={() => setShowAddBankModal(false)}
-        onAdd={handleAddBank}
-      />
-
-      {/* Edit Bank Modal */}
-      <EditBankModal
-        isOpen={showEditBankModal}
-        onClose={() => {
-          setShowEditBankModal(false);
-          setSelectedBank(null);
-        }}
-        onUpdate={handleUpdate}
-        bank={selectedBank}
-      />
+      {bankToDelete && (
+        <ConfirmDeleteModal
+          title="Delete Bank Account"
+          message="This removes the account from your records."
+          details={[
+            ["Bank", bankToDelete.bank_name],
+            ["Account", `${bankToDelete.account_number} · ${bankToDelete.account_name}`],
+            ["Balance", formatNaira(bankToDelete.balance)],
+          ]}
+          confirmLabel="Delete Account"
+          onConfirm={handleDelete}
+          onClose={() => setBankToDelete(null)}
+        />
+      )}
     </div>
   );
 }
