@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
-import { useRouter } from "next/router";
 import InventorySummary from "@/components/InventorySummary";
 import SalesAnalysis from "@/components/SalesAnalysis";
 import Trend from "@/components/TrendChart";
@@ -9,102 +8,28 @@ import CashFlow from "@/components/CashFlow";
 import ProfitLoss from "@/components/ProfitLoss";
 import DebtorCreditor from "@/components/DebtorCreditor";
 import http from "../../services/http";
-import {
-	getLocalStorage,
-	removeLocalStorage,
-	verifyToken,
-} from "../../utils/auth";
+import { useAuth } from "../context/AuthContext";
 
 export default function Dashboard() {
-	const [user, setUser] = useState(null);
-	const [loading, setLoading] = useState(true);
+	// RouteGuard has already checked the login and the dashboard.view permission
+	const { user, can, logout } = useAuth();
 	const [cards, setCards] = useState(null);
-	const [authChecked, setAuthChecked] = useState(false);
-	const router = useRouter();
+	const showFinancials = can("reports.view");
 
 	useEffect(() => {
-		const checkAuthAndFetchData = async () => {
-			console.log("🔐 Starting auth check...");
-
-			if (typeof window === "undefined") {
-				setLoading(false);
-				return;
-			}
-
-			const token = getLocalStorage("token");
-			console.log("📝 Token found:", !!token);
-
-			if (!token) {
-				console.log("❌ No token found, redirecting to login");
-				router.push("/");
-				return;
-			}
-
+		const fetchDashboardData = async () => {
 			try {
-				console.log("🔄 Verifying token with backend...");
-				const session = await verifyToken(token);
-
-				if (!session || !session.user) {
-					console.log("❌ Token verification failed");
-					removeLocalStorage("token");
-					router.push("/");
-					return;
-				}
-
-				const userData = session.user;
-				console.log("✅ User verified:", userData.role);
-
-				// ✅ REMOVED ROLE-BASED REDIRECTION - Both admin and staff can access
-				setUser(userData);
-				console.log("🎉 User authenticated successfully:", userData.role);
-
-				// ✅ Fetch dashboard cards data for both roles
-				await fetchDashboardData();
-				
+				const response = await http.get("/dashboardCards");
+				setCards(response.data);
 			} catch (error) {
-				console.error("❌ Authentication check failed:", error);
-				removeLocalStorage("token");
-				router.push("/");
-			} finally {
-				setLoading(false);
-				setAuthChecked(true);
+				console.error("Failed to fetch dashboard data:", error);
 			}
 		};
 
-		// Only run auth check once
-		if (!authChecked) {
-			checkAuthAndFetchData();
-		}
-	}, [router, authChecked]);
+		fetchDashboardData();
+	}, []);
 
-	const fetchDashboardData = async () => {
-		try {
-			console.log("📊 Fetching dashboard card data...");
-			const response = await http.get("/dashboardCards");
-			console.log("✅ Dashboard data fetched:", response.data);
-			setCards(response.data);
-		} catch (error) {
-			console.error("❌ Failed to fetch dashboard data:", error);
-		}
-	};
-
-	const handleLogout = () => {
-		console.log("🚪 Logging out...");
-		removeLocalStorage("token");
-		removeLocalStorage("user");
-		router.push("/");
-	};
-
-	if (loading) {
-		return (
-			<div className="min-h-screen flex items-center justify-center bg-gray-50">
-				<div className="text-center">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-					<p className="mt-4 text-gray-600">Verifying authentication...</p>
-				</div>
-			</div>
-		);
-	}
+	const handleLogout = logout;
 
 	if (!user) {
 		return (
@@ -120,7 +45,7 @@ export default function Dashboard() {
 	return (
 		<div className="min-h-screen bg-gray-50">
 			<Head>
-				<title>{user.role === 'admin' ? 'Admin' : 'Staff'} Dashboard - PGIMS</title>
+				<title>Dashboard - SellaPad</title>
 			</Head>
 
 			{/* HEADER */}
@@ -134,7 +59,7 @@ export default function Dashboard() {
 							<div className="text-center sm:text-right">
 								<p className="text-sm font-medium text-gray-900">{user.name}</p>
 								<p className="text-xs text-gray-600 capitalize">
-									{user.department || (user.role === 'admin' ? 'Administration' : 'Operations')} • {user.role}
+									{user.role_label || user.role}
 								</p>
 							</div>
 							<button
@@ -156,7 +81,7 @@ export default function Dashboard() {
 					<div className="bg-white overflow-hidden shadow mb-8">
 						<div className="px-4 py-5 sm:p-6">
 							<h2 className="text-2xl font-bold text-gray-900 mb-6">
-								{user.role === 'admin' ? 'Ops Center' : 'Sales Dashboard'}
+								Ops Center
 							</h2>
 
 							{/* DASHBOARD CARDS - Show for both roles */}
@@ -204,9 +129,9 @@ export default function Dashboard() {
 					</div>
 
 					{/* REMAINING SECTIONS - Show for both roles */}
-					<div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4 mb-8">
+					<div className={`grid grid-cols-1 ${showFinancials ? "md:grid-cols-[2fr_1fr]" : ""} gap-4 mb-8`}>
 						<SalesAnalysis />
-						<InventorySummary />
+						{showFinancials && <InventorySummary />}
 					</div>
 
 					<div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4 mb-8">
@@ -214,13 +139,16 @@ export default function Dashboard() {
 						<TopCategory />
 					</div>
 
-					<div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4">
-						<CashFlow />
-						<div className="grid grid-cols-1 gap-8">
-							<ProfitLoss />
-							<DebtorCreditor />
+					{/* Money reports need reports.view */}
+					{showFinancials && (
+						<div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4">
+							<CashFlow />
+							<div className="grid grid-cols-1 gap-8">
+								<ProfitLoss />
+								<DebtorCreditor />
+							</div>
 						</div>
-					</div>
+					)}
 
 		
 				</div>

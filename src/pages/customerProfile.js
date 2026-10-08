@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { customerAPI } from "../../services/api";
+import { useAuth } from "../context/AuthContext";
 import {
   Badge,
   EmptyState,
@@ -54,6 +55,9 @@ const CustomerProfile = ({ customerId: customerIdProp, onBack: onBackProp }) => 
   const router = useRouter();
   const customerId = customerIdProp ?? router.query.id;
   const onBack = onBackProp || (() => router.push("/folio/customer-management"));
+  // Deposits are money in: accountants and admins only
+  const { can } = useAuth();
+  const canDeposit = can("customers.deposit");
 
   const [customer, setCustomer] = useState(null);
   const [deposits, setDeposits] = useState([]);
@@ -205,10 +209,12 @@ const CustomerProfile = ({ customerId: customerIdProp, onBack: onBackProp }) => 
             <RefreshCw size={13} />
             Refresh
           </button>
-          <button onClick={() => setShowAddDeposit(true)} className={toolbarButtonClass.primary}>
-            <Plus size={14} />
-            Add Deposit
-          </button>
+          {canDeposit && (
+            <button onClick={() => setShowAddDeposit(true)} className={toolbarButtonClass.primary}>
+              <Plus size={14} />
+              Add Deposit
+            </button>
+          )}
         </div>
       </div>
 
@@ -271,10 +277,12 @@ const CustomerProfile = ({ customerId: customerIdProp, onBack: onBackProp }) => 
                 title="Deposit History"
                 meta={deposits.length ? `${deposits.length} · ${formatNaira(totalDeposits)} · newest first` : null}
               >
-                <button onClick={() => setShowAddDeposit(true)} className={toolbarButtonClass.secondary}>
-                  <Plus size={13} />
-                  Add Deposit
-                </button>
+                {canDeposit && (
+                  <button onClick={() => setShowAddDeposit(true)} className={toolbarButtonClass.secondary}>
+                    <Plus size={13} />
+                    Add Deposit
+                  </button>
+                )}
               </PanelHeader>
 
               {deposits.length === 0 ? (
@@ -338,7 +346,7 @@ const CustomerProfile = ({ customerId: customerIdProp, onBack: onBackProp }) => 
         </div>
       </div>
 
-      {showAddDeposit && (
+      {canDeposit && showAddDeposit && (
         <FormModal
           title="Add Deposit"
           subtitle={`Pay into ${customer.name}'s account`}

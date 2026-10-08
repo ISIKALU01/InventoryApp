@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import FolioNav from "../../components/FolioNav";
+import { useAuth } from "../../context/AuthContext";
 import { AlertTriangle, Landmark, Layers, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from "lucide-react";
 
 import { bankAPI } from "../../../services/api";
@@ -60,6 +61,9 @@ const balanceOf = (bank) => parseFloat(bank.balance) || 0;
 
 // Main Bank Management Component
 export default function BankManagement() {
+  // Junior accountants can look; only the senior accountant (and admins) change bank accounts
+  const { can } = useAuth();
+  const canManage = can("banking.manage");
   const [banks, setBanks] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("");
@@ -202,12 +206,12 @@ export default function BankManagement() {
             <button onClick={clearFilters} className={secondaryButtonClass}>
               Clear filters
             </button>
-          ) : (
+          ) : canManage ? (
             <button onClick={() => setFormBank({})} className={toolbarButtonClass.primary}>
               <Plus size={14} />
               Add Bank Account
             </button>
-          )
+          ) : null
         }
       />
     );
@@ -223,7 +227,7 @@ export default function BankManagement() {
               <col className="w-[12%]" />
               <col className="w-[16%]" />
               <col />
-              <col className="w-[5.5rem]" />
+              {canManage && <col className="w-[5.5rem]" />}
             </colgroup>
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr className="text-left">
@@ -232,7 +236,7 @@ export default function BankManagement() {
                 <th className={`px-3 py-2.5 ${statLabelClass}`}>Type</th>
                 <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Balance</th>
                 <th className={`px-3 py-2.5 ${statLabelClass}`}>Description</th>
-                <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+                {canManage && <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -257,7 +261,7 @@ export default function BankManagement() {
                   <td className="px-3 py-3 text-gray-600 truncate" title={bank.description}>
                     {bank.description || "—"}
                   </td>
-                  <td className="px-5 py-2">{actions(bank)}</td>
+                  {canManage && <td className="px-5 py-2">{actions(bank)}</td>}
                 </tr>
               ))}
             </tbody>
@@ -288,20 +292,22 @@ export default function BankManagement() {
                 <span>{bank.branch || "No branch"}</span>
               </div>
               {bank.description && <p className="mt-2 text-xs text-gray-600">{bank.description}</p>}
-              <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
-                <button
-                  onClick={() => setFormBank(bank)}
-                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Pencil size={13} /> Edit
-                </button>
-                <button
-                  onClick={() => setBankToDelete(bank)}
-                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 size={13} /> Delete
-                </button>
-              </div>
+              {canManage && (
+                <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
+                  <button
+                    onClick={() => setFormBank(bank)}
+                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Pencil size={13} /> Edit
+                  </button>
+                  <button
+                    onClick={() => setBankToDelete(bank)}
+                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 size={13} /> Delete
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -340,10 +346,12 @@ export default function BankManagement() {
               <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
               Refresh
             </button>
-            <button onClick={() => setFormBank({})} className={toolbarButtonClass.primary}>
-              <Plus size={14} />
-              Add Bank Account
-            </button>
+            {canManage && (
+              <button onClick={() => setFormBank({})} className={toolbarButtonClass.primary}>
+                <Plus size={14} />
+                Add Bank Account
+              </button>
+            )}
           </PanelHeader>
 
           <FilterBar
@@ -367,7 +375,7 @@ export default function BankManagement() {
         </section>
       </div>
 
-      {formBank && (
+      {canManage && formBank && (
         <FormModal
           key={formBank.id || "new"}
           title={isEditing ? "Edit Bank Account" : "Add Bank Account"}
@@ -386,7 +394,7 @@ export default function BankManagement() {
         />
       )}
 
-      {bankToDelete && (
+      {canManage && bankToDelete && (
         <ConfirmDeleteModal
           title="Delete Bank Account"
           message="This removes the account from your records."

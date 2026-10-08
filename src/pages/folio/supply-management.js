@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import FolioNav from "../../components/FolioNav";
+import { useAuth } from "../../context/AuthContext";
 import {
   AlertTriangle,
   Building2,
@@ -58,6 +59,9 @@ const toPayload = (values) => Object.fromEntries(Object.entries(values).filter((
 
 // Main Supplier Management Component
 export default function SupplierManagement() {
+  // Several roles can look at suppliers; only procurement (and admins) change them
+  const { can } = useAuth();
+  const canManage = can("suppliers.manage");
   const [suppliers, setSuppliers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [contactFilter, setContactFilter] = useState("");
@@ -204,12 +208,12 @@ export default function SupplierManagement() {
             <button onClick={clearFilters} className={secondaryButtonClass}>
               Clear filters
             </button>
-          ) : (
+          ) : canManage ? (
             <button onClick={() => setFormSupplier({})} className={toolbarButtonClass.primary}>
               <Plus size={14} />
               Add Supplier
             </button>
-          )
+          ) : null
         }
       />
     );
@@ -225,7 +229,7 @@ export default function SupplierManagement() {
               <col className="w-[22%]" />
               <col />
               <col className="w-[11%]" />
-              <col className="w-[5.5rem]" />
+              {canManage && <col className="w-[5.5rem]" />}
             </colgroup>
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr className="text-left">
@@ -234,7 +238,7 @@ export default function SupplierManagement() {
                 <th className={`px-3 py-2.5 ${statLabelClass}`}>Email / Phone</th>
                 <th className={`px-3 py-2.5 ${statLabelClass}`}>Address</th>
                 <th className={`px-3 py-2.5 ${statLabelClass}`}>Updated</th>
-                <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+                {canManage && <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -252,21 +256,23 @@ export default function SupplierManagement() {
                     {s.address || "—"}
                   </td>
                   <td className="px-3 py-3 text-gray-700 truncate">{formatDay(s.updated_at)}</td>
-                  <td className="px-5 py-2">
-                    <div className="flex justify-end gap-1">
-                      <button onClick={() => setFormSupplier(s)} className={iconButtonClass()} title="Edit" aria-label={`Edit ${s.name}`}>
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => setSupplierToDelete(s)}
-                        className={iconButtonClass("red")}
-                        title="Delete"
-                        aria-label={`Delete ${s.name}`}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
+                  {canManage && (
+                    <td className="px-5 py-2">
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => setFormSupplier(s)} className={iconButtonClass()} title="Edit" aria-label={`Edit ${s.name}`}>
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          onClick={() => setSupplierToDelete(s)}
+                          className={iconButtonClass("red")}
+                          title="Delete"
+                          aria-label={`Delete ${s.name}`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -297,20 +303,22 @@ export default function SupplierManagement() {
                 </p>
               )}
               {s.description && <p className="mt-2 text-xs text-gray-600">{s.description}</p>}
-              <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
-                <button
-                  onClick={() => setFormSupplier(s)}
-                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Pencil size={13} /> Edit
-                </button>
-                <button
-                  onClick={() => setSupplierToDelete(s)}
-                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 size={13} /> Delete
-                </button>
-              </div>
+              {canManage && (
+                <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
+                  <button
+                    onClick={() => setFormSupplier(s)}
+                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Pencil size={13} /> Edit
+                  </button>
+                  <button
+                    onClick={() => setSupplierToDelete(s)}
+                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 size={13} /> Delete
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -345,10 +353,12 @@ export default function SupplierManagement() {
               <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
               Refresh
             </button>
-            <button onClick={() => setFormSupplier({})} className={toolbarButtonClass.primary}>
-              <Plus size={14} />
-              Add Supplier
-            </button>
+            {canManage && (
+              <button onClick={() => setFormSupplier({})} className={toolbarButtonClass.primary}>
+                <Plus size={14} />
+                Add Supplier
+              </button>
+            )}
           </PanelHeader>
 
           <FilterBar
@@ -369,7 +379,7 @@ export default function SupplierManagement() {
         </section>
       </div>
 
-      {formSupplier && (
+      {canManage && formSupplier && (
         <FormModal
           key={formSupplier.id || "new"}
           title={isEditing ? "Edit Supplier" : "Add Supplier"}
@@ -388,7 +398,7 @@ export default function SupplierManagement() {
         />
       )}
 
-      {supplierToDelete && (
+      {canManage && supplierToDelete && (
         <ConfirmDeleteModal
           title="Delete Supplier"
           message="This removes the supplier and their contact details from your records."

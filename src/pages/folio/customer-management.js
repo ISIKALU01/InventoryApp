@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import FolioNav from "../../components/FolioNav";
+import { useAuth } from "../../context/AuthContext";
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -119,6 +120,9 @@ const BalanceCell = ({ customer, align = "right" }) => {
 
 // Main Customer Management Component
 export default function CustomerManagement() {
+  // Accountants open this page to record deposits; only admins add, edit or delete customers
+  const { can } = useAuth();
+  const canManage = can("customers.manage");
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGender, setSelectedGender] = useState("");
@@ -268,12 +272,12 @@ export default function CustomerManagement() {
             <button onClick={clearFilters} className={secondaryButtonClass}>
               Clear filters
             </button>
-          ) : (
+          ) : canManage ? (
             <button onClick={() => setFormCustomer({})} className={toolbarButtonClass.primary}>
               <Plus size={14} />
               Add Customer
             </button>
-          )
+          ) : null
         }
       />
     );
@@ -290,7 +294,7 @@ export default function CustomerManagement() {
               <col className="w-[15%]" />
               <col className="w-[13%]" />
               <col className="w-[12%]" />
-              <col className="w-[5.5rem]" />
+              {canManage && <col className="w-[5.5rem]" />}
             </colgroup>
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr className="text-left">
@@ -300,7 +304,7 @@ export default function CustomerManagement() {
                 <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Balance</th>
                 <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Credit Limit</th>
                 <th className={`px-3 py-2.5 ${statLabelClass}`}>Birthday</th>
-                <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+                {canManage && <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -333,26 +337,28 @@ export default function CustomerManagement() {
                   </td>
                   <td className="px-3 py-3 text-right text-gray-700 truncate">{formatNaira(customer.credit_limit)}</td>
                   <td className="px-3 py-3 text-gray-700 truncate">{formatDay(customer.birthday)}</td>
-                  <td className="px-5 py-2">
-                    <div className="flex justify-end gap-1">
-                      <button
-                        onClick={stop(() => setFormCustomer(customer))}
-                        className={iconButtonClass()}
-                        title="Edit"
-                        aria-label={`Edit ${customer.name}`}
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={stop(() => setCustomerToDelete(customer))}
-                        className={iconButtonClass("red")}
-                        title="Delete"
-                        aria-label={`Delete ${customer.name}`}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
+                  {canManage && (
+                    <td className="px-5 py-2">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={stop(() => setFormCustomer(customer))}
+                          className={iconButtonClass()}
+                          title="Edit"
+                          aria-label={`Edit ${customer.name}`}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          onClick={stop(() => setCustomerToDelete(customer))}
+                          className={iconButtonClass("red")}
+                          title="Delete"
+                          aria-label={`Delete ${customer.name}`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -390,20 +396,22 @@ export default function CustomerManagement() {
                   ))}
                 </div>
               </button>
-              <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
-                <button
-                  onClick={() => setFormCustomer(customer)}
-                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Pencil size={13} /> Edit
-                </button>
-                <button
-                  onClick={() => setCustomerToDelete(customer)}
-                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 size={13} /> Delete
-                </button>
-              </div>
+              {canManage && (
+                <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
+                  <button
+                    onClick={() => setFormCustomer(customer)}
+                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Pencil size={13} /> Edit
+                  </button>
+                  <button
+                    onClick={() => setCustomerToDelete(customer)}
+                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 size={13} /> Delete
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -446,10 +454,12 @@ export default function CustomerManagement() {
               <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
               Refresh
             </button>
-            <button onClick={() => setFormCustomer({})} className={toolbarButtonClass.primary}>
-              <Plus size={14} />
-              Add Customer
-            </button>
+            {canManage && (
+              <button onClick={() => setFormCustomer({})} className={toolbarButtonClass.primary}>
+                <Plus size={14} />
+                Add Customer
+              </button>
+            )}
           </PanelHeader>
 
           <FilterBar
@@ -482,7 +492,7 @@ export default function CustomerManagement() {
         </section>
       </div>
 
-      {formCustomer && (
+      {canManage && formCustomer && (
         <FormModal
           key={formCustomer.id || "new"}
           title={isEditing ? "Edit Customer" : "Add Customer"}
@@ -506,7 +516,7 @@ export default function CustomerManagement() {
         />
       )}
 
-      {customerToDelete && (
+      {canManage && customerToDelete && (
         <ConfirmDeleteModal
           title="Delete Customer"
           message="This removes the customer and their contact details from your records."

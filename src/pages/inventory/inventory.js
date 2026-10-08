@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import InventoryNav from "../../components/InventoryNav";
+import { useAuth } from "../../context/AuthContext";
 import {
   FaSearch,
   FaPlus,
@@ -1645,6 +1646,9 @@ const EditStockModal = ({
 
 // Main Inventory Component
 export default function Inventory() {
+  // Store managers and procurement can look at stock; inventory officers (and admins) change it
+  const { can } = useAuth();
+  const canManage = can("inventory.manage");
   const [inventory, setInventory] = useState([]);
   const [stores, setStores] = useState([]);
   const [products, setProducts] = useState([]);
@@ -2263,22 +2267,24 @@ export default function Inventory() {
                 {filteredInventory.length} {isFiltered ? "matching" : "items"}
               </span>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100"
-              >
-                <FaFileImport className="text-xs" />
-                Import CSV
-              </button>
-              <button
-                onClick={() => setShowAddStockModal(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700"
-              >
-                <FaPlus className="text-xs" />
-                Add Inventory
-              </button>
-            </div>
+            {canManage && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100"
+                >
+                  <FaFileImport className="text-xs" />
+                  Import CSV
+                </button>
+                <button
+                  onClick={() => setShowAddStockModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700"
+                >
+                  <FaPlus className="text-xs" />
+                  Add Inventory
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Filters */}
@@ -2325,10 +2331,12 @@ export default function Inventory() {
               </p>
               <div className="mt-4">
                 {inventory.length === 0 ? (
-                  <button onClick={() => setShowAddStockModal(true)} className={primaryButtonClass()}>
-                    <FaPlus className="mr-2 text-xs" />
-                    Add Your First Inventory Item
-                  </button>
+                  canManage && (
+                    <button onClick={() => setShowAddStockModal(true)} className={primaryButtonClass()}>
+                      <FaPlus className="mr-2 text-xs" />
+                      Add Your First Inventory Item
+                    </button>
+                  )
                 ) : (
                   <button onClick={clearFilters} className={secondaryButtonClass}>
                     Clear filters
@@ -2357,7 +2365,9 @@ export default function Inventory() {
                       <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Stock</th>
                       <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Price / Cost</th>
                       <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Stock Value</th>
-                      <th className={`px-4 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+                      {canManage && (
+                        <th className={`px-4 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -2405,26 +2415,28 @@ export default function Inventory() {
                           <td className="px-3 py-3 font-semibold text-right text-gray-900 truncate">
                             {formatCurrency(stockValue)}
                           </td>
-                          <td className="px-4 py-2">
-                            <div className="flex justify-end gap-1">
-                              <button
-                                onClick={() => handleEditClick(item)}
-                                className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
-                                title="Edit"
-                                aria-label={`Edit ${product.name || "item"}`}
-                              >
-                                <FaEdit className="text-sm" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteInventory(item)}
-                                className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600"
-                                title="Delete"
-                                aria-label={`Delete ${product.name || "item"}`}
-                              >
-                                <FaTrash className="text-sm" />
-                              </button>
-                            </div>
-                          </td>
+                          {canManage && (
+                            <td className="px-4 py-2">
+                              <div className="flex justify-end gap-1">
+                                <button
+                                  onClick={() => handleEditClick(item)}
+                                  className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+                                  title="Edit"
+                                  aria-label={`Edit ${product.name || "item"}`}
+                                >
+                                  <FaEdit className="text-sm" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteInventory(item)}
+                                  className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600"
+                                  title="Delete"
+                                  aria-label={`Delete ${product.name || "item"}`}
+                                >
+                                  <FaTrash className="text-sm" />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -2481,20 +2493,22 @@ export default function Inventory() {
                         ))}
                       </div>
 
-                      <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
-                        <button
-                          onClick={() => handleEditClick(item)}
-                          className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                        >
-                          <FaEdit className="text-[11px]" /> Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteInventory(item)}
-                          className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
-                        >
-                          <FaTrash className="text-[11px]" /> Delete
-                        </button>
-                      </div>
+                      {canManage && (
+                        <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
+                          <button
+                            onClick={() => handleEditClick(item)}
+                            className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            <FaEdit className="text-[11px]" /> Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInventory(item)}
+                            className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                          >
+                            <FaTrash className="text-[11px]" /> Delete
+                          </button>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
