@@ -1,143 +1,129 @@
-// pages/transaction/purchases.js
 import { useState, useEffect } from "react";
 import InventoryNav from "../../components/InventoryNav";
 import { useAuth } from "../../context/AuthContext";
 import {
-  FaSearch,
-  FaFileExport,
-  FaSlidersH,
-  FaPlus,
-  FaBuilding,
-  FaTimes,
-  FaEdit,
-  FaTrash,
-  FaEye,
-  FaTruck,
-  FaBox,
-  FaUser,
-  FaPhone,
-  FaEnvelope,
-  FaMapMarkerAlt,
-} from "react-icons/fa";
+  AlertTriangle,
+  CalendarClock,
+  ClipboardList,
+  Download,
+  Eye,
+  Hourglass,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  Plus,
+  RefreshCw,
+  Trash2,
+  User,
+  Wallet,
+  X,
+} from "lucide-react";
 
 import { purchaseOrderAPI, supplierAPI } from "../../../services/api";
+import {
+  Badge,
+  ConfirmDeleteModal,
+  EmptyState,
+  FilterBar,
+  FilterSelect,
+  FormModal,
+  LoadingState,
+  ModalFooter,
+  ModalShell,
+  PageTitle,
+  Pagination,
+  PanelHeader,
+  StatTiles,
+  SummaryRow,
+  filterFieldClass,
+  formatDay,
+  formatNaira,
+  iconButtonClass,
+  matchesTerm,
+  secondaryButtonClass,
+  statLabelClass,
+  toDate,
+  toList,
+  toolbarButtonClass,
+  usePagination,
+  useToast,
+} from "../../components/ui/Boxy";
+
+const STATUSES = [
+  { value: "pending", label: "Pending", badge: "bg-amber-50 text-amber-700" },
+  { value: "approved", label: "Approved", badge: "bg-blue-50 text-blue-700" },
+  { value: "received", label: "Received", badge: "bg-green-50 text-green-700" },
+  { value: "cancelled", label: "Cancelled", badge: "bg-red-50 text-red-700" },
+];
+
+const PAYMENT_METHODS = [
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "debit_card", label: "Debit Card" },
+  { value: "online", label: "Online Payment" },
+];
+
+const statusOf = (value) => STATUSES.find((s) => s.value === value);
+const statusLabel = (value) => statusOf(value)?.label || value || "—";
+const paymentLabel = (value) => PAYMENT_METHODS.find((m) => m.value === value)?.label || value || "—";
+
+const StatusBadge = ({ status }) => (
+  <Badge className={statusOf(status)?.badge || undefined}>{statusLabel(status)}</Badge>
+);
+
+// Suppliers store the person as contact_name; older orders embed contact_person
+const contactOf = (supplier) => supplier?.contact_name || supplier?.contact_person;
+const hasContactLines = (supplier) =>
+  Boolean(contactOf(supplier) || supplier.email || supplier.phone || supplier.address);
+
+const amountOf = (order) => parseFloat(order.total_amount) || 0;
+
+// "2025-03-01T00:00:00Z" or "2025-03-01" -> "2025-03-01", for date inputs and the date filter
+const dayKey = (value) => (value ? String(value).slice(0, 10) : "");
+const today = () => new Date().toISOString().split("T")[0];
+
+// Still waiting on a delivery whose expected date has passed
+const isOverdue = (order) =>
+  ["pending", "approved"].includes(order.status) && Boolean(order.expected_date) && dayKey(order.expected_date) < today();
+
+const EMPTY_ORDER = {
+  supplier_id: "",
+  order_number: "",
+  status: "pending",
+  payment_method: "",
+  total_amount: "",
+  order_date: "",
+  expected_date: "",
+  notes: "",
+};
+
+const csvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
 
 export default function Purchases() {
   // Many roles can look at purchase orders; only procurement (and admins) raise or change them
   const { can } = useAuth();
   const canManage = can("purchase-orders.manage");
   const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showOrderForm, setShowOrderForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [formOrder, setFormOrder] = useState(null); // {} = new, order = edit
+  const [viewOrder, setViewOrder] = useState(null);
   const [orderToDelete, setOrderToDelete] = useState(null);
-  const [suppliers, setSuppliers] = useState([]);
-  const [suppliersLoading, setSuppliersLoading] = useState(false);
-  const [showSupplierDetails, setShowSupplierDetails] = useState(false);
-  const [selectedSupplierDetails, setSelectedSupplierDetails] = useState(null);
-
-  // Purchase order form data
-  const [orderFormData, setOrderFormData] = useState({
-    supplier_id: "",
-    order_number: "",
-    status: "pending",
-    payment_method: "",
-    total_amount: "",
-    order_date: new Date().toISOString().split('T')[0],
-    expected_date: "",
-    notes: ""
-  });
-
-  // Status options
-  const statusOptions = [
-    { value: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-800" },
-    { value: "approved", label: "Approved", color: "bg-blue-100 text-blue-800" },
-    { value: "received", label: "Received", color: "bg-green-100 text-green-800" },
-    { value: "cancelled", label: "Cancelled", color: "bg-red-100 text-red-800" }
-  ];
-
-  // Payment method options
-  const paymentMethods = [
-    { value: "cash", label: "Cash" },
-    { value: "bank_transfer", label: "Bank Transfer" },
-    { value: "credit_card", label: "Credit Card" },
-    { value: "debit_card", label: "Debit Card" },
-    { value: "online", label: "Online Payment" }
-  ];
-
-  // Calculate total amount
-  const totalAmount = purchaseOrders.reduce((sum, order) => {
-    return sum + (parseFloat(order.total_amount) || 0);
-  }, 0);
-
-  // Generate order number
-  const generateOrderNumber = () => {
-    const timestamp = new Date().getTime();
-    return `PO-${timestamp}`;
-  };
-
-  // Fetch suppliers using the supplier API
-  const fetchSuppliers = async () => {
-    try {
-      setSuppliersLoading(true);
-      const suppliersData = await supplierAPI.getAllSuppliers();
-      setSuppliers(suppliersData);
-    } catch (err) {
-      console.error("Error fetching suppliers:", err);
-      setError(`Failed to load suppliers: ${err.message}`);
-    } finally {
-      setSuppliersLoading(false);
-    }
-  };
-
-  // View supplier details
-  const handleViewSupplierDetails = (supplierId) => {
-    const supplier = suppliers.find(s => s.id === supplierId);
-    if (supplier) {
-      setSelectedSupplierDetails(supplier);
-      setShowSupplierDetails(true);
-    }
-  };
-
-  // Detect mobile screen size
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkIsMobile();
-    window.addEventListener("resize", checkIsMobile);
-    return () => window.removeEventListener("resize", checkIsMobile);
-  }, []);
+  const { notify, toastElement } = useToast();
 
   // Fetch purchase orders from API
   const fetchPurchaseOrders = async () => {
+    setLoading(true);
+    setError("");
     try {
-      setLoading(true);
-      setError("");
-      
-      const data = await purchaseOrderAPI.getAllPurchaseOrders();
-
-      // Handle both array and object responses
-      if (Array.isArray(data)) {
-        setPurchaseOrders(data);
-        setFilteredOrders(data);
-      } else if (data.data && Array.isArray(data.data)) {
-        // Handle Laravel paginated response
-        setPurchaseOrders(data.data);
-        setFilteredOrders(data.data);
-      } else {
-        throw new Error("Unexpected response format");
-      }
+      setPurchaseOrders(toList(await purchaseOrderAPI.getAllPurchaseOrders()));
     } catch (err) {
       setError(err.message);
       console.error("Error fetching purchase orders:", err);
@@ -146,58 +132,115 @@ export default function Purchases() {
     }
   };
 
-  // Load purchase orders and suppliers on component mount
+  // Suppliers fill the order form's dropdown and the supplier details
+  const fetchSuppliers = async () => {
+    try {
+      setSuppliers(toList(await supplierAPI.getAllSuppliers()));
+    } catch (err) {
+      console.error("Error fetching suppliers:", err);
+      notify("error", err.message, "Couldn't load suppliers");
+    }
+  };
+
   useEffect(() => {
     fetchPurchaseOrders();
     fetchSuppliers();
   }, []);
 
-  // Extract unique suppliers and statuses from orders
-  const uniqueSuppliers = [...new Set(purchaseOrders
-    .map(order => order.supplier?.name)
-    .filter(Boolean)
-    .sort())];
+  // The order may embed its supplier; otherwise look it up
+  const supplierOf = (order) =>
+    order?.supplier || suppliers.find((s) => String(s.id) === String(order?.supplier_id)) || null;
+  const supplierName = (order) => supplierOf(order)?.name || "—";
 
-  const uniqueStatuses = [...new Set(purchaseOrders.map(order => order.status).filter(Boolean))];
+  // ---- Save / delete -------------------------------------------------------
 
-  // Filter orders based on filters
-  useEffect(() => {
-    let filtered = purchaseOrders;
+  const isEditing = Boolean(formOrder?.id);
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (order) =>
-          order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.supplier?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.total_amount?.toString().includes(searchTerm)
-      );
+  const handleSave = async (values) => {
+    const orderData = {
+      ...values,
+      total_amount: values.total_amount ? parseFloat(values.total_amount) : null,
+      supplier_id: parseInt(values.supplier_id),
+    };
+    if (isEditing) {
+      await purchaseOrderAPI.updatePurchaseOrder(formOrder.id, orderData);
+      notify("success", `${orderData.order_number} was saved.`, "Order updated");
+    } else {
+      await purchaseOrderAPI.createPurchaseOrder(orderData);
+      notify("success", `${orderData.order_number} was raised.`, "Order created");
     }
+    await fetchPurchaseOrders();
+    setFormOrder(null);
+  };
 
-    // Apply status filter
-    if (selectedStatus) {
-      filtered = filtered.filter(
-        (order) => order.status === selectedStatus
-      );
-    }
+  const handleDelete = async () => {
+    const order = orderToDelete;
+    await purchaseOrderAPI.deletePurchaseOrder(order.id);
+    setPurchaseOrders((prev) => prev.filter((o) => o.id !== order.id));
+    setOrderToDelete(null);
+    notify("success", `${order.order_number} was removed.`, "Order deleted");
+  };
 
-    // Apply date filter
-    if (selectedDate) {
-      filtered = filtered.filter(
-        (order) => order.order_date === selectedDate
-      );
-    }
+  const openEdit = (order) => {
+    setViewOrder(null);
+    setFormOrder(order);
+  };
 
-    // Apply supplier filter
-    if (selectedSupplier) {
-      filtered = filtered.filter(
-        (order) => order.supplier?.name === selectedSupplier
-      );
-    }
+  // ---- Filtering -------------------------------------------------------------
 
-    setFilteredOrders(filtered);
-  }, [purchaseOrders, searchTerm, selectedStatus, selectedDate, selectedSupplier]);
+  const term = searchTerm.trim().toLowerCase();
+  const filteredOrders = purchaseOrders.filter(
+    (order) =>
+      matchesTerm(term, [order.order_number, supplierOf(order)?.name, order.notes, order.total_amount]) &&
+      (!selectedStatus || order.status === selectedStatus) &&
+      (!selectedDate || dayKey(order.order_date) === selectedDate) &&
+      (!selectedSupplier || supplierOf(order)?.name === selectedSupplier)
+  );
+
+  const hasFilters = Boolean(searchTerm || selectedStatus || selectedDate || selectedSupplier);
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedStatus("");
+    setSelectedDate("");
+    setSelectedSupplier("");
+  };
+
+  const pager = usePagination(
+    filteredOrders,
+    25,
+    `${searchTerm}|${selectedStatus}|${selectedDate}|${selectedSupplier}`
+  );
+
+  const supplierNames = [...new Set(purchaseOrders.map((o) => supplierOf(o)?.name).filter(Boolean))].sort();
+
+  const totalAmount = purchaseOrders.reduce((sum, o) => sum + amountOf(o), 0);
+  const filteredAmount = filteredOrders.reduce((sum, o) => sum + amountOf(o), 0);
+  const pending = purchaseOrders.filter((o) => o.status === "pending");
+  const received = purchaseOrders.filter((o) => o.status === "received").length;
+  const overdue = purchaseOrders.filter(isOverdue).length;
+
+  const tiles = [
+    {
+      icon: ClipboardList,
+      iconClass: "bg-blue-50 text-blue-700",
+      label: "Total Orders",
+      value: purchaseOrders.length,
+      hint: `${received} received`,
+    },
+    { icon: Wallet, iconClass: "bg-green-50 text-green-700", label: "Total Amount", value: formatNaira(totalAmount) },
+    {
+      icon: Hourglass,
+      iconClass: "bg-amber-50 text-amber-700",
+      label: "Pending Orders",
+      value: pending.length,
+      hint: overdue
+        ? `${overdue} overdue for delivery`
+        : pending.length
+        ? `${formatNaira(pending.reduce((sum, o) => sum + amountOf(o), 0))} awaiting approval`
+        : null,
+      hintClass: overdue ? "text-red-600" : "text-gray-500",
+    },
+  ];
 
   const exportToCSV = () => {
     const headers = [
@@ -210,998 +253,475 @@ export default function Purchases() {
       "Order Date",
       "Expected Date",
       "Payment Method",
-      "Notes"
+      "Notes",
     ];
-    const csvData = filteredOrders.map((order) => [
-      order.order_number,
-      order.supplier?.name || 'N/A',
-      order.supplier?.contact_person || 'N/A',
-      order.supplier?.email || 'N/A',
-      order.status,
-      `₦${(parseFloat(order.total_amount) || 0).toFixed(2)}`, // Changed to ₦
-      order.order_date,
-      order.expected_date,
-      order.payment_method,
-      order.notes
-    ]);
+    const rows = filteredOrders.map((order) => {
+      const supplier = supplierOf(order);
+      return [
+        order.order_number,
+        supplier?.name || "N/A",
+        contactOf(supplier) || "N/A",
+        supplier?.email || "N/A",
+        statusLabel(order.status),
+        amountOf(order).toFixed(2),
+        dayKey(order.order_date),
+        dayKey(order.expected_date),
+        paymentLabel(order.payment_method),
+        order.notes,
+      ];
+    });
 
-    const csvContent = [
-      headers.join(","),
-      ...csvData.map((row) => row.join(",")),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
+    const csvContent = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+    const url = window.URL.createObjectURL(new Blob([csvContent], { type: "text/csv" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `purchase-orders-report-${
-      new Date().toISOString().split("T")[0]
-    }.csv`;
+    link.download = `purchase-orders-report-${today()}.csv`;
     link.click();
     window.URL.revokeObjectURL(url);
   };
 
-  const clearFilters = () => {
-    setSearchTerm("");
-    setSelectedStatus("");
-    setSelectedDate("");
-    setSelectedSupplier("");
+  // ---- Render ----------------------------------------------------------------
+
+  const stop = (fn) => (e) => {
+    e.stopPropagation();
+    fn();
   };
 
-  const toggleFilters = () => {
-    setShowFilters(!showFilters);
-  };
+  const expectedCell = (order) =>
+    order.expected_date ? (
+      <>
+        <div className="text-gray-900 truncate">{formatDay(order.expected_date)}</div>
+        {isOverdue(order) && <div className="text-[11px] font-semibold text-red-600">Overdue</div>}
+      </>
+    ) : (
+      <span className="text-gray-400">—</span>
+    );
 
-  const handleCreateOrder = () => {
-    setSelectedOrder(null);
-    setOrderFormData({
-      supplier_id: "",
-      order_number: generateOrderNumber(),
-      status: "pending",
-      payment_method: "",
-      total_amount: "",
-      order_date: new Date().toISOString().split('T')[0],
-      expected_date: "",
-      notes: ""
-    });
-    setShowOrderForm(true);
-  };
+  const newOrderButton = (
+    <button onClick={() => setFormOrder({})} className={toolbarButtonClass.primary}>
+      <Plus size={14} />
+      New Order
+    </button>
+  );
 
-  const handleEditOrder = (order) => {
-    setSelectedOrder(order);
-    setOrderFormData({
-      supplier_id: order.supplier_id,
-      order_number: order.order_number,
-      status: order.status,
-      payment_method: order.payment_method,
-      total_amount: order.total_amount,
-      order_date: order.order_date,
-      expected_date: order.expected_date,
-      notes: order.notes
-    });
-    setShowOrderForm(true);
-  };
-
-  const handleViewOrder = (order) => {
-    setSelectedOrder(order);
-    setOrderFormData({
-      supplier_id: order.supplier_id,
-      order_number: order.order_number,
-      status: order.status,
-      payment_method: order.payment_method,
-      total_amount: order.total_amount,
-      order_date: order.order_date,
-      expected_date: order.expected_date,
-      notes: order.notes
-    });
-    setShowOrderForm(true);
-  };
-
-  const handleDeleteOrder = (order) => {
-    setOrderToDelete(order);
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = async () => {
-    try {
-      setError("");
-      await purchaseOrderAPI.deletePurchaseOrder(orderToDelete.id);
-
-      // Refresh the orders list
-      await fetchPurchaseOrders();
-      setShowDeleteConfirm(false);
-      setOrderToDelete(null);
-    } catch (err) {
-      setError(err.message);
-      console.error("Error deleting purchase order:", err);
-    }
-  };
-
-  const handleCloseOrderForm = () => {
-    setShowOrderForm(false);
-    setSelectedOrder(null);
-    setOrderFormData({
-      supplier_id: "",
-      order_number: generateOrderNumber(),
-      status: "pending",
-      payment_method: "",
-      total_amount: "",
-      order_date: new Date().toISOString().split('T')[0],
-      expected_date: "",
-      notes: ""
-    });
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setOrderFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleSubmitOrder = async (e) => {
-    e.preventDefault();
-    
-    try {
-      setError("");
-      const orderData = {
-        ...orderFormData,
-        total_amount: orderFormData.total_amount ? parseFloat(orderFormData.total_amount) : null,
-        supplier_id: parseInt(orderFormData.supplier_id)
-      };
-
-      if (selectedOrder) {
-        await purchaseOrderAPI.updatePurchaseOrder(selectedOrder.id, orderData);
-      } else {
-        await purchaseOrderAPI.createPurchaseOrder(orderData);
-      }
-
-      // Refresh the orders list
-      await fetchPurchaseOrders();
-      
-      handleCloseOrderForm();
-    } catch (err) {
-      setError(err.message);
-      console.error(`Error ${selectedOrder ? 'updating' : 'creating'} purchase order:`, err);
-    }
-  };
-
-  const getStatusColor = (status) => {
-    const statusOption = statusOptions.find(opt => opt.value === status);
-    return statusOption ? statusOption.color : "bg-gray-100 text-gray-800";
-  };
-
-  const getStatusLabel = (status) => {
-    const statusOption = statusOptions.find(opt => opt.value === status);
-    return statusOption ? statusOption.label : status;
-  };
-
-  // Get supplier details for display
-  const getSelectedSupplier = () => {
-    return suppliers.find(s => s.id === parseInt(orderFormData.supplier_id));
-  };
-
-  const selectedSupplierData = getSelectedSupplier();
-
-  return (
-    <div className="max-w-6xl mx-auto pb-16 md:pb-0">
-      <h1 className="text-xl font-normal font-raleway text-gray-800 mb-6 hidden md:block">
-        Purchase Orders
-      </h1>
-      <InventoryNav />
-
-      <div className="mt-4 space-y-4 px-2 md:px-0">
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-            <p className="text-sm">{error}</p>
-            {error.includes("authentication") && (
-              <button
-                onClick={() => window.location.href = '/login'}
-                className="mt-2 px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-              >
-                Go to Login
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded shadow p-3">
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded mr-2">
-                <FaBox className="text-blue-600 text-sm" />
-              </div>
-              <div>
-                <h3 className="text-xs font-medium text-gray-600">
-                  Total Orders
-                </h3>
-                <p className="text-lg font-bold text-gray-800">
-                  {purchaseOrders.length}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded shadow p-3">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded mr-2">
-                <FaBuilding className="text-green-600 text-sm" />
-              </div>
-              <div>
-                <h3 className="text-xs font-medium text-gray-600">
-                  Total Amount
-                </h3>
-                <p className="text-lg font-bold text-gray-800">
-                  ₦{totalAmount.toFixed(2)} {/* Changed to ₦ */}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded shadow p-3">
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded mr-2">
-                <FaTruck className="text-purple-600 text-sm" />
-              </div>
-              <div>
-                <h3 className="text-xs font-medium text-gray-600">
-                  Pending Orders
-                </h3>
-                <p className="text-lg font-bold text-gray-800">
-                  {purchaseOrders.filter(order => order.status === 'pending').length}
-                </p>
-              </div>
-            </div>
-          </div>
+  let body;
+  if (loading && purchaseOrders.length === 0) {
+    body = <LoadingState label="Loading purchase orders…" />;
+  } else if (error && purchaseOrders.length === 0) {
+    body = (
+      <EmptyState
+        icon={AlertTriangle}
+        tone="red"
+        title="Couldn't load purchase orders"
+        hint={error}
+        action={
+          <button onClick={fetchPurchaseOrders} className={secondaryButtonClass}>
+            Try again
+          </button>
+        }
+      />
+    );
+  } else if (filteredOrders.length === 0) {
+    body = (
+      <EmptyState
+        icon={ClipboardList}
+        title={purchaseOrders.length === 0 ? "No purchase orders yet" : "No orders match your filters"}
+        hint={
+          purchaseOrders.length === 0
+            ? "Orders you raise with suppliers will appear here"
+            : "Try a different search, status, date or supplier"
+        }
+        action={
+          hasFilters ? (
+            <button onClick={clearFilters} className={secondaryButtonClass}>
+              Clear filters
+            </button>
+          ) : canManage ? (
+            newOrderButton
+          ) : null
+        }
+      />
+    );
+  } else {
+    body = (
+      <>
+        {/* Desktop Table */}
+        <div className="hidden md:block">
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col className="w-[19%]" />
+              <col />
+              <col className="w-[11%]" />
+              <col className="w-[15%]" />
+              <col className="w-[12%]" />
+              <col className="w-[12%]" />
+              <col className={canManage ? "w-[7.5rem]" : "w-[4rem]"} />
+            </colgroup>
+            <thead className="border-b border-gray-200 bg-gray-50">
+              <tr className="text-left">
+                <th className={`px-5 py-2.5 ${statLabelClass}`}>Order</th>
+                <th className={`px-3 py-2.5 ${statLabelClass}`}>Supplier</th>
+                <th className={`px-3 py-2.5 ${statLabelClass}`}>Status</th>
+                <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Amount</th>
+                <th className={`px-3 py-2.5 ${statLabelClass}`}>Ordered</th>
+                <th className={`px-3 py-2.5 ${statLabelClass}`}>Expected</th>
+                <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {pager.pageRows.map((order) => {
+                const supplier = supplierOf(order);
+                return (
+                  <tr
+                    key={order.id}
+                    onClick={() => setViewOrder(order)}
+                    className="transition-colors cursor-pointer hover:bg-blue-50/50"
+                    title="View order"
+                  >
+                    <td className="px-5 py-3">
+                      <div className="font-mono font-medium text-gray-900 truncate">{order.order_number}</div>
+                      <div className="text-xs text-gray-500 truncate">{paymentLabel(order.payment_method)}</div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="font-medium text-gray-900 truncate">{supplier?.name || "—"}</div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {contactOf(supplier) || supplier?.email || supplier?.phone || "No contact on file"}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusBadge status={order.status} />
+                    </td>
+                    <td className="px-3 py-3 font-semibold text-right text-gray-900 truncate">
+                      {formatNaira(order.total_amount)}
+                    </td>
+                    <td className="px-3 py-3 text-gray-700 truncate">{formatDay(order.order_date)}</td>
+                    <td className="px-3 py-3">{expectedCell(order)}</td>
+                    <td className="px-5 py-2">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={stop(() => setViewOrder(order))}
+                          className={iconButtonClass()}
+                          title="View"
+                          aria-label={`View ${order.order_number}`}
+                        >
+                          <Eye size={15} />
+                        </button>
+                        {canManage && (
+                          <>
+                            <button
+                              onClick={stop(() => setFormOrder(order))}
+                              className={iconButtonClass()}
+                              title="Edit"
+                              aria-label={`Edit ${order.order_number}`}
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              onClick={stop(() => setOrderToDelete(order))}
+                              className={iconButtonClass("red")}
+                              title="Delete"
+                              aria-label={`Delete ${order.order_number}`}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
-        {/* Filters and Export */}
-        <div className="bg-white rounded shadow p-3">
-          <div className="flex flex-col md:flex-row items-stretch gap-3 w-full">
-            {/* Left side - Search and filters */}
-            <div className="flex flex-col md:flex-row gap-3 flex-grow">
-              {/* Search bar and filter button for mobile */}
-              {isMobile ? (
-                <div className="flex gap-2 w-full">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      placeholder="Search purchase orders..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-2 pr-7 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                    />
-                    <FaSearch className="absolute right-2 top-1.5 text-gray-400 text-xs" />
+        {/* Mobile Cards */}
+        <ul className="divide-y divide-gray-100 md:hidden">
+          {pager.pageRows.map((order) => (
+            <li key={order.id} className="px-5 py-4">
+              <button type="button" onClick={() => setViewOrder(order)} className="w-full text-left">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm font-semibold text-gray-900 truncate">{order.order_number}</p>
+                    <p className="text-xs text-gray-500 truncate">{supplierName(order)}</p>
                   </div>
-
-                  <button
-                    onClick={toggleFilters}
-                    className={`px-3 py-1.5 rounded transition-colors flex items-center text-xs ${
-                      showFilters
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
-                  >
-                    <FaSlidersH className="text-xs" />
-                  </button>
+                  <p className="text-sm font-bold text-gray-900 whitespace-nowrap">{formatNaira(order.total_amount)}</p>
                 </div>
-              ) : (
-                <>
-                  {/* Search bar for desktop */}
-                  <div className="w-full md:w-48 relative">
-                    <input
-                      type="text"
-                      placeholder="Search purchase orders..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-2 pr-7 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                    />
-                    <FaSearch className="absolute right-2 top-1.5 text-gray-400 text-xs" />
-                  </div>
-
-                  {/* Desktop filters */}
-                  <div className="flex gap-3">
-                    {/* Status filter */}
-                    <div className="w-auto">
-                      <select
-                        value={selectedStatus}
-                        onChange={(e) => setSelectedStatus(e.target.value)}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                      >
-                        <option value="">All Status</option>
-                        {statusOptions.map((status) => (
-                          <option key={status.value} value={status.value}>
-                            {status.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Date filter */}
-                    <div className="w-auto">
-                      <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                      />
-                    </div>
-
-                    {/* Supplier filter */}
-                    <div className="w-auto">
-                      <select
-                        value={selectedSupplier}
-                        onChange={(e) => setSelectedSupplier(e.target.value)}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                      >
-                        <option value="">All Suppliers</option>
-                        {uniqueSuppliers.map((supplier) => (
-                          <option key={supplier} value={supplier}>
-                            {supplier}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Right side - Action buttons (hidden on mobile) */}
-            <div className="hidden md:flex gap-2 w-full md:w-auto justify-start md:justify-end">
-              <button
-                onClick={exportToCSV}
-                className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center text-xs"
-              >
-                <FaFileExport className="mr-1 text-xs" />
-                Export
+                <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-600">
+                  <StatusBadge status={order.status} />
+                  <span>Ordered {formatDay(order.order_date)}</span>
+                  {order.expected_date && (
+                    <span className={isOverdue(order) ? "font-semibold text-red-600" : ""}>
+                      · {isOverdue(order) ? "Overdue since" : "Due"} {formatDay(order.expected_date)}
+                    </span>
+                  )}
+                </div>
+                {order.notes && <p className="mt-2 text-xs text-gray-600 line-clamp-2">{order.notes}</p>}
               </button>
               {canManage && (
-                <button
-                  onClick={handleCreateOrder}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center text-xs"
-                >
-                  <FaPlus className="mr-1 text-xs" />
-                  New Order
-                </button>
+                <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
+                  <button
+                    onClick={() => setFormOrder(order)}
+                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Pencil size={13} /> Edit
+                  </button>
+                  <button
+                    onClick={() => setOrderToDelete(order)}
+                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 size={13} /> Delete
+                  </button>
+                </div>
               )}
-            </div>
-          </div>
+            </li>
+          ))}
+        </ul>
 
-          {/* Filter dropdown for mobile */}
-          {isMobile && showFilters && (
-            <div className="mt-3 grid grid-cols-1 gap-2 p-2 bg-gray-50 rounded">
-              {/* Status filter */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Status
-                </label>
-                <select
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                >
-                  <option value="">All Status</option>
-                  {statusOptions.map((status) => (
-                    <option key={status.value} value={status.value}>
-                      {status.label}
+        <Pagination {...pager} shown={pager.pageRows.length} />
+      </>
+    );
+  }
+
+  // ---- Order form fields -------------------------------------------------------
+
+  const supplierOptions = [
+    { value: "", label: suppliers.length ? "Select supplier" : "No suppliers yet — add one in Supplier Management" },
+    ...suppliers.map((s) => ({ value: String(s.id), label: s.name })),
+  ];
+
+  const orderFields = [
+    { name: "supplier_id", label: "Supplier", type: "select", required: true, options: supplierOptions },
+    { name: "order_number", label: "Order Number", required: true, placeholder: "PO-12345", span: "half" },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      required: true,
+      span: "half",
+      options: STATUSES.map(({ value, label }) => ({ value, label })),
+    },
+    {
+      name: "payment_method",
+      label: "Payment Method",
+      type: "select",
+      required: true,
+      span: "half",
+      options: [{ value: "", label: "Select method" }, ...PAYMENT_METHODS],
+    },
+    { name: "total_amount", label: "Total Amount", type: "number", prefix: "₦", placeholder: "0.00", span: "half" },
+    { name: "order_date", label: "Order Date", type: "date", required: true, span: "half" },
+    { name: "expected_date", label: "Expected Delivery", type: "date", span: "half" },
+    { name: "notes", label: "Notes", type: "textarea", placeholder: "Items ordered, delivery terms, anything to remember" },
+  ];
+
+  const orderInitialValues = isEditing
+    ? {
+        ...Object.fromEntries(Object.keys(EMPTY_ORDER).map((k) => [k, formOrder[k] ?? EMPTY_ORDER[k]])),
+        supplier_id: formOrder.supplier_id != null ? String(formOrder.supplier_id) : "",
+        order_date: dayKey(formOrder.order_date),
+        expected_date: dayKey(formOrder.expected_date),
+      }
+    : { ...EMPTY_ORDER, order_number: `PO-${Date.now()}`, order_date: today() };
+
+  // ---- Page ------------------------------------------------------------------
+
+  const viewSupplier = supplierOf(viewOrder);
+
+  return (
+    <div className="pt-0 mt-0 font-raleway">
+      {toastElement}
+
+      <PageTitle title="Purchase Orders" description="Stock you've ordered from suppliers and where each order stands" />
+      <InventoryNav />
+
+      <div className="mt-5 space-y-5">
+        <StatTiles tiles={tiles} loading={loading && purchaseOrders.length === 0} />
+
+        <section className="bg-white border border-gray-200">
+          <PanelHeader
+            title="Orders"
+            meta={
+              loading && purchaseOrders.length === 0
+                ? "Loading…"
+                : `${filteredOrders.length} ${hasFilters ? "matching" : "orders"} · ${formatNaira(filteredAmount)}`
+            }
+          >
+            {hasFilters && (
+              <button onClick={clearFilters} className={toolbarButtonClass.ghost}>
+                <X size={14} />
+                Clear filters
+              </button>
+            )}
+            <button onClick={fetchPurchaseOrders} disabled={loading} className={toolbarButtonClass.secondary}>
+              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+              Refresh
+            </button>
+            <button
+              onClick={exportToCSV}
+              disabled={filteredOrders.length === 0}
+              className={toolbarButtonClass.secondary}
+              title="Download the orders shown as a CSV file"
+            >
+              <Download size={13} />
+              Export
+            </button>
+            {canManage && newOrderButton}
+          </PanelHeader>
+
+          <FilterBar
+            search={searchTerm}
+            onSearch={setSearchTerm}
+            placeholder="Search by order number, supplier, notes or amount"
+            columns="md:grid-cols-[minmax(0,1fr)_9rem_10rem_12rem]"
+            filtersActive={Boolean(selectedStatus || selectedDate || selectedSupplier)}
+            filters={
+              <>
+                <FilterSelect value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} aria-label="Filter by status">
+                  <option value="">All Statuses</option>
+                  {STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
                     </option>
                   ))}
-                </select>
-              </div>
-
-              {/* Date filter */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Order Date
-                </label>
+                </FilterSelect>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
+                  aria-label="Filter by order date"
+                  title="Order date"
+                  className={filterFieldClass}
                 />
-              </div>
-
-              {/* Supplier filter */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Supplier
-                </label>
-                <select
-                  value={selectedSupplier}
-                  onChange={(e) => setSelectedSupplier(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs"
-                >
+                <FilterSelect value={selectedSupplier} onChange={(e) => setSelectedSupplier(e.target.value)} aria-label="Filter by supplier">
                   <option value="">All Suppliers</option>
-                  {uniqueSuppliers.map((supplier) => (
-                    <option key={supplier} value={supplier}>
-                      {supplier}
+                  {supplierNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
                     </option>
                   ))}
-                </select>
-              </div>
+                </FilterSelect>
+              </>
+            }
+          />
 
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={clearFilters}
-                  className="flex-1 px-2 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-xs"
-                >
-                  Clear Filters
-                </button>
-                <button
-                  onClick={toggleFilters}
-                  className="flex-1 px-2 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs"
-                >
-                  Apply Filters
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Purchase Orders Table */}
-        <div className="bg-white rounded shadow overflow-hidden">
-          {/* Loading State */}
-          {loading && (
-            <div className="text-center py-6">
-              <p className="text-black text-xs">Loading purchase orders...</p>
-            </div>
-          )}
-
-          {/* Desktop Table */}
-          {!loading && (
-            <div className="hidden md:block text-black overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Order Number
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Supplier Details
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Total Amount
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Order Date
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Expected Date
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-black">
-                        {order.order_number}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        <div>
-                          <div className="font-medium">{order.supplier?.name || 'N/A'}</div>
-                          {order.supplier?.contact_person && (
-                            <div className="text-xs text-gray-600">
-                              Contact: {order.supplier.contact_person}
-                            </div>
-                          )}
-                          {order.supplier?.email && (
-                            <div className="text-xs text-gray-600">
-                              Email: {order.supplier.email}
-                            </div>
-                          )}
-                          <button
-                            onClick={() => handleViewSupplierDetails(order.supplier_id)}
-                            className="text-xs text-blue-600 hover:text-blue-800 mt-1"
-                          >
-                            View Supplier Details
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                          {getStatusLabel(order.status)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-black">
-                        ₦{(parseFloat(order.total_amount) || 0).toFixed(2)} {/* Changed to ₦ */}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {order.order_date}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-black">
-                        {order.expected_date || 'N/A'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleViewOrder(order)}
-                            className="text-blue-600 hover:text-blue-800 transition-colors"
-                            title="View"
-                          >
-                            <FaEye className="text-sm" />
-                          </button>
-                          {canManage && (
-                            <button
-                              onClick={() => handleEditOrder(order)}
-                              className="text-green-600 hover:text-green-800 transition-colors"
-                              title="Edit"
-                            >
-                              <FaEdit className="text-sm" />
-                            </button>
-                          )}
-                          {canManage && (
-                            <button
-                              onClick={() => handleDeleteOrder(order)}
-                              className="text-red-600 hover:text-red-800 transition-colors"
-                              title="Delete"
-                            >
-                              <FaTrash className="text-sm" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Mobile Cards */}
-          {!loading && (
-            <div className="md:hidden text-black">
-              {filteredOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="border-b border-gray-200 p-4"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="font-medium text-black">
-                            {order.order_number}
-                          </span>
-                          <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                            {getStatusLabel(order.status)}
-                          </span>
-                        </div>
-                        <span className="text-sm font-medium text-black">
-                          ₦{(parseFloat(order.total_amount) || 0).toFixed(2)} {/* Changed to ₦ */}
-                        </span>
-                      </div>
-                      <div className="text-sm text-black mt-1">
-                        <strong>Supplier:</strong> {order.supplier?.name || 'N/A'}
-                      </div>
-                      {order.supplier?.contact_person && (
-                        <div className="text-sm text-black mt-1">
-                          <strong>Contact:</strong> {order.supplier.contact_person}
-                        </div>
-                      )}
-                      {order.supplier?.email && (
-                        <div className="text-sm text-black mt-1">
-                          <strong>Email:</strong> {order.supplier.email}
-                        </div>
-                      )}
-                      <div className="text-sm text-black mt-1">
-                        <strong>Order Date:</strong> {order.order_date}
-                      </div>
-                      <div className="text-sm text-black mt-1">
-                        <strong>Expected Date:</strong> {order.expected_date || 'N/A'}
-                      </div>
-                      {order.notes && (
-                        <div className="text-sm text-gray-600 mt-1">
-                          <strong>Notes:</strong> {order.notes}
-                        </div>
-                      )}
-                      <div className="flex space-x-3 mt-2">
-                        <button
-                          onClick={() => handleViewSupplierDetails(order.supplier_id)}
-                          className="text-blue-600 hover:text-blue-800 transition-colors text-xs flex items-center"
-                        >
-                          <FaEye className="mr-1" />
-                          Supplier
-                        </button>
-                        <button
-                          onClick={() => handleViewOrder(order)}
-                          className="text-blue-600 hover:text-blue-800 transition-colors text-xs flex items-center"
-                        >
-                          <FaEye className="mr-1" />
-                          View
-                        </button>
-                        {canManage && (
-                          <button
-                            onClick={() => handleEditOrder(order)}
-                            className="text-green-600 hover:text-green-800 transition-colors text-xs flex items-center"
-                          >
-                            <FaEdit className="mr-1" />
-                            Edit
-                          </button>
-                        )}
-                        {canManage && (
-                          <button
-                            onClick={() => handleDeleteOrder(order)}
-                            className="text-red-600 hover:text-red-800 transition-colors text-xs flex items-center"
-                          >
-                            <FaTrash className="mr-1" />
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!loading && filteredOrders.length === 0 && (
-            <div className="text-center py-6">
-              <p className="text-black text-xs">There is no data</p>
-            </div>
-          )}
-        </div>
+          {body}
+        </section>
       </div>
 
-      {/* Floating Action Button for Mobile */}
-      {isMobile && canManage && (
-        <div className="fixed bottom-6 right-6 z-10 md:hidden">
-          <button
-            onClick={handleCreateOrder}
-            className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors"
-          >
-            <FaPlus className="text-xl" />
-          </button>
-        </div>
-      )}
-
-      {/* Order Form Modal */}
-      {showOrderForm && (
-        <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-2xl mx-auto max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {selectedOrder ? (selectedOrder.id ? 'Edit Purchase Order' : 'View Purchase Order') : 'Create Purchase Order'}
-              </h2>
-              <button
-                onClick={handleCloseOrderForm}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <FaTimes className="w-5 h-5" />
-              </button>
+      {/* Order details, with the supplier's contact info */}
+      {viewOrder && (
+        <ModalShell
+          title={viewOrder.order_number}
+          subtitle={`Purchase order · ${supplierName(viewOrder)}`}
+          icon={ClipboardList}
+          onClose={() => setViewOrder(null)}
+          maxWidth="max-w-lg"
+        >
+          <div className="px-6 py-5 space-y-5">
+            <div className="grid gap-px bg-gray-200 border border-gray-200">
+              <SummaryRow label="Status" value={<StatusBadge status={viewOrder.status} />} />
+              <SummaryRow label="Payment Method" value={paymentLabel(viewOrder.payment_method)} />
+              <SummaryRow label="Order Date" value={formatDay(viewOrder.order_date)} />
+              <SummaryRow
+                label="Expected Delivery"
+                value={
+                  viewOrder.expected_date ? (
+                    <span className={isOverdue(viewOrder) ? "text-red-600" : ""}>
+                      {formatDay(viewOrder.expected_date)}
+                      {isOverdue(viewOrder) && " · Overdue"}
+                    </span>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              <SummaryRow label="Total Amount" value={formatNaira(viewOrder.total_amount)} strong />
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmitOrder} className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Order Number *
-                  </label>
-                  <input
-                    type="text"
-                    name="order_number"
-                    value={orderFormData.order_number}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                    required
-                    placeholder="PO-12345"
-                    readOnly={selectedOrder && !selectedOrder.id}
-                  />
-                </div>
+            {viewOrder.notes && (
+              <div>
+                <div className={`mb-1 ${statLabelClass}`}>Notes</div>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewOrder.notes}</p>
+              </div>
+            )}
 
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Supplier *
-                  </label>
-                  <select
-                    name="supplier_id"
-                    value={orderFormData.supplier_id}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                    required
-                    disabled={selectedOrder && !selectedOrder.id}
-                  >
-                    <option value="">Select Supplier</option>
-                    {suppliers.map((supplier) => (
-                      <option key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </option>
+            <div>
+              <div className={`mb-2 ${statLabelClass}`}>Supplier</div>
+              {viewSupplier ? (
+                <div className="px-4 py-3 space-y-1.5 text-sm border border-gray-200">
+                  <p className="font-semibold text-gray-900">{viewSupplier.name}</p>
+                  {[
+                    { icon: User, value: contactOf(viewSupplier) },
+                    { icon: Mail, value: viewSupplier.email, href: viewSupplier.email && `mailto:${viewSupplier.email}` },
+                    { icon: Phone, value: viewSupplier.phone, href: viewSupplier.phone && `tel:${viewSupplier.phone}` },
+                    { icon: MapPin, value: viewSupplier.address },
+                  ]
+                    .filter((line) => line.value)
+                    .map(({ icon: Icon, value, href }) => (
+                      <p key={value} className="flex items-start gap-2 text-gray-600">
+                        <Icon size={13} className="mt-0.5 text-gray-400 shrink-0" />
+                        {href ? (
+                          <a href={href} className="text-blue-600 break-all hover:underline">
+                            {value}
+                          </a>
+                        ) : (
+                          <span className="break-words">{value}</span>
+                        )}
+                      </p>
                     ))}
-                  </select>
-                  
-                  {/* Supplier Details Preview */}
-                  {selectedSupplierData && (
-                    <div className="mt-2 p-3 bg-gray-50 rounded-md border">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Supplier Details:</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                        {selectedSupplierData.contact_person && (
-                          <div className="flex items-center">
-                            <FaUser className="w-3 h-3 text-gray-400 mr-2" />
-                            <span>{selectedSupplierData.contact_person}</span>
-                          </div>
-                        )}
-                        {selectedSupplierData.email && (
-                          <div className="flex items-center">
-                            <FaEnvelope className="w-3 h-3 text-gray-400 mr-2" />
-                            <span>{selectedSupplierData.email}</span>
-                          </div>
-                        )}
-                        {selectedSupplierData.phone && (
-                          <div className="flex items-center">
-                            <FaPhone className="w-3 h-3 text-gray-400 mr-2" />
-                            <span>{selectedSupplierData.phone}</span>
-                          </div>
-                        )}
-                        {selectedSupplierData.address && (
-                          <div className="flex items-center md:col-span-2">
-                            <FaMapMarkerAlt className="w-3 h-3 text-gray-400 mr-2" />
-                            <span className="flex-1">{selectedSupplierData.address}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  {!hasContactLines(viewSupplier) && (
+                    <p className="text-xs text-gray-400">No contact details on file</p>
                   )}
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Status
-                  </label>
-                  <select
-                    name="status"
-                    value={orderFormData.status}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                    disabled={selectedOrder && !selectedOrder.id}
-                  >
-                    {statusOptions.map((status) => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Payment Method *
-                  </label>
-                  <select
-                    name="payment_method"
-                    value={orderFormData.payment_method}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                    required
-                    disabled={selectedOrder && !selectedOrder.id}
-                  >
-                    <option value="">Select Payment Method</option>
-                    {paymentMethods.map((method) => (
-                      <option key={method.value} value={method.value}>
-                        {method.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Total Amount
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                      ₦ {/* Changed to ₦ */}
-                    </span>
-                    <input
-                      type="number"
-                      name="total_amount"
-                      value={orderFormData.total_amount}
-                      onChange={handleInputChange}
-                      className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      readOnly={selectedOrder && !selectedOrder.id}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Order Date *
-                  </label>
-                  <input
-                    type="date"
-                    name="order_date"
-                    value={orderFormData.order_date}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                    required
-                    readOnly={selectedOrder && !selectedOrder.id}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Expected Delivery Date
-                  </label>
-                  <input
-                    type="date"
-                    name="expected_date"
-                    value={orderFormData.expected_date}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                    readOnly={selectedOrder && !selectedOrder.id}
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    name="notes"
-                    value={orderFormData.notes}
-                    onChange={handleInputChange}
-                    rows="3"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                    placeholder="Additional notes..."
-                    readOnly={selectedOrder && !selectedOrder.id}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={handleCloseOrderForm}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                {(!selectedOrder || selectedOrder.id) && (
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    {selectedOrder ? 'Update Order' : 'Create Order'}
-                  </button>
-                )}
-              </div>
-            </form>
+              ) : (
+                <p className="text-sm text-gray-400">This order has no supplier on record.</p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Supplier Details Modal */}
-      {showSupplierDetails && selectedSupplierDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-md mx-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Supplier Details
-              </h2>
-              <button
-                onClick={() => setShowSupplierDetails(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <FaTimes className="w-5 h-5" />
+          <ModalFooter>
+            <button onClick={() => setViewOrder(null)} className={secondaryButtonClass}>
+              Close
+            </button>
+            {canManage && (
+              <button onClick={() => openEdit(viewOrder)} className={`${secondaryButtonClass} text-blue-700`}>
+                <Pencil size={15} />
+                Edit Order
               </button>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">
-                    {selectedSupplierDetails.name}
-                  </h3>
-                </div>
-                
-                {selectedSupplierDetails.contact_person && (
-                  <div className="flex items-center">
-                    <FaUser className="w-4 h-4 text-gray-400 mr-3" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Contact Person</p>
-                      <p className="text-sm text-gray-600">{selectedSupplierDetails.contact_person}</p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedSupplierDetails.email && (
-                  <div className="flex items-center">
-                    <FaEnvelope className="w-4 h-4 text-gray-400 mr-3" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Email</p>
-                      <p className="text-sm text-gray-600">{selectedSupplierDetails.email}</p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedSupplierDetails.phone && (
-                  <div className="flex items-center">
-                    <FaPhone className="w-4 h-4 text-gray-400 mr-3" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Phone</p>
-                      <p className="text-sm text-gray-600">{selectedSupplierDetails.phone}</p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedSupplierDetails.address && (
-                  <div className="flex items-start">
-                    <FaMapMarkerAlt className="w-4 h-4 text-gray-400 mr-3 mt-1" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Address</p>
-                      <p className="text-sm text-gray-600">{selectedSupplierDetails.address}</p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedSupplierDetails.notes && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 mb-1">Notes</p>
-                    <p className="text-sm text-gray-600">{selectedSupplierDetails.notes}</p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => setShowSupplierDetails(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+            )}
+          </ModalFooter>
+        </ModalShell>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-sm mx-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
-                <FaTrash className="w-6 h-6 text-red-600" />
-              </div>
-              <div className="mt-3 text-center">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Delete Purchase Order
-                </h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  Are you sure you want to delete this purchase order? This action cannot be undone.
-                </p>
-              </div>
-              <div className="mt-4 flex space-x-3">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {canManage && formOrder && (
+        <FormModal
+          key={formOrder.id || "new"}
+          title={isEditing ? "Edit Purchase Order" : "New Purchase Order"}
+          subtitle={isEditing ? `${formOrder.order_number} · ${supplierName(formOrder)}` : "Raise an order with a supplier"}
+          icon={isEditing ? Pencil : CalendarClock}
+          fields={orderFields}
+          initialValues={orderInitialValues}
+          submitLabel={isEditing ? "Update Order" : "Create Order"}
+          errorTitle={isEditing ? "Order not updated" : "Order not created"}
+          onSubmit={handleSave}
+          onClose={() => setFormOrder(null)}
+        />
+      )}
+
+      {canManage && orderToDelete && (
+        <ConfirmDeleteModal
+          title="Delete Purchase Order"
+          message="This removes the order from your purchase log."
+          details={[
+            ["Order", orderToDelete.order_number],
+            ["Supplier", supplierName(orderToDelete)],
+            ["Amount", formatNaira(orderToDelete.total_amount)],
+            ["Status", statusLabel(orderToDelete.status)],
+          ]}
+          confirmLabel="Delete Order"
+          onConfirm={handleDelete}
+          onClose={() => setOrderToDelete(null)}
+        />
       )}
     </div>
   );

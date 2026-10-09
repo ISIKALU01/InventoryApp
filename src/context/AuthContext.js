@@ -63,6 +63,19 @@ export function AuthProvider({ children }) {
     refresh();
   }, [refresh]);
 
+  // An admin may change a role's permissions while this tab is open: check
+  // again when the user comes back to the tab, at most once a minute
+  useEffect(() => {
+    let lastCheck = Date.now();
+    const onFocus = () => {
+      if (Date.now() - lastCheck < 60_000 || !getLocalStorage("token")) return;
+      lastCheck = Date.now();
+      refresh();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refresh]);
+
   // Called by the login page once the backend accepts the password
   const startSession = useCallback((token, sessionUser) => {
     setLocalStorage("token", token);

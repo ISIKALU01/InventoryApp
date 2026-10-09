@@ -13,8 +13,8 @@ import {
   normalizePath,
 } from "../utils/permissions.js";
 
-// Copy of the backend matrix (PGIMS_APP app/Support/Permissions.php), as
-// GET /api/user returns it for each role. Admin holds all of them.
+// Copy of the backend defaults (PGIMS_APP app/Support/Permissions.php, DEFAULTS), as
+// GET /api/user returns them until an admin edits a role. Admin holds all of them.
 const ALL = [
   "users.manage", "dashboard.view", "reports.view", "sales.create", "sales.view", "sales.manage",
   "sales.audit", "customers.view", "customers.manage", "customers.deposit", "expenses.manage",
@@ -143,6 +143,19 @@ test("senior accountant also sees deleted sales", () => {
     "/deletedTransactions", "/settings", "/folio/bank-management", "/folio/customer-management",
     "/folio/supply-management",
   ]);
+});
+
+test("a custom role works from its permissions alone, whatever it is called", () => {
+  const supervisor = { role: "branch_supervisor", role_label: "Branch supervisor", permissions: ["sales.view", "suppliers.view"] };
+  assert.deepEqual(
+    SIDEBAR_PAGES.filter((page) => canAccessPath(supervisor, page)),
+    ["/transaction/sales-list", "/settings", "/folio/supply-management"]
+  );
+  assert.equal(homePathFor(supervisor), "/transaction/sales-list");
+
+  // A role literally named "admin" in the label gets nothing extra
+  const fakeAdmin = { role: "admin_helper", role_label: "Admin", permissions: [] };
+  assert.equal(canAccessPath(fakeAdmin, "/authorizeUser"), false);
 });
 
 test("only admins reach user management", () => {

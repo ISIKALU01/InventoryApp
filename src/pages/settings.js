@@ -13,6 +13,7 @@ import {
   FaPhone,
   FaGlobe,
   FaUserCog,
+  FaUserShield,
   FaBell,
   FaShieldAlt,
   FaPalette,
@@ -30,6 +31,7 @@ import {
 import { storeAPI } from "../../services/api";
 import { useAuth } from "../context/AuthContext";
 import UsersSection from "../components/settings/UsersSection";
+import RolesSection from "../components/settings/RolesSection";
 import {
   ModalFooter,
   ModalShell,
@@ -290,6 +292,7 @@ const SECTIONS = [
   { id: "notifications", name: "Notifications", icon: FaBell, description: "Alerts and reminders" },
   { id: "security", name: "Security", icon: FaShieldAlt, description: "Security and privacy" },
   { id: "users", name: "Users", icon: FaUserCog, description: "Accounts and roles", permission: "users.manage" },
+  { id: "roles", name: "Roles & permissions", icon: FaUserShield, description: "What each role may do", permission: "users.manage" },
   { id: "data", name: "Data Management", icon: FaDatabase, description: "Backup and data handling" },
 ];
 
@@ -749,6 +752,7 @@ export default function Settings() {
     if (activeSection === "general") return renderGeneralSection();
     if (activeSection === "appearance") return renderAppearanceSection();
     if (activeSection === "users" && can("users.manage")) return <UsersSection notify={notify} />;
+    if (activeSection === "roles" && can("users.manage")) return <RolesSection notify={notify} />;
 
     const section = sections.find((s) => s.id === activeSection);
     return (
