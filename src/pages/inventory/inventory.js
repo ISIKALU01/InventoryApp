@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import InventoryNav from "../../components/InventoryNav";
+import ExpiryAlert from "../../components/ExpiryAlert";
 import { useAuth } from "../../context/AuthContext";
 import {
   FaSearch,
@@ -26,6 +27,8 @@ import {
 } from "react-icons/fa";
 
 import { inventoryAPI, productAPI, storeAPI } from "../../../services/api";
+import { BARCODE_PATTERN, looksLikeExcelNumber } from "../../../utils/barcode";
+import { parseExpiryDate } from "../../../utils/expiry";
 
 // ---------------------------------------------------------------------------
 // Number / data helpers
@@ -321,7 +324,8 @@ const parseCSV = (text) => {
 // Accepted header names for each field (compared after normalizing)
 const CSV_COLUMNS = {
   product_id: ["product_id"],
-  sku: ["sku", "product_sku", "code", "item_code", "barcode"],
+  sku: ["sku", "product_sku", "code", "item_code"],
+  barcode: ["barcode", "barcode_number", "ean", "upc", "gtin"],
   name: ["name", "product", "product_name", "item", "item_name"],
   description: ["description", "desc"],
   price: ["price", "unit_price", "selling_price", "retail_price"],
@@ -329,6 +333,8 @@ const CSV_COLUMNS = {
   quantity: ["quantity", "qty", "stock", "units"],
   store_id: ["store_id"],
   store: ["store", "store_name"],
+  expiry_date: ["expiry_date", "expiry", "expires", "expiration_date", "best_before", "use_by"],
+  batch_number: ["batch_number", "batch", "batch_no", "lot", "lot_number"],
 };
 
 const normalizeHeader = (header) =>
@@ -379,6 +385,7 @@ const readInventoryCSV = (text) => {
       line,
       product_id: get("product_id"),
       sku: get("sku"),
+      barcode: get("barcode"),
       name: get("name"),
       description: get("description"),
       price: get("price"),
@@ -389,9 +396,19 @@ const readInventoryCSV = (text) => {
 
     const rawQuantity = get("quantity").replace(/,/g, "");
     const quantity = Number(rawQuantity);
+    const rawExpiry = get("expiry_date");
+    const batchNumber = get("batch_number");
+    const expiryDate = parseExpiryDate(rawExpiry);
 
-    if (!row.product_id && !row.sku && !row.name) {
-      problems.push({ line, message: "No SKU or product name" });
+    if (!row.product_id && !row.sku && !row.barcode && !row.name) {
+      problems.push({ line, message: "No barcode, SKU or product name" });
+    } else if (row.barcode && looksLikeExcelNumber(row.barcode)) {
+      problems.push({
+        line,
+        message: `Barcode "${row.barcode}" was shortened by Excel. Format the barcode column as Text and type the full number again`,
+      });
+    } else if (row.barcode && !BARCODE_PATTERN.test(row.barcode)) {
+      problems.push({ line, message: `Barcode "${row.barcode}" can only contain letters, numbers and dashes` });
     } else if (rawQuantity === "" || !Number.isFinite(quantity)) {
       problems.push({ line, message: `Quantity "${get("quantity")}" is not a number` });
     } else if (quantity < 0 || !Number.isInteger(quantity)) {
@@ -400,8 +417,14 @@ const readInventoryCSV = (text) => {
       problems.push({ line, message: `Price "${row.price}" is not a number` });
     } else if (row.cost_price && !isNumeric(row.cost_price)) {
       problems.push({ line, message: `Cost price "${row.cost_price}" is not a number` });
+    } else if (rawExpiry && !expiryDate) {
+      problems.push({ line, message: `Expiry date "${rawExpiry}" isn't a date. Use 31/12/2026 or 2026-12-31` });
+    } else if (batchNumber && !expiryDate) {
+      problems.push({ line, message: "A batch number needs its expiry date" });
+    } else if (batchNumber.length > 64) {
+      problems.push({ line, message: "Batch number is longer than 64 characters" });
     } else {
-      rows.push({ ...row, quantity });
+      rows.push({ ...row, quantity, expiry_date: expiryDate, batch_number: batchNumber || null });
     }
   });
 
@@ -416,8 +439,8 @@ const readInventoryCSV = (text) => {
 const downloadCSVTemplate = (stores) => {
   const storeName = (stores[0]?.name || "Main Store").replace(/"/g, '""');
   const csv = [
-    "sku,name,description,price,cost_price,quantity,store",
-    `SKU-001,Sample Product,Optional description,2500,1800,25,"${storeName}"`,
+    "sku,barcode,name,description,price,cost_price,quantity,store,expiry_date,batch_number",
+    `SKU-001,6151100039013,Sample Product,Optional description,2500,1800,25,"${storeName}",31/12/2026,B-1102`,
   ].join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   const link = document.createElement("a");
@@ -937,6 +960,8 @@ const EMPTY_STOCK_FORM = {
   inventory_id: "",
   adjustment: "add",
   amount: "",
+  expiry_date: "",
+  batch_number: "",
 };
 
 // Two jobs in one modal: stock a product in a store for the first time, or
@@ -1020,8 +1045,17 @@ const AddStockModal = ({ isOpen, onClose, onAdd, onRestock, stores, products, in
       ? "That is already the current quantity."
       : "";
 
+  // Expiry details only apply to units coming in
+  const receivingUnits = formData.mode === "new" || formData.adjustment === "add";
+  const batchWithoutExpiry = receivingUnits && formData.batch_number.trim() !== "" && !formData.expiry_date;
+  const expiryDetails = () =>
+    receivingUnits && formData.expiry_date
+      ? { expiry_date: formData.expiry_date, batch_number: formData.batch_number.trim() || null }
+      : {};
+
   const canSubmit =
     !loading &&
+    !batchWithoutExpiry &&
     (formData.mode === "new"
       ? formData.store_id && formData.product_id && toNumber(formData.quantity) >= 1 && !duplicateRow
       : selected && newQuantity !== null && !updateError);
@@ -1039,6 +1073,7 @@ const AddStockModal = ({ isOpen, onClose, onAdd, onRestock, stores, products, in
           store_id: toId(formData.store_id),
           product_id: toId(formData.product_id),
           quantity,
+          ...expiryDetails(),
         });
         if (result?.status === "exists") {
           // Someone stocked it after this page loaded: update that row instead
@@ -1055,6 +1090,7 @@ const AddStockModal = ({ isOpen, onClose, onAdd, onRestock, stores, products, in
           amount,
           expectedQuantity: selected.quantity,
           confirmed: Boolean(conflict),
+          ...expiryDetails(),
         });
         if (result?.status === "conflict") {
           setConflict({ expected: selected.quantity, actual: result.actual });
@@ -1341,6 +1377,46 @@ const AddStockModal = ({ isOpen, onClose, onAdd, onRestock, stores, products, in
                 </div>
               )}
             </>
+          )}
+
+          {receivingUnits && (
+            <div className="grid gap-3 p-3 border border-gray-200 sm:grid-cols-2 bg-gray-50">
+              <div>
+                <label htmlFor="stock-expiry" className="block mb-1 text-xs font-semibold tracking-wide text-gray-600 uppercase">
+                  Expiry date
+                </label>
+                <input
+                  id="stock-expiry"
+                  type="date"
+                  name="expiry_date"
+                  value={formData.expiry_date}
+                  onChange={handleChange}
+                  disabled={loading}
+                  className="block w-full px-3 py-2 text-sm bg-white border border-gray-300 outline-none focus:border-blue-600"
+                />
+              </div>
+              <div>
+                <label htmlFor="stock-batch" className="block mb-1 text-xs font-semibold tracking-wide text-gray-600 uppercase">
+                  Batch number
+                </label>
+                <input
+                  id="stock-batch"
+                  name="batch_number"
+                  value={formData.batch_number}
+                  onChange={handleChange}
+                  maxLength={64}
+                  disabled={loading}
+                  autoComplete="off"
+                  placeholder="e.g. B-1102"
+                  className="block w-full px-3 py-2 text-sm bg-white border border-gray-300 outline-none focus:border-blue-600"
+                />
+              </div>
+              <p className={`sm:col-span-2 text-[11px] ${batchWithoutExpiry ? "text-red-600" : "text-gray-500"}`}>
+                {batchWithoutExpiry
+                  ? "Add the expiry date for this batch."
+                  : "Optional. Fill in for goods that expire, so they show on the Expiry page before they go off."}
+              </p>
+            </div>
           )}
         </div>
 
@@ -1786,6 +1862,8 @@ export default function Inventory() {
     amount,
     expectedQuantity,
     confirmed,
+    expiry_date,
+    batch_number,
   }) => {
     if (addingInventory) return { status: "busy" };
 
@@ -1798,6 +1876,26 @@ export default function Inventory() {
       }
 
       const current = toNumber(row.quantity);
+
+      // Goods coming in are added on the server (with their expiry date, if
+      // any), so a sale made meanwhile is never overwritten
+      if (adjustment === "add") {
+        const response = await inventoryAPI.receiveStock(row.id, {
+          quantity: amount,
+          ...(expiry_date ? { expiry_date, batch_number: batch_number || null } : {}),
+        });
+        const saved = normalizeInventoryItem(response, row);
+        setInventory((prev) => prev.map((item) => (sameId(item.id, row.id) ? saved : item)));
+        setShowAddStockModal(false);
+        const productName = safeGetProduct(row, products).name || "Item";
+        notify(
+          "success",
+          `${productName}: ${current} → ${toNumber(saved.quantity)} units${expiry_date ? `, expiring ${expiry_date}` : ""}.`,
+          "Stock received"
+        );
+        return { status: "ok" };
+      }
+
       if (adjustment === "set" && current !== expectedQuantity && !confirmed) {
         return { status: "conflict", actual: current };
       }
@@ -2055,26 +2153,28 @@ export default function Inventory() {
           throw new Error("No store given and no default store selected");
         }
 
-        // Product: id, then SKU, then name
+        // Product: id, then barcode, then SKU, then name
         let product = null;
         if (row.product_id) {
           product = knownProducts.find((p) => sameId(p.id, row.product_id));
           if (!product) throw new Error(`Product id "${row.product_id}" not found`);
         } else {
           product =
+            (row.barcode && knownProducts.find((p) => p.barcode && lower(p.barcode) === lower(row.barcode))) ||
             (row.sku && knownProducts.find((p) => p.sku && lower(p.sku) === lower(row.sku))) ||
             (row.name && knownProducts.find((p) => lower(p.name) === lower(row.name))) ||
             null;
         }
 
         if (!product) {
-          const label = row.sku || row.name;
+          const label = row.barcode || row.sku || row.name;
           if (!createMissing) throw new Error(`Product "${label}" not found`);
           if (!row.name) throw new Error(`Product "${label}" not found; add a name to create it`);
           if (!row.price) throw new Error(`Product "${label}" not found; add a price to create it`);
 
           const response = await productAPI.createProduct({
             sku: row.sku,
+            barcode: row.barcode || null,
             name: row.name,
             description: row.description,
             price: toNumber(row.price),
@@ -2090,21 +2190,33 @@ export default function Inventory() {
         const existing = knownInventory.find(
           (item) => sameId(item.store_id, storeId) && sameId(item.product_id, product.id)
         );
-        if (existing) {
-          const quantity =
-            mode === "replace" ? row.quantity : toNumber(existing.quantity) + row.quantity;
+        const expiry = row.expiry_date ? { expiry_date: row.expiry_date, batch_number: row.batch_number } : {};
+
+        if (existing && mode === "replace") {
+          // A count replaces the total; it can't say when the units expire
+          if (row.expiry_date) {
+            throw new Error("Expiry dates can only be recorded when adding stock, not when replacing counts");
+          }
           await inventoryAPI.updateInventory(existing.id, {
             store_id: toId(storeId),
             product_id: toId(product.id),
-            quantity,
+            quantity: row.quantity,
           });
-          existing.quantity = quantity;
+          existing.quantity = row.quantity;
+          result.updated += 1;
+        } else if (existing) {
+          // Added on the server, so sales made during the import aren't overwritten
+          if (row.quantity > 0) {
+            const response = await inventoryAPI.receiveStock(existing.id, { quantity: row.quantity, ...expiry });
+            existing.quantity = toNumber(normalizeInventoryItem(response, existing).quantity);
+          }
           result.updated += 1;
         } else {
           const payload = {
             store_id: toId(storeId),
             product_id: toId(product.id),
             quantity: row.quantity,
+            ...(row.quantity > 0 ? expiry : {}),
           };
           const response = await inventoryAPI.createInventory(payload);
           knownInventory.push(normalizeInventoryItem(response, payload));
@@ -2222,6 +2334,7 @@ export default function Inventory() {
 
       <h1 className="hidden mb-2 text-xl font-normal text-gray-800 md:block">Inventory</h1>
       <InventoryNav />
+      <ExpiryAlert className="mt-4" />
 
       <div className="mt-5 space-y-5">
         {/* Summary Tiles (totals follow the active filters) */}

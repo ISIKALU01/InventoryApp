@@ -27,7 +27,9 @@ import {
   FaUniversity,
   FaWallet,
   FaLock,
-  FaSignOutAlt
+  FaSignOutAlt,
+  FaCalendarTimes,
+  FaPrint
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { canAccessPath } from '../../utils/permissions';
@@ -106,9 +108,11 @@ export default function Sidebar({ onToggle }) {
       icon: <FaBoxes className="w-5 h-5" />,
       submenu: [
         { name: 'Product Category', path: '/inventory/product-category', icon: <FaTag className="w-4 h-4" /> },
-        // Pages not built yet
+        { name: 'Stock Transfers', path: '/inventory/stock-transfers', icon: <FaTruck className="w-4 h-4" /> },
+        { name: 'Expiry', path: '/inventory/expiry', icon: <FaCalendarTimes className="w-4 h-4" /> },
+        { name: 'Print Labels', path: '/inventory/labels', icon: <FaPrint className="w-4 h-4" /> },
+        // Page not built yet
         { name: 'View Adjustment', path: '/inventory/view-adjustment', icon: <FaSlidersH className="w-4 h-4" />, hidden: true },
-        { name: 'Stock Requisition', path: '/inventory/stock-requisition', icon: <FaTruck className="w-4 h-4" />, hidden: true },
         { name: 'Manage Product/Service', path: '/inventory/manage-products', icon: <FaCube className="w-4 h-4" /> },
         { name: 'Inventory', path: '/inventory/inventory', icon: <FaBoxes className="w-4 h-4" /> },
         { name: 'Purchase Log', path: '/inventory/purchase-log', icon: <FaShoppingCart className="w-4 h-4" /> },
