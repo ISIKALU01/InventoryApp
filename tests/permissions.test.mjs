@@ -55,7 +55,7 @@ const userWith = (role) => ({ id: 1, name: role, role, permissions: ROLE_PERMISS
 const SIDEBAR_PAGES = [
   "/dashboard", "/authorizeUser", "/transaction/sales-invoice", "/transaction/expenses",
   "/transaction/sales-list", "/inventory/product-category", "/inventory/manage-products",
-  "/inventory/inventory", "/inventory/purchase-log", "/deletedTransactions", "/settings",
+  "/inventory/inventory", "/inventory/purchase-log", "/inventory/stock-transfers", "/inventory/expiry", "/inventory/labels", "/deletedTransactions", "/settings",
   "/folio/bank-management", "/folio/customer-management", "/folio/supply-management",
 ];
 
@@ -112,21 +112,21 @@ test("store manager sells and watches stock and suppliers", () => {
   assert.deepEqual(visibleFor("store_manager"), [
     "/transaction/sales-invoice", "/transaction/expenses", "/transaction/sales-list",
     "/inventory/product-category", "/inventory/manage-products", "/inventory/inventory",
-    "/inventory/purchase-log", "/settings", "/folio/supply-management",
+    "/inventory/purchase-log", "/inventory/stock-transfers", "/inventory/expiry", "/inventory/labels", "/settings", "/folio/supply-management",
   ]);
 });
 
 test("inventory officer works on stock, not sales or money", () => {
   assert.deepEqual(visibleFor("inventory_officer"), [
     "/inventory/product-category", "/inventory/manage-products", "/inventory/inventory",
-    "/inventory/purchase-log", "/settings", "/folio/supply-management",
+    "/inventory/purchase-log", "/inventory/stock-transfers", "/inventory/expiry", "/inventory/labels", "/settings", "/folio/supply-management",
   ]);
 });
 
 test("procurement officer works on suppliers and purchase orders", () => {
   assert.deepEqual(visibleFor("procurement_officer"), [
     "/inventory/product-category", "/inventory/manage-products", "/inventory/inventory",
-    "/inventory/purchase-log", "/settings", "/folio/supply-management",
+    "/inventory/purchase-log", "/inventory/expiry", "/inventory/labels", "/settings", "/folio/supply-management",
   ]);
 });
 

@@ -26,42 +26,44 @@ ChartJS.register(
 	Filler
 );
 
-export default function TrendChart() {
+// storeId: one branch, or empty for all branches
+export default function TrendChart({ storeId = "" }) {
 	const [dateRange, setDateRange] = useState("today");
 	const [trendData, setTrendData] = useState([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(true);
 
-	const fetchTrendData = async (filter) => {
-		try {
-			setLoading(true);
-			const token = getLocalStorage("token");
-			if (!token) return;
-
-			// Handle default mapping — empty means “today”
-			const finalFilter = filter === "today" ? "" : `this_${filter}`;
-
-			const response = await http.get("/sales-trend", {
-				params: { filter: finalFilter },
-			});
-
-			console.log(`✅ Trend data (${filter}) fetched:`, response.data);
-
-			const { total, trend } = response.data;
-			setTotal(total || 0);
-			setTrendData(trend || []);
-		} catch (error) {
-			console.error("❌ Failed to fetch trend data:", error);
-			setTrendData([]);
-			setTotal(0);
-		} finally {
-			setLoading(false);
-		}
-	};
-
+	// Refetch when the period or the branch changes
 	useEffect(() => {
+		const fetchTrendData = async (filter) => {
+			try {
+				setLoading(true);
+				const token = getLocalStorage("token");
+				if (!token) return;
+
+				// Handle default mapping — empty means “today”
+				const finalFilter = filter === "today" ? "" : `this_${filter}`;
+
+				const response = await http.get("/sales-trend", {
+					params: { filter: finalFilter, store_id: storeId || undefined },
+				});
+
+				console.log(`✅ Trend data (${filter}) fetched:`, response.data);
+
+				const { total, trend } = response.data;
+				setTotal(total || 0);
+				setTrendData(trend || []);
+			} catch (error) {
+				console.error("❌ Failed to fetch trend data:", error);
+				setTrendData([]);
+				setTotal(0);
+			} finally {
+				setLoading(false);
+			}
+		};
+
 		fetchTrendData(dateRange);
-	}, [dateRange]);
+	}, [dateRange, storeId]);
 
 	// 🟢 Correctly pick label key based on dateRange
 	const labels = trendData.map((item) =>

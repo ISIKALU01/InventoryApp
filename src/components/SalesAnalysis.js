@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import http from "../../services/http";
 
-export default function SalesAnalysis() {
+// storeId: one branch, or empty for all branches
+export default function SalesAnalysis({ storeId = "" }) {
 	const [dateRange, setDateRange] = useState("today");
 	const [data, setData] = useState(null);
 	const [loading, setLoading] = useState(false);
@@ -20,11 +21,9 @@ export default function SalesAnalysis() {
 		try {
 			setLoading(true);
 			const filter = dateRange === "today" ? "" : dateRange;
-			const url = `/dashboardCards${
-				filter ? `?filter=${filter}` : ""
-			}`;
-
-			const response = await http.get(url);
+			const response = await http.get("/dashboardCards", {
+				params: { filter: filter || undefined, store_id: storeId || undefined },
+			});
 
 			setData(response.data);
 		} catch (error) {
@@ -36,7 +35,7 @@ export default function SalesAnalysis() {
 
 	useEffect(() => {
 		fetchSalesData();
-	}, [dateRange]);
+	}, [dateRange, storeId]);
 
 	// Helper to format currency
 	const formatCurrency = (amount) =>

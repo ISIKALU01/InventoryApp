@@ -28,6 +28,7 @@ import {
 import { useRouter } from "next/router";
 
 import { productAPI } from "../../../services/api";
+import { BARCODE_PATTERN, looksLikeExcelNumber } from "../../../utils/barcode";
 
 // ---------------------------------------------------------------------------
 // Number / data helpers
@@ -160,6 +161,7 @@ const parseCSV = (text) => {
 const CSV_HEADERS = [
 	"Product Name",
 	"SKU (Stock Keeping Unit)",
+	"Barcode",
 	"Description / Category",
 	"Price",
 	"Cost price",
@@ -167,7 +169,8 @@ const CSV_HEADERS = [
 
 const CSV_COLUMNS = {
 	name: ["product_name", "name", "product", "item", "item_name"],
-	sku: ["sku_stock_keeping_unit", "sku", "stock_keeping_unit", "product_sku", "code", "item_code", "barcode"],
+	sku: ["sku_stock_keeping_unit", "sku", "stock_keeping_unit", "product_sku", "code", "item_code"],
+	barcode: ["barcode", "barcode_number", "ean", "upc", "gtin"],
 	description: ["description_category", "description", "category", "desc"],
 	price: ["price", "selling_price", "unit_price", "retail_price"],
 	cost_price: ["cost_price", "cost", "purchase_price", "buying_price"],
@@ -204,7 +207,7 @@ const readProductsCSV = (text) => {
 			problems: [],
 			fatal:
 				found > 0
-					? `Only the header row was found (${found} of ${CSV_HEADERS.length} columns recognized). Add one product per line below the header, e.g. "Rice 50kg,GRN-001,Grains,78000,62780".`
+					? `Only the header row was found (${found} of ${CSV_HEADERS.length} columns recognized). Add one product per line below the header, e.g. "Rice 50kg,GRN-001,6151100039013,Grains,78000,62780".`
 					: `The file has a single line and none of it matches the expected headers: ${CSV_HEADERS.join(", ")}.`,
 		};
 	}
@@ -223,6 +226,7 @@ const readProductsCSV = (text) => {
 	const rows = [];
 	const problems = [];
 	const seenSkus = new Map();
+	const seenBarcodes = new Map();
 
 	table.slice(1).forEach((cells, i) => {
 		const line = i + 2; // spreadsheet row number, counting the header as row 1
@@ -235,11 +239,13 @@ const readProductsCSV = (text) => {
 			line,
 			name: get("name"),
 			sku: get("sku"),
+			barcode: get("barcode"),
 			description: get("description"),
 			price: get("price"),
 			cost_price: get("cost_price"),
 		};
 		const skuKey = row.sku.toLowerCase();
+		const barcodeKey = row.barcode.toLowerCase();
 
 		if (!row.name) {
 			problems.push({ line, message: "Product name is empty" });
@@ -253,6 +259,18 @@ const readProductsCSV = (text) => {
 			problems.push({ line, message: `Cost price "${row.cost_price}" is not a number` });
 		} else if (row.cost_price && toNumber(row.cost_price) < 0) {
 			problems.push({ line, message: "Cost price cannot be negative" });
+		} else if (row.barcode && looksLikeExcelNumber(row.barcode)) {
+			problems.push({
+				line,
+				message: `Barcode "${row.barcode}" was shortened by Excel. Format the Barcode column as Text and type the full number again`,
+			});
+		} else if (row.barcode && !BARCODE_PATTERN.test(row.barcode)) {
+			problems.push({ line, message: `Barcode "${row.barcode}" can only contain letters, numbers and dashes` });
+		} else if (barcodeKey && seenBarcodes.has(barcodeKey)) {
+			problems.push({
+				line,
+				message: `Barcode "${row.barcode}" is also on row ${seenBarcodes.get(barcodeKey)}`,
+			});
 		} else if (skuKey && seenSkus.has(skuKey)) {
 			problems.push({
 				line,
@@ -260,6 +278,7 @@ const readProductsCSV = (text) => {
 			});
 		} else {
 			if (skuKey) seenSkus.set(skuKey, line);
+			if (barcodeKey) seenBarcodes.set(barcodeKey, line);
 			rows.push({
 				...row,
 				price: roundMoney(toNumber(row.price)),
@@ -279,8 +298,8 @@ const csvCell = (value) => {
 const downloadCSVTemplate = () => {
 	const csv = [
 		CSV_HEADERS,
-		["Rice 50kg", "GRN-001", "Grains", "78000", "62780"],
-		["Vegetable Oil 5L", "OIL-001", "Cooking Oil", "16500", "14030"],
+		["Rice 50kg", "GRN-001", "6151100039013", "Grains", "78000", "62780"],
+		["Vegetable Oil 5L", "OIL-001", "6154000048014", "Cooking Oil", "16500", "14030"],
 	]
 		.map((row) => row.map(csvCell).join(","))
 		.join("\n");
@@ -461,6 +480,7 @@ const Toast = ({ toast, onClose }) => {
 const EMPTY_PRODUCT_FORM = {
 	name: "",
 	sku: "",
+	barcode: "",
 	description: "",
 	price: "",
 	cost_price: "",
@@ -506,6 +526,34 @@ const ProductFormFields = ({ formData, onChange, disabled }) => {
 					placeholder="e.g., SKU001"
 					className={fieldClass()}
 				/>
+			</div>
+
+			<div className="sm:col-span-2">
+				<label className={labelClass} htmlFor="product-barcode">
+					<FaBarcode className="text-gray-400" />
+					Barcode
+					<span className="font-normal text-gray-400 normal-case">(scan it or type the number under the bars)</span>
+				</label>
+				<input
+					id="product-barcode"
+					type="text"
+					name="barcode"
+					value={formData.barcode}
+					onChange={onChange}
+					// A scanner types the code and presses Enter: keep the form open
+					onKeyDown={(e) => {
+						if (e.key === "Enter") e.preventDefault();
+					}}
+					disabled={disabled}
+					maxLength={64}
+					autoComplete="off"
+					spellCheck={false}
+					placeholder="e.g., 6151100039013"
+					className={fieldClass(Boolean(formData.barcode) && !BARCODE_PATTERN.test(formData.barcode.trim()))}
+				/>
+				{formData.barcode && !BARCODE_PATTERN.test(formData.barcode.trim()) && (
+					<p className="mt-1 text-xs text-red-600">A barcode can only contain letters, numbers and dashes.</p>
+				)}
 			</div>
 
 			<div className="sm:col-span-2">
@@ -594,6 +642,7 @@ const ProductFormFields = ({ formData, onChange, disabled }) => {
 const toProductPayload = (formData) => ({
 	name: formData.name.trim(),
 	sku: formData.sku.trim(),
+	barcode: formData.barcode.trim() || null,
 	description: formData.description.trim(),
 	price: roundMoney(toNumber(formData.price)),
 	cost_price: roundMoney(toNumber(formData.cost_price)),
@@ -920,6 +969,7 @@ const EditProductModal = ({ isOpen, onClose, onEdit, isLoading, product }) => {
 			setFormData({
 				name: product.name || "",
 				sku: product.sku || "",
+				barcode: product.barcode || "",
 				description: product.description || "",
 				price: product.price?.toString() || "",
 				cost_price: product.cost_price?.toString() || "",
@@ -1002,6 +1052,7 @@ const DeleteProductModal = ({ product, onClose, onConfirm, isLoading }) => {
 				<StatGrid
 					stats={[
 						{ label: "SKU", value: product.sku || "—" },
+						{ label: "Barcode", value: product.barcode || "—" },
 						{ label: "Price", value: formatCurrency(product.price) },
 					]}
 				/>
@@ -1062,6 +1113,30 @@ export default function Products() {
 
 	const [toast, setToast] = useState(null);
 	const toastTimer = useRef(null);
+
+	// Products without a barcode get an in-store one (EAN-13 starting with 2)
+	const [generatingBarcodes, setGeneratingBarcodes] = useState(false);
+	const missingBarcodes = products.filter((product) => !product.barcode).length;
+
+	const handleGenerateBarcodes = async () => {
+		setGeneratingBarcodes(true);
+		try {
+			const result = await productAPI.generateBarcodes();
+			const count = result?.generated?.length || 0;
+			await loadProducts();
+			notify(
+				"success",
+				count
+					? `${count} product${count === 1 ? " now has a barcode" : "s now have barcodes"}. Print them from Print Labels.`
+					: "Every product already had a barcode.",
+				"Barcodes created"
+			);
+		} catch (error) {
+			notify("error", error.message || "Could not create barcodes.", "Barcodes not created");
+		} finally {
+			setGeneratingBarcodes(false);
+		}
+	};
 
 	const notify = (type, message, title) => {
 		clearTimeout(toastTimer.current);
@@ -1167,6 +1242,7 @@ export default function Products() {
 				(product) =>
 					product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
 					product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+					product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
 					product.description?.toLowerCase().includes(searchTerm.toLowerCase())
 			);
 		}
@@ -1190,7 +1266,8 @@ export default function Products() {
 	};
 
 	// Import validated CSV rows one at a time: match an existing product by
-	// SKU (or by name when either side has no SKU), then update or create it
+	// barcode, then SKU (or by name when either side has no SKU), then update
+	// or create it
 	const handleImportCSV = async ({ rows, updateExisting }, onProgress) => {
 		const result = { created: 0, updated: 0, unchanged: 0, failed: [] };
 		const knownProducts = products.map((product) => ({ ...product }));
@@ -1200,6 +1277,7 @@ export default function Products() {
 			const row = rows[i];
 			try {
 				const existing =
+					(row.barcode && knownProducts.find((p) => p.barcode && lower(p.barcode) === lower(row.barcode))) ||
 					(row.sku && knownProducts.find((p) => p.sku && lower(p.sku) === lower(row.sku))) ||
 					knownProducts.find(
 						(p) => lower(p.name) === lower(row.name) && (!row.sku || !p.sku)
@@ -1211,6 +1289,8 @@ export default function Products() {
 					const payload = {
 						name: row.name,
 						sku: row.sku || existing.sku || "",
+						// A row without a barcode keeps the product's current one
+						barcode: row.barcode || existing.barcode || null,
 						description: row.description || existing.description || "",
 						price: row.price,
 						cost_price:
@@ -1223,6 +1303,7 @@ export default function Products() {
 					const payload = {
 						name: row.name,
 						sku: row.sku,
+						barcode: row.barcode || null,
 						description: row.description,
 						price: row.price,
 						cost_price: row.cost_price ?? 0,
@@ -1408,6 +1489,22 @@ export default function Products() {
 								{isLoading ? "Refreshing…" : "Refresh"}
 							</button>
 							{canManage && (
+								<button
+									type="button"
+									onClick={handleGenerateBarcodes}
+									disabled={isLoading || generatingBarcodes || missingBarcodes === 0}
+									title={missingBarcodes === 0 ? "Every product has a barcode" : "Give each product without a barcode an in-store barcode"}
+									className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
+								>
+									<FaBarcode className="text-[11px]" />
+									{generatingBarcodes
+										? "Creating…"
+										: missingBarcodes
+										? `Create ${missingBarcodes} missing barcode${missingBarcodes === 1 ? "" : "s"}`
+										: "All have barcodes"}
+								</button>
+							)}
+							{canManage && (
 							  <button
   								onClick={() => setShowImportModal(true)}
   								disabled={isLoading}
@@ -1521,6 +1618,7 @@ export default function Products() {
 										<tr className="text-left">
 											<th className={`px-5 py-2.5 ${statLabelClass}`}>Product</th>
 											<th className={`px-3 py-2.5 ${statLabelClass}`}>SKU</th>
+											<th className={`px-3 py-2.5 ${statLabelClass}`}>Barcode</th>
 											<th className={`px-3 py-2.5 ${statLabelClass}`}>Category</th>
 											<th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Price</th>
 											<th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Cost Price</th>
@@ -1539,6 +1637,7 @@ export default function Products() {
 														{product.name || "N/A"}
 													</td>
 													<td className="px-3 py-3 text-gray-600 whitespace-nowrap">{product.sku || "—"}</td>
+													<td className="px-3 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{product.barcode || "—"}</td>
 													<td className="px-3 py-3">
 														{product.description ? (
 															<span className="inline-block max-w-[12rem] px-2 py-0.5 text-[11px] font-medium text-blue-800 truncate align-middle bg-blue-50">
@@ -1603,6 +1702,7 @@ export default function Products() {
 													<p className="text-sm font-semibold text-gray-900 truncate">{product.name || "N/A"}</p>
 													<p className="text-xs text-gray-500 truncate">
 														SKU {product.sku || "—"}
+														{product.barcode && ` · ${product.barcode}`}
 														{product.description && ` · ${product.description}`}
 													</p>
 												</div>

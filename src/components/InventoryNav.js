@@ -23,8 +23,16 @@ export default function InventoryNav() {
       path: "/inventory/view-adjustment",
     },
     {
-      name: "Stock Requisition",
-      path: "/inventory/stock-requisition",
+      name: "Stock Transfers",
+      path: "/inventory/stock-transfers",
+    },
+    {
+      name: "Expiry",
+      path: "/inventory/expiry",
+    },
+    {
+      name: "Print Labels",
+      path: "/inventory/labels",
     },
     {
       name: "Manage product/services",

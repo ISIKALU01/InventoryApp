@@ -68,6 +68,9 @@ export const apiRequest = async (path, { method = "GET", body, errorLabel = "Req
 // update doesn't overwrite the product's current stock
 const toProductPayload = (productData) => ({
   sku: productData.sku || "",
+  // Left out when not given, so saving a product elsewhere keeps its barcode;
+  // an empty value removes it
+  barcode: productData.barcode === undefined ? undefined : String(productData.barcode ?? "").trim() || null,
   name: productData.name,
   description: productData.description || "",
   price: productData.price,
@@ -77,6 +80,14 @@ const toProductPayload = (productData) => ({
 
 export const productAPI = {
   getAllProducts: () => apiRequest("/products", { errorLabel: "Failed to fetch products" }),
+
+  // Give products without a barcode an in-store one; pass ids to do only some
+  generateBarcodes: (productIds) =>
+    apiRequest("/products/barcodes/generate", {
+      method: "POST",
+      body: productIds ? { product_ids: productIds } : {},
+      errorLabel: "Failed to create barcodes",
+    }),
 
   createProduct: (productData) =>
     apiRequest("/products", {
@@ -148,6 +159,14 @@ export const inventoryAPI = {
 
   deleteInventory: (id) =>
     apiRequest(`/inventory/${id}`, { method: "DELETE", errorLabel: "Failed to delete inventory" }),
+
+  // Goods coming in: adds `quantity` units, optionally with expiry_date and batch_number
+  receiveStock: (id, data) =>
+    apiRequest(`/inventory/${id}/receive`, {
+      method: "POST",
+      body: data,
+      errorLabel: "Failed to receive stock",
+    }),
 };
 
 // Stores

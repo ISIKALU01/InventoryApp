@@ -56,14 +56,21 @@ import {
 // Store form modal
 // ---------------------------------------------------------------------------
 
+// A shop sells to customers; a back store only keeps stock until it is moved to a shop
+const STORE_TYPES = [
+  { value: "shop", label: "Shop", help: "Customers buy here. The sales point sells from it." },
+  { value: "back_store", label: "Back store", help: "A stock room. Goods are kept here and moved to a shop to be sold." },
+];
+
 const StoreFormModal = ({ isOpen, onClose, onSave, isLoading, store = null }) => {
-  const [formData, setFormData] = useState({ name: "", address: "", phone: "", website: "" });
+  const [formData, setFormData] = useState({ name: "", type: "shop", address: "", phone: "", website: "" });
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (!isOpen) return;
     setFormData({
       name: store?.name || "",
+      type: store?.type || "shop",
       address: store?.address || "",
       phone: store?.phone || "",
       website: store?.website || "",
@@ -132,6 +139,44 @@ const StoreFormModal = ({ isOpen, onClose, onSave, isLoading, store = null }) =>
             />
             {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}
           </div>
+
+          <fieldset className="sm:col-span-2">
+            <legend className={labelClass}>
+              <FaStore className="text-gray-400" />
+              Type of store
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {STORE_TYPES.map((option) => (
+                <label
+                  key={option.value}
+                  className={`flex gap-3 p-3 border cursor-pointer ${
+                    formData.type === option.value ? "border-blue-600 bg-blue-50" : "border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="type"
+                    value={option.value}
+                    checked={formData.type === option.value}
+                    onChange={handleChange}
+                    disabled={isLoading}
+                    className="mt-0.5 accent-blue-600"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-gray-900">{option.label}</span>
+                    <span className="block text-xs text-gray-500">{option.help}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {store && store.type !== formData.type && (
+              <p className="mt-2 text-xs text-amber-700">
+                {formData.type === "back_store"
+                  ? "The sales point will stop selling this store's stock. The stock stays here; move it to a shop to sell it."
+                  : "The sales point will be able to sell this store's stock."}
+              </p>
+            )}
+          </fieldset>
 
           <div className="sm:col-span-2">
             <label className={labelClass}>
@@ -513,7 +558,16 @@ export default function Settings() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-gray-900 truncate">{store.name}</h3>
+                    <h3 className="flex items-center min-w-0 gap-2 text-sm font-semibold text-gray-900">
+                      <span className="truncate">{store.name}</span>
+                      <span
+                        className={`shrink-0 px-1.5 py-px text-[10px] font-semibold ${
+                          store.type === "back_store" ? "text-amber-800 bg-amber-50" : "text-green-800 bg-green-50"
+                        }`}
+                      >
+                        {store.type === "back_store" ? "Back store" : "Shop"}
+                      </span>
+                    </h3>
                     {canManageStores && (
                     <div className="flex -mt-1 -mr-1 shrink-0">
                       <button

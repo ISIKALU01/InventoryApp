@@ -1,7 +1,8 @@
 // pages/transaction/sales-invoice.js
 import TransactionNav from "../../components/TransactionNav";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import http from "../../../services/http";
+import { BARCODE_PATTERN, createScanBuffer, findProductByCode } from "../../../utils/barcode";
 import {
 	AlertTriangle,
 	CheckCircle2,
@@ -89,6 +90,12 @@ const toList = (body, key) => {
 // A product's store comes back as a name or as a { name } object
 const storeNameOf = (store) =>
 	(store && typeof store === "object" ? store.name : store)?.toString().trim() || "";
+
+// Only shops sell; stock in a back store has to be moved to a shop first.
+// Entries without a type come from before stores had types: they are shops.
+const isBackStore = (store) => (store?.type ?? store?.store_type) === "back_store";
+const shopStock = (stores) => (stores || []).filter((s) => !isBackStore(s));
+const totalStock = (stores) => stores.reduce((sum, s) => sum + (Number(s.stock) || 0), 0);
 
 const formatNaira = (value) =>
 	`₦${Number(value || 0).toLocaleString("en-NG", {
@@ -284,6 +291,8 @@ export default function SalesInvoice() {
 	const [filteredInventory, setFilteredInventory] = useState([]);
 	const [addingId, setAddingId] = useState(null);
 	const [cart, setCart] = useState([]);
+	// The latest cart, readable from scans queued before React re-renders
+	const cartRef = useRef([]);
 	const [showOrderModal, setShowOrderModal] = useState(false);
 	const [paymentMethod, setPaymentMethod] = useState("");
 	const [selectedCustomer, setSelectedCustomer] = useState("");
@@ -311,6 +320,10 @@ export default function SalesInvoice() {
 	};
 
 	useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+	useEffect(() => {
+		cartRef.current = cart;
+	}, [cart]);
 
 	const needsCustomer = CUSTOMER_METHODS.includes(paymentMethod);
 
@@ -406,7 +419,12 @@ export default function SalesInvoice() {
 
 	// Filter inventory based on store and search term
 	useEffect(() => {
-		let filtered = inventory;
+		// The list shows what can be sold: shop stock only, and only products a shop holds
+		let filtered = inventory.flatMap((item) => {
+			const shops = shopStock(item.stores);
+			if (shops.length === 0) return [];
+			return [{ ...item, stores: shops, stock: totalStock(shops), store: shops.map((s) => s.store).join(", ") }];
+		});
 
 		// Filter by store: keep products stocked there and show that store's stock
 		if (selectedStore) {
@@ -424,11 +442,13 @@ export default function SalesInvoice() {
 			filtered = filtered.filter((item) => {
 				const productName = item.name || "";
 				const productSku = item.sku || "";
+				const productBarcode = item.barcode || "";
 				const storeName = storeNameOf(item.store) || "";
 
 				return (
 					productName.toLowerCase().includes(term) ||
 					productSku.toLowerCase().includes(term) ||
+					productBarcode.toLowerCase().includes(term) ||
 					storeName.toLowerCase().includes(term) ||
 					(item.id && item.id.toString().includes(term)) ||
 					(item._id && item._id.toString().includes(term))
@@ -445,20 +465,21 @@ export default function SalesInvoice() {
 		setOrderStore(e.target.value);
 	};
 
-	// Stock a cart item can sell: the order store's stock, or the total if no store is chosen
+	// Stock a cart item can sell: the order store's stock, or the total across shops
+	// if no store is chosen. Back store stock never counts.
 	const availableStock = (item) => {
-		if (orderStore && Array.isArray(item.product_stores)) {
-			const entry = item.product_stores.find(
-				(s) => String(s.store_id) === String(orderStore)
-			);
+		const shops = shopStock(item.product_stores);
+		if (!Array.isArray(item.product_stores)) return Number(item.product_stock);
+		if (orderStore) {
+			const entry = shops.find((s) => String(s.store_id) === String(orderStore));
 			return entry ? Number(entry.stock) : 0;
 		}
-		return Number(item.product_stock);
+		return totalStock(shops);
 	};
 
-	// Products stocked in more than one store need a store to sell from
+	// Products stocked in more than one shop need a store to sell from
 	const needsOrderStore =
-		!orderStore && cart.some((item) => (item.product_stores || []).length > 1);
+		!orderStore && cart.some((item) => shopStock(item.product_stores).length > 1);
 
 	// Helper function to determine stock status
 	const getStockStatus = (stock) => {
@@ -480,20 +501,21 @@ export default function SalesInvoice() {
 	const fetchCart = async () => {
 		try {
 			const response = await http.get("/cart");
-			setCart(response.data.data || []);
+			const items = response.data.data || [];
+			cartRef.current = items;
+			setCart(items);
 		} catch (error) {
 			console.error("Error fetching cart:", error);
 			notify("error", "Could not load the current order.");
 		}
 	};
 
-	//add to cart
-	const handleItemClick = async (item) => {
-		if (addingId) return;
+	// Add a product to the order (POST /cart/{id} adds it, or removes it if it is already there)
+	const addToCart = async (item, successTitle = "Item added") => {
 		try {
 			setAddingId(item.id);
 			await http.post(`/cart/${item.id}`, {});
-			notify("success", `${item.name} added to the order.`, "Item added");
+			notify("success", `${item.name} added to the order.`, successTitle);
 			await fetchCart();
 		} catch (error) {
 			console.error("Error adding cart item:", error);
@@ -504,6 +526,127 @@ export default function SalesInvoice() {
 			);
 		} finally {
 			setAddingId(null);
+		}
+	};
+
+	//add to cart
+	const handleItemClick = async (item) => {
+		if (addingId) return;
+		await addToCart(item);
+	};
+
+	// ---- Barcode scanning ----------------------------------------------------
+	// A scan adds the product, or adds one more if it is already in the order.
+	// Scans run one after another, so fast scanning never loses an item or
+	// removes one by adding it twice at the same moment.
+	const processScanRef = useRef(null);
+	processScanRef.current = async (code) => {
+		// Don't add items behind an open payment, receipt or recall window
+		if (showOrderModal || completedOrder || showRecallModal) return;
+
+		if (loading) {
+			notify("error", "Products are still loading. Scan again in a moment.", "Not added");
+			return;
+		}
+
+		const product = findProductByCode(inventory, code);
+		if (!product) {
+			notify("error", `No product has barcode ${code}. Check it on the Manage Products page.`, "Not found");
+			return;
+		}
+
+		// Stock in the shop this order sells from, or across all shops
+		const shops = shopStock(product.stores);
+		if (shops.length === 0) {
+			notify(
+				"error",
+				(product.stores || []).length
+					? `${product.name} is only in the back store. Move it to a shop first.`
+					: `${product.name} isn't stocked in any shop.`,
+				"Not added"
+			);
+			return;
+		}
+		const sellingStore = orderStore || selectedStore;
+		let stock = totalStock(shops);
+		if (sellingStore) {
+			const entry = shops.find((s) => String(s.store_id) === String(sellingStore));
+			if (!entry) {
+				notify("error", `${product.name} isn't stocked in ${storeName(sellingStore) || "this store"}.`, "Not added");
+				return;
+			}
+			stock = Number(entry.stock) || 0;
+		}
+		if (stock <= 0) {
+			notify("error", `${product.name} is out of stock.`, "Not added");
+			return;
+		}
+
+		const inCart = cartRef.current.find((item) => String(item.product_id) === String(product.id));
+		if (!inCart) {
+			await addToCart(product, "Scanned");
+			return;
+		}
+
+		const quantity = Number(inCart.default_quantity_added) || 1;
+		const max = availableStock(inCart);
+		if (quantity >= max) {
+			notify("error", `Only ${max} ${product.name} in stock.`, "Not added");
+			return;
+		}
+
+		const addOne = (items) =>
+			items.map((item) =>
+				item.id === inCart.id
+					? { ...item, default_quantity_added: (Number(item.default_quantity_added) || 1) + 1 }
+					: item
+			);
+		cartRef.current = addOne(cartRef.current);
+		setCart(addOne);
+		notify("success", `${product.name} × ${quantity + 1}`, "Scanned");
+	};
+
+	const scanQueue = useRef(Promise.resolve());
+	const queueScan = useCallback((code) => {
+		scanQueue.current = scanQueue.current
+			.then(() => processScanRef.current?.(code))
+			.catch((error) => console.error("Scan failed:", error));
+	}, []);
+
+	// Scans made while no text box has focus (the search box handles its own)
+	useEffect(() => {
+		const buffer = createScanBuffer();
+		const onKeyDown = (e) => {
+			const target = e.target;
+			if (target?.closest?.("input, textarea, select, [contenteditable='true']")) {
+				buffer.reset();
+				return;
+			}
+			const code = buffer.push(e.key, e.timeStamp);
+			if (code) {
+				e.preventDefault();
+				queueScan(code);
+			}
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [queueScan]);
+
+	// Enter in the search box: an exact barcode or SKU goes straight into the order
+	const handleSearchKeyDown = (e) => {
+		if (e.key !== "Enter") return;
+		const code = searchTerm.trim();
+		if (!code) return;
+
+		if (findProductByCode(inventory, code)) {
+			e.preventDefault();
+			setSearchTerm("");
+			queueScan(code);
+		} else if (BARCODE_PATTERN.test(code) && /\d{6,}/.test(code)) {
+			// Looks like a scanned barcode nobody has registered
+			e.preventDefault();
+			setSearchTerm("");
+			notify("error", `No product has barcode ${code}. Check it on the Manage Products page.`, "Not found");
 		}
 	};
 
@@ -833,7 +976,7 @@ export default function SalesInvoice() {
 								disabled={processing}
 							>
 								<option value="">Select store</option>
-								{stores.map((store) => (
+								{stores.filter((store) => !isBackStore(store)).map((store) => (
 									<option key={store.id} value={store.id}>
 										{storeNameOf(store)}
 									</option>
@@ -1086,8 +1229,8 @@ export default function SalesInvoice() {
 							onChange={handleStoreChange}
 							aria-label="Filter by store"
 						>
-							<option value="">All Stores</option>
-							{stores.map((store) => (
+							<option value="">All Shops</option>
+							{stores.filter((store) => !isBackStore(store)).map((store) => (
 								<option key={store.id} value={store.id}>
 									{storeNameOf(store)}
 								</option>
@@ -1101,9 +1244,13 @@ export default function SalesInvoice() {
 							/>
 							<input
 								type="search"
-								placeholder="Search by name, SKU, store or ID"
+								placeholder="Scan a barcode, or search by name or SKU"
+								aria-label="Scan a barcode or search products"
 								value={searchTerm}
 								onChange={(e) => setSearchTerm(e.target.value)}
+								onKeyDown={handleSearchKeyDown}
+								autoFocus
+								autoComplete="off"
 								className={`${filterFieldClass} pl-8`}
 							/>
 						</div>
