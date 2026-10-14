@@ -19,8 +19,12 @@ const ALL = [
   "users.manage", "dashboard.view", "reports.view", "sales.create", "sales.view", "sales.manage",
   "sales.audit", "customers.view", "customers.manage", "customers.deposit", "expenses.manage",
   "catalog.view", "inventory.view", "products.manage", "inventory.manage", "stores.manage",
-  "stock-transfers.manage", "suppliers.view", "suppliers.manage", "purchase-orders.view",
-  "purchase-orders.manage", "banking.view", "banking.manage", "payments.manage", "notifications.manage",
+  "stock-transfers.manage", "requisitions.view", "requisitions.create", "requisitions.approve",
+  "suppliers.view", "suppliers.manage", "suppliers.verify", "purchase-orders.view",
+  "purchase-orders.manage", "goods-receipts.view", "goods-receipts.create", "goods-receipts.store-check",
+  "goods-receipts.post-stock", "goods-receipts.procurement-check", "sor.view", "sor.count", "sor.store-sign",
+  "sor.stock-sign", "sor.return", "supplier-payments.view", "supplier-payments.request",
+  "supplier-payments.check", "supplier-payments.approve", "supplier-payments.pay", "follow-up.view", "follow-up.manage", "banking.view", "banking.manage", "payments.manage", "notifications.manage",
 ];
 
 const ROLE_PERMISSIONS = {
@@ -28,23 +32,33 @@ const ROLE_PERMISSIONS = {
   store_manager: [
     "sales.create", "sales.view", "customers.view", "expenses.manage", "catalog.view",
     "inventory.view", "stock-transfers.manage", "suppliers.view", "purchase-orders.view",
+    "requisitions.view", "requisitions.create",
+    "goods-receipts.view", "goods-receipts.create", "goods-receipts.store-check",
+    "sor.view", "sor.count", "sor.store-sign", "follow-up.view",
   ],
   inventory_officer: [
     "catalog.view", "inventory.view", "products.manage", "inventory.manage",
-    "stock-transfers.manage", "suppliers.view", "purchase-orders.view",
+    "stock-transfers.manage", "suppliers.view", "purchase-orders.view", "requisitions.view", "requisitions.create",
+    "goods-receipts.view", "goods-receipts.create", "goods-receipts.post-stock",
+    "sor.view", "sor.count", "sor.stock-sign", "sor.return", "follow-up.view",
   ],
   procurement_officer: [
     "catalog.view", "inventory.view", "suppliers.view", "suppliers.manage",
-    "purchase-orders.view", "purchase-orders.manage",
+    "purchase-orders.view", "purchase-orders.manage", "requisitions.view", "requisitions.approve",
+    "goods-receipts.view", "goods-receipts.procurement-check", "sor.view",
+    "supplier-payments.view", "supplier-payments.request", "follow-up.view", "follow-up.manage",
   ],
   junior_accountant: [
     "dashboard.view", "reports.view", "sales.view", "customers.view", "customers.deposit",
-    "expenses.manage", "catalog.view", "suppliers.view", "purchase-orders.view", "banking.view", "payments.manage",
+    "expenses.manage", "catalog.view", "suppliers.view", "suppliers.verify", "purchase-orders.view", "banking.view", "payments.manage",
+    "goods-receipts.view", "sor.view", "supplier-payments.view", "supplier-payments.check", "follow-up.view",
   ],
   senior_accountant: [
     "dashboard.view", "reports.view", "sales.view", "sales.audit", "customers.view", "customers.deposit",
     "expenses.manage", "catalog.view", "suppliers.view", "purchase-orders.view", "banking.view",
-    "banking.manage", "payments.manage",
+    "banking.manage", "payments.manage", "goods-receipts.view", "sor.view",
+    "supplier-payments.view", "supplier-payments.approve", "supplier-payments.pay",
+    "follow-up.view", "follow-up.manage",
   ],
   staff: ["sales.create", "sales.view", "customers.view", "expenses.manage", "catalog.view"],
 };
@@ -53,10 +67,10 @@ const userWith = (role) => ({ id: 1, name: role, role, permissions: ROLE_PERMISS
 
 // Pages in the sidebar, as a user of each role should see them
 const SIDEBAR_PAGES = [
-  "/dashboard", "/authorizeUser", "/transaction/sales-invoice", "/transaction/expenses",
+  "/dashboard", "/authorizeUser", "/team", "/transaction/sales-invoice", "/transaction/expenses",
   "/transaction/sales-list", "/inventory/product-category", "/inventory/manage-products",
-  "/inventory/inventory", "/inventory/purchase-log", "/inventory/stock-transfers", "/inventory/expiry", "/inventory/labels", "/deletedTransactions", "/settings",
-  "/folio/bank-management", "/folio/customer-management", "/folio/supply-management",
+  "/inventory/inventory", "/inventory/stock-ledger", "/inventory/purchase-log", "/inventory/goods-received", "/inventory/sor", "/inventory/follow-up", "/inventory/requisitions", "/inventory/stock-transfers", "/inventory/expiry", "/inventory/labels", "/deletedTransactions", "/settings",
+  "/folio/bank-management", "/folio/customer-management", "/folio/supply-management", "/folio/supplier-payments",
 ];
 
 const visibleFor = (role) => SIDEBAR_PAGES.filter((page) => canAccessPath(userWith(role), page));
@@ -111,37 +125,38 @@ test("cashier (staff) only sells, records expenses and sees sales", () => {
 test("store manager sells and watches stock and suppliers", () => {
   assert.deepEqual(visibleFor("store_manager"), [
     "/transaction/sales-invoice", "/transaction/expenses", "/transaction/sales-list",
-    "/inventory/product-category", "/inventory/manage-products", "/inventory/inventory",
-    "/inventory/purchase-log", "/inventory/stock-transfers", "/inventory/expiry", "/inventory/labels", "/settings", "/folio/supply-management",
+    "/inventory/product-category", "/inventory/manage-products", "/inventory/inventory", "/inventory/stock-ledger",
+    "/inventory/purchase-log", "/inventory/goods-received", "/inventory/sor", "/inventory/follow-up", "/inventory/requisitions", "/inventory/stock-transfers", "/inventory/expiry", "/inventory/labels", "/settings", "/folio/supply-management",
   ]);
 });
 
 test("inventory officer works on stock, not sales or money", () => {
   assert.deepEqual(visibleFor("inventory_officer"), [
-    "/inventory/product-category", "/inventory/manage-products", "/inventory/inventory",
-    "/inventory/purchase-log", "/inventory/stock-transfers", "/inventory/expiry", "/inventory/labels", "/settings", "/folio/supply-management",
+    "/inventory/product-category", "/inventory/manage-products", "/inventory/inventory", "/inventory/stock-ledger",
+    "/inventory/purchase-log", "/inventory/goods-received", "/inventory/sor", "/inventory/follow-up", "/inventory/requisitions", "/inventory/stock-transfers", "/inventory/expiry", "/inventory/labels", "/settings", "/folio/supply-management",
   ]);
 });
 
 test("procurement officer works on suppliers and purchase orders", () => {
   assert.deepEqual(visibleFor("procurement_officer"), [
-    "/inventory/product-category", "/inventory/manage-products", "/inventory/inventory",
-    "/inventory/purchase-log", "/inventory/expiry", "/inventory/labels", "/settings", "/folio/supply-management",
+    "/inventory/product-category", "/inventory/manage-products", "/inventory/inventory", "/inventory/stock-ledger",
+    "/inventory/purchase-log", "/inventory/goods-received", "/inventory/sor", "/inventory/follow-up", "/inventory/requisitions", "/inventory/expiry", "/inventory/labels", "/settings", "/folio/supply-management", "/folio/supplier-payments",
   ]);
 });
 
 test("junior accountant sees the money side but not deleted sales", () => {
   assert.deepEqual(visibleFor("junior_accountant"), [
-    "/dashboard", "/transaction/expenses", "/transaction/sales-list", "/inventory/purchase-log",
+    "/dashboard", "/transaction/expenses", "/transaction/sales-list", "/inventory/purchase-log", "/inventory/goods-received", "/inventory/sor", "/inventory/follow-up",
     "/settings", "/folio/bank-management", "/folio/customer-management", "/folio/supply-management",
+    "/folio/supplier-payments",
   ]);
 });
 
 test("senior accountant also sees deleted sales", () => {
   assert.deepEqual(visibleFor("senior_accountant"), [
-    "/dashboard", "/transaction/expenses", "/transaction/sales-list", "/inventory/purchase-log",
+    "/dashboard", "/transaction/expenses", "/transaction/sales-list", "/inventory/purchase-log", "/inventory/goods-received", "/inventory/sor", "/inventory/follow-up",
     "/deletedTransactions", "/settings", "/folio/bank-management", "/folio/customer-management",
-    "/folio/supply-management",
+    "/folio/supply-management", "/folio/supplier-payments",
   ]);
 });
 

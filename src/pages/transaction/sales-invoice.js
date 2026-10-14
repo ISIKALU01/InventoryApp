@@ -1,5 +1,6 @@
 // pages/transaction/sales-invoice.js
 import TransactionNav from "../../components/TransactionNav";
+import ProductPicker from "../../components/ProductPicker";
 import { useState, useEffect, useRef, useCallback } from "react";
 import http from "../../../services/http";
 import { BARCODE_PATTERN, createScanBuffer, findProductByCode } from "../../../utils/barcode";
@@ -18,6 +19,7 @@ import {
 	XCircle,
 	History,
 	Info,
+	List,
 } from "lucide-react";
 
 const PAYMENT_METHODS = [
@@ -290,6 +292,7 @@ export default function SalesInvoice() {
 	const [searchTerm, setSearchTerm] = useState("");
 	const [filteredInventory, setFilteredInventory] = useState([]);
 	const [addingId, setAddingId] = useState(null);
+	const [browsing, setBrowsing] = useState(false);
 	const [cart, setCart] = useState([]);
 	// The latest cart, readable from scans queued before React re-renders
 	const cartRef = useRef([]);
@@ -529,6 +532,43 @@ export default function SalesInvoice() {
 		}
 	};
 
+	// Several products ticked in "Browse products", added one after another
+	// (POST /cart/{id} would remove a product already in the order, so those
+	// can't be ticked)
+	const addManyToCart = async (products) => {
+		setBrowsing(false);
+		let added = 0;
+		const failed = [];
+		for (const product of products) {
+			try {
+				setAddingId(product.id);
+				await http.post(`/cart/${product.id}`, {});
+				added += 1;
+			} catch (error) {
+				failed.push(product.name);
+			}
+		}
+		setAddingId(null);
+		await fetchCart();
+		if (added) notify("success", `${added} ${added === 1 ? "product" : "products"} added to the order.`, "Items added");
+		if (failed.length) notify("error", `Could not add ${failed.join(", ")}.`, "Not added");
+	};
+
+	// Why a product can't be sold from here right now, for "Browse products"
+	const browseReason = (product) => {
+		const shops = shopStock(product.stores);
+		if (shops.length === 0) return (product.stores || []).length ? "only in the back store" : "not stocked in any shop";
+		const sellingStore = orderStore || selectedStore;
+		if (sellingStore) {
+			const entry = shops.find((s) => String(s.store_id) === String(sellingStore));
+			if (!entry) return `not stocked in ${storeName(sellingStore) || "this shop"}`;
+			if ((Number(entry.stock) || 0) <= 0) return "out of stock";
+		} else if (totalStock(shops) <= 0) {
+			return "out of stock";
+		}
+		return null;
+	};
+
 	//add to cart
 	const handleItemClick = async (item) => {
 		if (addingId) return;
@@ -542,7 +582,7 @@ export default function SalesInvoice() {
 	const processScanRef = useRef(null);
 	processScanRef.current = async (code) => {
 		// Don't add items behind an open payment, receipt or recall window
-		if (showOrderModal || completedOrder || showRecallModal) return;
+		if (showOrderModal || completedOrder || showRecallModal || browsing) return;
 
 		if (loading) {
 			notify("error", "Products are still loading. Scan again in a moment.", "Not added");
@@ -1082,6 +1122,22 @@ export default function SalesInvoice() {
 			)}
 
 			{/* Recall Order Modal */}
+			{browsing && (
+				<ProductPicker
+					title="Add products to the order"
+					products={inventory.map((p) => {
+						const shops = shopStock(p.stores);
+						return { ...p, stores: shops, stock: totalStock(shops) };
+					})}
+					stores={stores.filter((store) => !isBackStore(store))}
+					storeId={orderStore || selectedStore}
+					disabledReason={browseReason}
+					addedIds={cart.map((item) => item.product_id)}
+					onAdd={addManyToCart}
+					onClose={() => setBrowsing(false)}
+				/>
+			)}
+
 			{showRecallModal && (
 				<ModalShell
 					title="Recall Order"
@@ -1237,7 +1293,9 @@ export default function SalesInvoice() {
 							))}
 						</Select>
 
-						<div className="relative">
+						<div>
+							<div className="flex gap-2">
+							<div className="relative flex-1">
 							<Search
 								size={13}
 								className="absolute text-gray-400 -translate-y-1/2 pointer-events-none left-2.5 top-1/2"
@@ -1253,6 +1311,18 @@ export default function SalesInvoice() {
 								autoComplete="off"
 								className={`${filterFieldClass} pl-8`}
 							/>
+							</div>
+							<button
+								type="button"
+								onClick={() => setBrowsing(true)}
+								disabled={loading || Boolean(addingId)}
+								title="Browse products"
+								aria-label="Browse products"
+								className="flex items-center justify-center w-9 shrink-0 text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 hover:text-blue-700 disabled:opacity-50"
+							>
+								<List size={15} />
+							</button>
+							</div>
 						</div>
 					</div>
 

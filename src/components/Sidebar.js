@@ -22,6 +22,14 @@ import {
   FaTruck,
   FaCube,
   FaShoppingCart,
+  FaTruckLoading,
+  FaBalanceScale,
+  FaMoneyCheckAlt,
+  FaRoute,
+  FaHistory,
+  FaUsersCog,
+  FaUserCheck,
+  FaUserShield,
   FaCalculator,
   FaMoneyCheck,
   FaUniversity,
@@ -29,16 +37,94 @@ import {
   FaLock,
   FaSignOutAlt,
   FaCalendarTimes,
-  FaPrint
+  FaPrint,
+  FaClipboardList,
+  FaCashRegister,
+  FaShoppingBasket,
+  FaIndustry,
+  FaFileInvoice,
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { canAccessPath } from '../../utils/permissions';
+
+// The menu, in the order people work: sell, keep stock, buy from suppliers,
+// then the money and admin pages. Each item needs a permission (see
+// utils/permissions.js); items the user can't use are hidden, and a group
+// shows only when one of its items is visible.
+const MENU = [
+  { name: 'Dashboard', path: '/dashboard', icon: <FaChartPie className="w-5 h-5" /> },
+  {
+    name: 'Sales',
+    icon: <FaCashRegister className="w-5 h-5" />,
+    submenu: [
+      { name: 'Sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" /> },
+      { name: 'Sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" /> },
+      { name: 'Expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" /> },
+      { name: 'Deleted sales', path: '/deletedTransactions', icon: <FaTrash className="w-4 h-4" /> },
+      // Still showing sample data: hidden until connected to the backend
+      { name: 'Sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, hidden: true },
+      { name: 'Payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, hidden: true },
+    ]
+  },
+  {
+    name: 'Inventory',
+    icon: <FaBoxes className="w-5 h-5" />,
+    submenu: [
+      { name: 'Stock levels', path: '/inventory/inventory', icon: <FaBoxes className="w-4 h-4" /> },
+      { name: 'Products', path: '/inventory/manage-products', icon: <FaCube className="w-4 h-4" /> },
+      { name: 'Product categories', path: '/inventory/product-category', icon: <FaTag className="w-4 h-4" /> },
+      { name: 'Stock transfers', path: '/inventory/stock-transfers', icon: <FaTruck className="w-4 h-4" /> },
+      { name: 'Expiry', path: '/inventory/expiry', icon: <FaCalendarTimes className="w-4 h-4" /> },
+      { name: 'Print labels', path: '/inventory/labels', icon: <FaPrint className="w-4 h-4" /> },
+      { name: 'Stock ledger', path: '/inventory/stock-ledger', icon: <FaHistory className="w-4 h-4" /> },
+      // Page not built yet
+      { name: 'View Adjustment', path: '/inventory/view-adjustment', icon: <FaSlidersH className="w-4 h-4" />, hidden: true },
+    ]
+  },
+  {
+    // The supplier-to-payment flow, in the order it happens
+    name: 'Purchasing',
+    icon: <FaShoppingBasket className="w-5 h-5" />,
+    submenu: [
+      { name: 'Suppliers', path: '/folio/supply-management', icon: <FaIndustry className="w-4 h-4" /> },
+      { name: 'Store requisitions', path: '/inventory/requisitions', icon: <FaClipboardList className="w-4 h-4" /> },
+      { name: 'Purchase orders', path: '/inventory/purchase-log', icon: <FaFileInvoice className="w-4 h-4" /> },
+      { name: 'Goods received', path: '/inventory/goods-received', icon: <FaTruckLoading className="w-4 h-4" /> },
+      { name: 'SOR reconciliation', path: '/inventory/sor', icon: <FaBalanceScale className="w-4 h-4" /> },
+      { name: 'Supplier payments', path: '/folio/supplier-payments', icon: <FaMoneyCheckAlt className="w-4 h-4" /> },
+      { name: 'Order follow-up', path: '/inventory/follow-up', icon: <FaRoute className="w-4 h-4" /> },
+    ]
+  },
+  {
+    name: 'Folio',
+    icon: <FaFolder className="w-5 h-5" />,
+    submenu: [
+      { name: 'Customers', path: '/folio/customer-management', icon: <FaUsers className="w-4 h-4" /> },
+      { name: 'Bank management', path: '/folio/bank-management', icon: <FaUniversity className="w-4 h-4" /> },
+    ]
+  },
+  {
+    name: 'User Management',
+    icon: <FaUsersCog className="w-5 h-5" />,
+    submenu: [
+      { name: 'Authorize users', path: '/authorizeUser', icon: <FaUserCheck className="w-4 h-4" /> },
+      { name: 'Staff & Roles', path: '/team', icon: <FaUserShield className="w-4 h-4" /> },
+    ]
+  },
+  { name: 'Settings', path: '/settings', icon: <FaCog className="w-5 h-5" /> },
+];
 
 export default function Sidebar({ onToggle }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
+
+  // Open the group that holds the page you're on, so you can see where you are
+  useEffect(() => {
+    const group = MENU.find((item) => item.submenu?.some((sub) => sub.path === router.pathname));
+    if (group) setOpenDropdown(group.name);
+  }, [router.pathname]);
   const { user, logout } = useAuth();
 
   useEffect(() => {
@@ -86,52 +172,7 @@ export default function Sidebar({ onToggle }) {
     }
   };
 
-  // Each item needs a permission (see utils/permissions.js). Items the user
-  // can't use are hidden; a group shows only when one of its items is visible.
-  const menuItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: <FaChartPie className="w-5 h-5" /> },
-    { name: 'Authorize users', path: '/authorizeUser', icon: <FaUsers className="w-5 h-5" /> },
-    {
-      name: 'Transaction',
-      icon: <FaMoneyBill className="w-5 h-5" />,
-      submenu: [
-        { name: 'Sales point', path: '/transaction/sales-invoice', icon: <FaShoppingCart className="w-4 h-4" /> },
-        { name: 'Expenses', path: '/transaction/expenses', icon: <FaMoneyBill className="w-4 h-4" /> },
-        { name: 'Sales list', path: '/transaction/sales-list', icon: <FaList className="w-4 h-4" /> },
-        // Still showing sample data: hidden until connected to the backend
-        { name: 'Sales summary', path: '/transaction/sales-summary', icon: <FaChartBar className="w-4 h-4" />, hidden: true },
-        { name: 'Payment analysis', path: '/transaction/payment-analysis', icon: <FaCalculator className="w-4 h-4" />, hidden: true },
-      ]
-    },
-    {
-      name: 'Inventory',
-      icon: <FaBoxes className="w-5 h-5" />,
-      submenu: [
-        { name: 'Product Category', path: '/inventory/product-category', icon: <FaTag className="w-4 h-4" /> },
-        { name: 'Stock Transfers', path: '/inventory/stock-transfers', icon: <FaTruck className="w-4 h-4" /> },
-        { name: 'Expiry', path: '/inventory/expiry', icon: <FaCalendarTimes className="w-4 h-4" /> },
-        { name: 'Print Labels', path: '/inventory/labels', icon: <FaPrint className="w-4 h-4" /> },
-        // Page not built yet
-        { name: 'View Adjustment', path: '/inventory/view-adjustment', icon: <FaSlidersH className="w-4 h-4" />, hidden: true },
-        { name: 'Manage Product/Service', path: '/inventory/manage-products', icon: <FaCube className="w-4 h-4" /> },
-        { name: 'Inventory', path: '/inventory/inventory', icon: <FaBoxes className="w-4 h-4" /> },
-        { name: 'Purchase Log', path: '/inventory/purchase-log', icon: <FaShoppingCart className="w-4 h-4" /> },
-      ]
-    },
-    { name: 'Deleted Transactions', path: '/deletedTransactions', icon: <FaTrash className="w-5 h-5" /> },
-    { name: 'Settings', path: '/settings', icon: <FaCog className="w-5 h-5" /> },
-    {
-      name: 'Folio',
-      icon: <FaFolder className="w-5 h-5" />,
-      submenu: [
-        { name: 'Bank Management', path: '/folio/bank-management', icon: <FaUniversity className="w-4 h-4" /> },
-        { name: 'Manage Customer', path: '/folio/customer-management', icon: <FaUsers className="w-4 h-4" /> },
-        { name: 'Manage Supplier', path: '/folio/supply-management', icon: <FaUsers className="w-4 h-4" /> },
-      ]
-    },
-  ];
-
-  const visibleMenu = menuItems
+  const visibleMenu = MENU
     .map((item) => item.submenu
       ? { ...item, submenu: item.submenu.filter((sub) => !sub.hidden && canAccessPath(user, sub.path)) }
       : item)
@@ -195,7 +236,7 @@ export default function Sidebar({ onToggle }) {
         </div>
 
         {/* Navigation items - Scrollable area */}
-        <nav className="mt-6 flex-1 overflow-y-auto">
+        <nav className="mt-6 flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin">
           <ul className="space-y-2 px-2">
             {visibleMenu.map((item) => {
               const isActive = isMenuItemActive(item);
@@ -234,10 +275,11 @@ export default function Sidebar({ onToggle }) {
 
                       {/* Submenu items with smooth transition */}
                       {isOpen && (
-                        <div className={`
-                          overflow-hidden transition-all duration-500 ease-in-out
-                          ${openDropdown === item.name ? 'max-h-96' : 'max-h-0'}
-                        `}>
+                        // Tall enough for every link in this menu (about 3rem each), so none are cut off
+                        <div
+                          className="overflow-hidden transition-all duration-500 ease-in-out"
+                          style={{ maxHeight: openDropdown === item.name ? `${item.submenu.length * 3}rem` : 0 }}
+                        >
                           <ul className="ml-8 mt-1 space-y-1">
                             {item.submenu.map((subItem) => (
                               <li key={subItem.name}>

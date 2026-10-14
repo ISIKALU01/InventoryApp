@@ -3,8 +3,9 @@
 // and can't be edited afterwards: to undo one, move the stock back.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
-import { FaArrowRight, FaExchangeAlt, FaExclamationTriangle, FaPlus, FaSearch, FaTimes, FaTruck } from "react-icons/fa";
+import { FaArrowRight, FaExchangeAlt, FaExclamationTriangle, FaListUl, FaPlus, FaSearch, FaTimes, FaTruck } from "react-icons/fa";
 import InventoryNav from "../../components/InventoryNav";
+import ProductPicker from "../../components/ProductPicker";
 import http from "../../../services/http";
 import { findProductByCode } from "../../../utils/barcode";
 import {
@@ -74,6 +75,7 @@ const MoveStockModal = ({ stores, products, onClose, onDone }) => {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
   const searchRef = useRef(null);
 
   // Products the source store holds and that aren't on the list yet
@@ -108,6 +110,14 @@ const MoveStockModal = ({ stores, products, onClose, onDone }) => {
     setQuery("");
     setErrors({});
     searchRef.current?.focus();
+  };
+
+  // Several products ticked in "Browse products"
+  const addPicked = (picked) => {
+    setLines((prev) => [...prev, ...picked.filter((p) => !prev.some((line) => line.product.id === p.id)).map((product) => ({ product, quantity: "1" }))]);
+    setBrowsing(false);
+    setErrors({});
+    setFormError("");
   };
 
   // Enter (or a scanner) adds an exact barcode/SKU match, or the only match
@@ -240,7 +250,8 @@ const MoveStockModal = ({ stores, products, onClose, onDone }) => {
 
           <div className="relative">
             <label htmlFor="transfer-search" className={labelClass}>Add products</label>
-            <div className="relative">
+            <div className="flex gap-2">
+            <div className="relative flex-1">
               <FaSearch className="absolute text-xs text-gray-400 -translate-y-1/2 left-3 top-1/2" />
               <input
                 id="transfer-search"
@@ -256,6 +267,10 @@ const MoveStockModal = ({ stores, products, onClose, onDone }) => {
                 placeholder={fromId ? "Scan a barcode, or type a name or SKU" : "Choose the store to move from first"}
                 className={`${fieldClass()} pl-8`}
               />
+            </div>
+            <button type="button" onClick={() => setBrowsing(true)} disabled={saving || !fromId} title="Browse products" aria-label="Browse products" className="flex items-center justify-center w-11 shrink-0 text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 hover:text-blue-700 disabled:opacity-50">
+              <FaListUl className="text-sm" />
+            </button>
             </div>
             {matches.length > 0 && (
               <ul className="absolute z-10 w-full mt-1 overflow-y-auto bg-white border border-gray-200 shadow-lg max-h-64">
@@ -345,6 +360,19 @@ const MoveStockModal = ({ stores, products, onClose, onDone }) => {
           </button>
         </ModalFooter>
       </form>
+      {browsing && (
+        <ProductPicker
+          title={`Products in ${fromStore?.name || "this store"}`}
+          products={products}
+          stores={stores}
+          storeId={fromId}
+          lockStore
+          disabledReason={(p) => (stockIn(p, fromId) > 0 ? null : `none in ${fromStore?.name}`)}
+          addedIds={lines.map((line) => line.product.id)}
+          onAdd={addPicked}
+          onClose={() => setBrowsing(false)}
+        />
+      )}
     </ModalShell>
   );
 };

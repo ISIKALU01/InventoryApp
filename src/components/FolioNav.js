@@ -13,18 +13,8 @@ export default function CustomerNav() {
   const [isMedium, setIsMedium] = useState(false);
 
   const allNavItems = [
-    {
-      name: "Bank Management",
-      path: "/folio/bank-management",
-    },
-    {
-      name: "Manage Customer",
-      path: "/folio/customer-management",
-    },
-    {
-      name: "Manage Supplier",
-      path: "/folio/supply-management",
-    }
+    { name: "Manage Customer", path: "/folio/customer-management" },
+    { name: "Bank Management", path: "/folio/bank-management" },
   ];
   // Only the tabs this user may open
   const navItems = allNavItems.filter((item) => canAccessPath(user, item.path));

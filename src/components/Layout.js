@@ -3,6 +3,12 @@ import { useRouter } from 'next/router';
 import Sidebar from './Sidebar';
 import { useState, useEffect } from 'react';
 
+// Pages of the supplier-to-payment flow (they live under /inventory and /folio)
+const PURCHASING_PAGES = [
+  '/folio/supply-management', '/inventory/requisitions', '/inventory/purchase-log', '/inventory/goods-received',
+  '/inventory/sor', '/folio/supplier-payments', '/inventory/follow-up',
+];
+
 export default function Layout({ children }) {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -57,11 +63,13 @@ export default function Layout({ children }) {
                 {router.pathname === '/dashboard' ? 'Dashboard' : 
                 router.pathname === '/admin-dashboard' ? 'Admin Dashboard' :
                 router.pathname === '/staff-dashboard' ? 'Staff Dashboard' :
-                router.pathname === '/authorizeUser' ? 'Authorize User' :
-                router.pathname.startsWith('/transaction/') ? 'Transaction' :
+                router.pathname === '/authorizeUser' ? 'User Management' :
+                router.pathname === '/team' ? 'User Management' :
+                PURCHASING_PAGES.includes(router.pathname) ? 'Purchasing' :
+                router.pathname.startsWith('/transaction/') ? 'Sales' :
                 router.pathname.startsWith('/inventory/') ? 'Inventory' :
                 router.pathname === '/accounts' ? 'Accounts' :
-                router.pathname === '/deletedTransactions' ? 'Deleted Transactions' :
+                router.pathname === '/deletedTransactions' ? 'Sales' :
                 router.pathname === '/settings' ? 'Settings' :
                 router.pathname.startsWith('/folio') ? 'Folio' : ''}
               </h1>

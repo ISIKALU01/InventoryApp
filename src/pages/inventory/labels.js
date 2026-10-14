@@ -5,8 +5,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Head from "next/head";
 import Link from "next/link";
-import { FaPrint, FaSearch, FaTag, FaTimes } from "react-icons/fa";
+import { FaListUl, FaPrint, FaSearch, FaTag, FaTimes } from "react-icons/fa";
 import InventoryNav from "../../components/InventoryNav";
+import ProductPicker from "../../components/ProductPicker";
 import BarcodeSvg from "../../components/BarcodeSvg";
 import http from "../../../services/http";
 import { findProductByCode } from "../../../utils/barcode";
@@ -50,6 +51,7 @@ export default function PrintLabels() {
   const [lines, setLines] = useState([]); // { product, copies }
   const [type, setType] = useState("price");
   const [showPrice, setShowPrice] = useState(true);
+  const [browsing, setBrowsing] = useState(false);
   const searchRef = useRef(null);
   // The print sheet goes straight under <body>, outside the app layout
   const [mounted, setMounted] = useState(false);
@@ -82,6 +84,13 @@ export default function PrintLabels() {
         : [...prev, { product, copies: 1 }]
     );
     searchRef.current?.focus();
+  };
+
+  // Several products ticked in "Browse products", one label each to start
+  const addPicked = (picked) => {
+    setMessage("");
+    setLines((prev) => [...prev, ...picked.filter((p) => !prev.some((line) => line.product.id === p.id)).map((product) => ({ product, copies: 1 }))]);
+    setBrowsing(false);
   };
 
   // Enter (or a scanner) adds an exact barcode/SKU, or the only match
@@ -153,7 +162,8 @@ export default function PrintLabels() {
 
           <div className="relative">
             <label htmlFor="labels-search" className={statLabelClass}>Add products</label>
-            <div className="relative mt-1">
+            <div className="flex gap-2 mt-1">
+            <div className="relative flex-1">
               <FaSearch className="absolute text-xs text-gray-400 -translate-y-1/2 left-3 top-1/2" />
               <input
                 id="labels-search"
@@ -169,6 +179,10 @@ export default function PrintLabels() {
                 placeholder={loading ? "Loading products…" : "Scan a barcode, or type a name or SKU"}
                 className="block w-full py-2.5 pl-8 pr-3 text-sm border border-gray-300 outline-none focus:border-blue-600"
               />
+            </div>
+            <button type="button" onClick={() => setBrowsing(true)} disabled={loading} title="Browse products" aria-label="Browse products" className="flex items-center justify-center w-11 shrink-0 text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 hover:text-blue-700 disabled:opacity-50">
+              <FaListUl className="text-sm" />
+            </button>
             </div>
             {matches.length > 0 && (
               <ul className="absolute z-10 w-full mt-1 overflow-y-auto bg-white border border-gray-200 shadow-lg max-h-64">
@@ -362,6 +376,15 @@ export default function PrintLabels() {
           }
         }
       `}</style>
+
+      {browsing && (
+        <ProductPicker
+          products={products}
+          addedIds={lines.map((line) => line.product.id)}
+          onAdd={addPicked}
+          onClose={() => setBrowsing(false)}
+        />
+      )}
     </div>
   );
 }

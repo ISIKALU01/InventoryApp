@@ -40,10 +40,9 @@ export const apiRequest = async (path, { method = "GET", body, errorLabel = "Req
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
-    let message = errorData?.message || `${errorLabel}: ${response.status}`;
-    if (errorData?.errors) {
-      message += ` - ${JSON.stringify(errorData.errors)}`;
-    }
+    // The server's message is already readable ("The account number must be
+    // ...", "(and 1 more error)"), so it's shown as is, without the raw field list
+    const message = errorData?.message || `${errorLabel}: ${response.status}`;
     throw new Error(message);
   }
 
@@ -280,12 +279,23 @@ export const supplierAPI = {
 
   deleteSupplier: (id) =>
     apiRequest(`/suppliers/${id}`, { method: "DELETE", errorLabel: "Failed to delete supplier" }),
+
+  // Junior accountant: confirm the bank details ({ method, reference })
+  verifySupplier: (id, data) =>
+    apiRequest(`/suppliers/${id}/verify`, { method: "POST", body: data, errorLabel: "Failed to verify supplier" }),
+
+  suspendSupplier: (id, reason) =>
+    apiRequest(`/suppliers/${id}/suspend`, { method: "POST", body: { reason }, errorLabel: "Failed to suspend supplier" }),
+
+  getSupplierHistory: (id) =>
+    apiRequest(`/suppliers/${id}/history`, { errorLabel: "Failed to load supplier history" }),
 };
 
 // Purchase orders
 export const purchaseOrderAPI = {
-  getAllPurchaseOrders: () =>
-    apiRequest("/purchase-orders", { errorLabel: "Failed to fetch purchase orders" }),
+  // Paginated: { data: [...], current_page, last_page, ... }
+  getAllPurchaseOrders: (page = 1) =>
+    apiRequest(`/purchase-orders?page=${page}`, { errorLabel: "Failed to fetch purchase orders" }),
 
   createPurchaseOrder: (orderData) =>
     apiRequest("/purchase-orders", {
@@ -306,6 +316,19 @@ export const purchaseOrderAPI = {
       method: "DELETE",
       errorLabel: "Failed to delete purchase order",
     }),
+
+  issuePurchaseOrder: (id) =>
+    apiRequest(`/purchase-orders/${id}/issue`, { method: "POST", errorLabel: "Failed to issue purchase order" }),
+
+  cancelPurchaseOrder: (id, reason) =>
+    apiRequest(`/purchase-orders/${id}/cancel`, {
+      method: "POST",
+      body: { reason },
+      errorLabel: "Failed to cancel purchase order",
+    }),
+
+  getPurchaseOrderHistory: (id) =>
+    apiRequest(`/purchase-orders/${id}/history`, { errorLabel: "Failed to load purchase order history" }),
 };
 
 // Expenses

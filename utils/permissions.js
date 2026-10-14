@@ -16,6 +16,7 @@ export const ANY_USER_PATHS = ["/settings"];
 export const PAGE_PERMISSIONS = {
   "/dashboard": "dashboard.view",
   "/authorizeUser": "users.manage",
+  "/team": "users.manage",
   "/transaction/sales-invoice": "sales.create",
   "/transaction/expenses": "expenses.manage",
   "/transaction/sales-list": "sales.view",
@@ -26,6 +27,11 @@ export const PAGE_PERMISSIONS = {
   "/inventory/manage-products": "inventory.view",
   "/inventory/inventory": "inventory.view",
   "/inventory/purchase-log": "purchase-orders.view",
+  "/inventory/goods-received": "goods-receipts.view",
+  "/inventory/sor": "sor.view",
+  "/inventory/follow-up": "follow-up.view",
+  "/inventory/stock-ledger": "inventory.view",
+  "/inventory/requisitions": "requisitions.view",
   "/inventory/stock-transfers": "stock-transfers.manage",
   "/inventory/expiry": "inventory.view",
   "/inventory/labels": "inventory.view",
@@ -34,6 +40,7 @@ export const PAGE_PERMISSIONS = {
   "/folio/customer-management": ["customers.manage", "customers.deposit"],
   "/customerProfile": ["customers.manage", "customers.deposit"],
   "/folio/supply-management": "suppliers.view",
+  "/folio/supplier-payments": "supplier-payments.view",
 };
 
 // Where a user lands after logging in: the first page here they may open

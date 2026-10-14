@@ -14,38 +14,13 @@ export default function InventoryNav() {
   const [isMedium, setIsMedium] = useState(false);
 
   const allNavItems = [
-    {
-      name: "Product Category",
-      path: "/inventory/product-category",
-    },
-    {
-      name: "View Adjustment",
-      path: "/inventory/view-adjustment",
-    },
-    {
-      name: "Stock Transfers",
-      path: "/inventory/stock-transfers",
-    },
-    {
-      name: "Expiry",
-      path: "/inventory/expiry",
-    },
-    {
-      name: "Print Labels",
-      path: "/inventory/labels",
-    },
-    {
-      name: "Manage product/services",
-      path: "/inventory/manage-products",
-    },
-    {
-      name: "Inventory",
-      path: "/inventory/inventory",
-    },
-    {
-      name: "Purchase Log",
-      path: "/inventory/purchase-log",
-    },
+    { name: "Inventory", path: "/inventory/inventory" },
+    { name: "Manage product/services", path: "/inventory/manage-products" },
+    { name: "Product Category", path: "/inventory/product-category" },
+    { name: "Stock Transfers", path: "/inventory/stock-transfers" },
+    { name: "Expiry", path: "/inventory/expiry" },
+    { name: "Print Labels", path: "/inventory/labels" },
+    { name: "Stock Ledger", path: "/inventory/stock-ledger" },
   ];
   // Only the tabs this user may open
   const navItems = allNavItems.filter((item) => canAccessPath(user, item.path));
