@@ -31,20 +31,30 @@ const TOAST_DURATION = { success: 3000, error: 5000 };
 // Helpers
 // ---------------------------------------------------------------------------
 
-const toList = (body) => (Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : []);
+const toList = (body) =>
+  Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
 
 // Laravel can send "2026-10-07 13:25:00", which Safari won't parse
 const toDate = (value) => {
   if (!value) return null;
-  const date = new Date(typeof value === "string" ? value.replace(" ", "T") : value);
+  const date = new Date(
+    typeof value === "string" ? value.replace(" ", "T") : value,
+  );
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
 const formatDay = (value) =>
-  toDate(value)?.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }) || "N/A";
+  toDate(value)?.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }) || "N/A";
 
 const formatClock = (value) =>
-  toDate(value)?.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) || "";
+  toDate(value)?.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  }) || "";
 
 const formatDateTime = (value) => {
   const day = formatDay(value);
@@ -106,9 +116,11 @@ const STATUS_BADGE = {
   cancelled: "bg-gray-100 text-gray-600",
 };
 
-const itemName = (item, index) => item.name || item.product_name || `Item ${index + 1}`;
+const itemName = (item, index) =>
+  item.name || item.product_name || `Item ${index + 1}`;
 const itemQty = (item) => Number(item.quantity) || Number(item.qty) || 0;
-const itemPrice = (item) => parseFloat(item.price ?? item.unit_price ?? item.product_price) || 0;
+const itemPrice = (item) =>
+  parseFloat(item.price ?? item.unit_price ?? item.product_price) || 0;
 
 // ---------------------------------------------------------------------------
 // Shared pieces (same look as the other redesigned pages)
@@ -117,7 +129,8 @@ const itemPrice = (item) => parseFloat(item.price ?? item.unit_price ?? item.pro
 const filterFieldClass =
   "block w-full h-8 px-2.5 text-xs text-gray-800 bg-gray-100 border-0 rounded-none outline-none shadow-none appearance-none transition-colors placeholder:text-gray-400 focus:bg-gray-50 focus:outline-none focus:ring-0";
 
-const statLabelClass = "text-[10px] font-semibold tracking-wide text-gray-500 uppercase";
+const statLabelClass =
+  "text-[10px] font-semibold tracking-wide text-gray-500 uppercase";
 
 const secondaryButtonClass =
   "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-none transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed";
@@ -135,16 +148,26 @@ const FilterSelect = ({ className = "", children, ...props }) => (
 );
 
 const Badge = ({ className, children }) => (
-  <span className={`inline-block px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${className}`}>
+  <span
+    className={`inline-block px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${className}`}
+  >
     {children}
   </span>
 );
 
 const StatusBadge = ({ status }) => (
-  <Badge className={STATUS_BADGE[status?.toLowerCase()] || "bg-gray-100 text-gray-600"}>{label(status)}</Badge>
+  <Badge
+    className={
+      STATUS_BADGE[status?.toLowerCase()] || "bg-gray-100 text-gray-600"
+    }
+  >
+    {label(status)}
+  </Badge>
 );
 
-const PaymentBadge = ({ method }) => <Badge className="text-gray-700 bg-gray-100">{label(method)}</Badge>;
+const PaymentBadge = ({ method }) => (
+  <Badge className="text-gray-700 bg-gray-100">{label(method)}</Badge>
+);
 
 const Toast = ({ toast, onClose }) => {
   const isError = toast.type === "error";
@@ -161,12 +184,17 @@ const Toast = ({ toast, onClose }) => {
         }`}
       >
         <div className="flex items-start gap-3 px-4 py-3.5">
-          <Icon size={20} className={`mt-0.5 shrink-0 ${isError ? "text-red-600" : "text-green-600"}`} />
+          <Icon
+            size={20}
+            className={`mt-0.5 shrink-0 ${isError ? "text-red-600" : "text-green-600"}`}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-gray-900">
               {toast.title || (isError ? "Something went wrong" : "Done")}
             </p>
-            <p className="mt-0.5 text-sm text-gray-600 break-words">{toast.message}</p>
+            <p className="mt-0.5 text-sm text-gray-600 break-words">
+              {toast.message}
+            </p>
           </div>
           <button
             type="button"
@@ -203,18 +231,36 @@ const EmptyState = ({ icon: Icon, title, hint, tone = "gray", action }) => (
 
 const SummaryRow = ({ label: rowLabel, value, strong = false }) => (
   <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-white">
-    <span className={strong ? "text-sm font-semibold text-gray-900" : "text-sm text-gray-600"}>{rowLabel}</span>
-    <span className={`text-right ${strong ? "text-base font-bold text-gray-900" : "text-sm font-medium text-gray-900"}`}>
+    <span
+      className={
+        strong ? "text-sm font-semibold text-gray-900" : "text-sm text-gray-600"
+      }
+    >
+      {rowLabel}
+    </span>
+    <span
+      className={`text-right ${strong ? "text-base font-bold text-gray-900" : "text-sm font-medium text-gray-900"}`}
+    >
       {value}
     </span>
   </div>
 );
 
 // Clickable column header with a sort arrow
-const SortHeader = ({ column, sortBy, sortOrder, onSort, align = "left", className = "", children }) => {
+const SortHeader = ({
+  column,
+  sortBy,
+  sortOrder,
+  onSort,
+  align = "left",
+  className = "",
+  children,
+}) => {
   const active = sortBy === column;
   return (
-    <th className={`py-2.5 ${className} ${align === "right" ? "text-right" : "text-left"}`}>
+    <th
+      className={`py-2.5 ${className} ${align === "right" ? "text-right" : "text-left"}`}
+    >
       <button
         type="button"
         onClick={() => onSort(column)}
@@ -224,7 +270,11 @@ const SortHeader = ({ column, sortBy, sortOrder, onSort, align = "left", classNa
       >
         {children}
         {active ? (
-          sortOrder === "asc" ? <ChevronUp size={11} /> : <ChevronDown size={11} />
+          sortOrder === "asc" ? (
+            <ChevronUp size={11} />
+          ) : (
+            <ChevronDown size={11} />
+          )
         ) : (
           <ChevronDown size={11} className="opacity-0" />
         )}
@@ -276,7 +326,9 @@ export default function DeletedTransactions() {
       setTransactions(toList(response.data));
     } catch (err) {
       console.error("Failed to fetch deleted transactions:", err);
-      setError(err.response?.data?.message || "Failed to load deleted transactions");
+      setError(
+        err.response?.data?.message || "Failed to load deleted transactions",
+      );
     } finally {
       setLoading(false);
     }
@@ -292,13 +344,26 @@ export default function DeletedTransactions() {
   const filteredTransactions = transactions.filter((t) => {
     const matchesSearch =
       term === "" ||
-      [t.id, t.total_amount, t.processed_by, t.customer_id, t.payment_method, t.status].some((field) =>
-        field?.toString().toLowerCase().includes(term)
-      );
-    const matchesStatus = statusFilter === "all" || t.status?.toLowerCase() === statusFilter.toLowerCase();
+      [
+        t.id,
+        t.total_amount,
+        t.processed_by,
+        t.customer_id,
+        t.payment_method,
+        t.status,
+      ].some((field) => field?.toString().toLowerCase().includes(term));
+    const matchesStatus =
+      statusFilter === "all" ||
+      t.status?.toLowerCase() === statusFilter.toLowerCase();
     const matchesPayment =
-      paymentMethodFilter === "all" || t.payment_method?.toLowerCase() === paymentMethodFilter.toLowerCase();
-    return matchesSearch && matchesStatus && matchesPayment && inDateRange(t.deleted_at, dateFilter);
+      paymentMethodFilter === "all" ||
+      t.payment_method?.toLowerCase() === paymentMethodFilter.toLowerCase();
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesPayment &&
+      inDateRange(t.deleted_at, dateFilter)
+    );
   });
 
   const sortValue = (t) => {
@@ -332,7 +397,10 @@ export default function DeletedTransactions() {
   };
 
   const hasFilters = Boolean(
-    searchTerm || statusFilter !== "all" || paymentMethodFilter !== "all" || dateFilter !== "all"
+    searchTerm ||
+    statusFilter !== "all" ||
+    paymentMethodFilter !== "all" ||
+    dateFilter !== "all",
   );
 
   const clearFilters = () => {
@@ -345,37 +413,80 @@ export default function DeletedTransactions() {
   // Back to the first page whenever the result set or order changes
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, statusFilter, paymentMethodFilter, dateFilter, sortBy, sortOrder]);
+  }, [
+    searchTerm,
+    statusFilter,
+    paymentMethodFilter,
+    dateFilter,
+    sortBy,
+    sortOrder,
+  ]);
 
-  const pageCount = Math.max(1, Math.ceil(sortedTransactions.length / PAGE_SIZE));
+  const pageCount = Math.max(
+    1,
+    Math.ceil(sortedTransactions.length / PAGE_SIZE),
+  );
   const currentPage = Math.min(page, pageCount);
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const pageRows = sortedTransactions.slice(pageStart, pageStart + PAGE_SIZE);
 
-  const uniqueStatuses = [...new Set(transactions.map((t) => t.status).filter(Boolean))].sort();
-  const uniquePaymentMethods = [...new Set(transactions.map((t) => t.payment_method).filter(Boolean))].sort();
+  const uniqueStatuses = [
+    ...new Set(transactions.map((t) => t.status).filter(Boolean)),
+  ].sort();
+  const uniquePaymentMethods = [
+    ...new Set(transactions.map((t) => t.payment_method).filter(Boolean)),
+  ].sort();
 
   const totalAmount = transactions.reduce((sum, t) => sum + amountOf(t), 0);
-  const filteredAmount = filteredTransactions.reduce((sum, t) => sum + amountOf(t), 0);
-  const deletedToday = transactions.filter((t) => inDateRange(t.deleted_at, "today")).length;
-  const processorCount = new Set(transactions.map((t) => t.processed_by).filter(Boolean)).size;
+  const filteredAmount = filteredTransactions.reduce(
+    (sum, t) => sum + amountOf(t),
+    0,
+  );
+  const deletedToday = transactions.filter((t) =>
+    inDateRange(t.deleted_at, "today"),
+  ).length;
+  const processorCount = new Set(
+    transactions.map((t) => t.processed_by).filter(Boolean),
+  ).size;
 
   // ---- Export --------------------------------------------------------------
 
   const handleExportCSV = () => {
     if (sortedTransactions.length === 0) {
-      notify("error", "There are no transactions to export.", "Nothing to export");
+      notify(
+        "error",
+        "There are no transactions to export.",
+        "Nothing to export",
+      );
       return;
     }
     try {
-      const headers = ["ID", "Amount", "Status", "Payment Method", "Processed By", "Customer ID", "Deleted At", "Created At"];
+      const headers = [
+        "ID",
+        "Amount",
+        "Status",
+        "Payment Method",
+        "Processed By",
+        "Customer ID",
+        "Deleted At",
+        "Created At",
+      ];
       const cell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
       const csvContent = [
         headers.join(","),
         ...sortedTransactions.map((t) =>
-          [t.id, t.total_amount, t.status, t.payment_method, t.processed_by, t.customer_id, t.deleted_at, t.created_at]
+          [
+            t.id,
+            t.total_amount,
+            t.status,
+            t.payment_method,
+            t.processed_by,
+            t.customer_id,
+            t.deleted_at,
+            t.created_at,
+          ]
             .map(cell)
-            .join(",")
+            .join(","),
         ),
       ].join("\n");
 
@@ -385,7 +496,7 @@ export default function DeletedTransactions() {
       const today = startOfToday();
       link.href = url;
       link.download = `deleted-transactions-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
-        today.getDate()
+        today.getDate(),
       ).padStart(2, "0")}.csv`;
       document.body.appendChild(link);
       link.click();
@@ -395,7 +506,7 @@ export default function DeletedTransactions() {
       notify(
         "success",
         `${sortedTransactions.length} transaction${sortedTransactions.length === 1 ? "" : "s"} exported.`,
-        "Export ready"
+        "Export ready",
       );
     } catch (err) {
       console.error("Export failed:", err);
@@ -416,15 +527,39 @@ export default function DeletedTransactions() {
   // ---- Render --------------------------------------------------------------
 
   const tiles = [
-    { icon: Trash2, iconClass: "bg-red-50 text-red-700", label: "Total Deleted", value: transactions.length },
-    { icon: Wallet, iconClass: "bg-blue-50 text-blue-700", label: "Total Amount", value: formatCurrency(totalAmount) },
-    { icon: CalendarDays, iconClass: "bg-amber-50 text-amber-700", label: "Deleted Today", value: deletedToday },
-    { icon: Users, iconClass: "bg-purple-50 text-purple-700", label: "Processed By", value: `${processorCount} ${processorCount === 1 ? "person" : "people"}` },
+    {
+      icon: Trash2,
+      iconClass: "bg-red-50 text-red-700",
+      label: "Total Deleted",
+      value: transactions.length,
+    },
+    {
+      icon: Wallet,
+      iconClass: "bg-blue-50 text-blue-700",
+      label: "Total Amount",
+      value: formatCurrency(totalAmount),
+    },
+    {
+      icon: CalendarDays,
+      iconClass: "bg-amber-50 text-amber-700",
+      label: "Deleted Today",
+      value: deletedToday,
+    },
+    {
+      icon: Users,
+      iconClass: "bg-purple-50 text-purple-700",
+      label: "Processed By",
+      value: `${processorCount} ${processorCount === 1 ? "person" : "people"}`,
+    },
   ];
 
   const filterFields = (
     <>
-      <FilterSelect value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+      <FilterSelect
+        value={statusFilter}
+        onChange={(e) => setStatusFilter(e.target.value)}
+        aria-label="Filter by status"
+      >
         <option value="all">All Statuses</option>
         {uniqueStatuses.map((status) => (
           <option key={status} value={status}>
@@ -444,7 +579,11 @@ export default function DeletedTransactions() {
           </option>
         ))}
       </FilterSelect>
-      <FilterSelect value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} aria-label="Filter by date deleted">
+      <FilterSelect
+        value={dateFilter}
+        onChange={(e) => setDateFilter(e.target.value)}
+        aria-label="Filter by date deleted"
+      >
         {DATE_RANGES.map((range) => (
           <option key={range.id} value={range.id}>
             {range.label}
@@ -481,8 +620,12 @@ export default function DeletedTransactions() {
                   <FileText size={20} />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-lg font-semibold leading-tight text-gray-900 truncate">Transaction #{selected.id}</h2>
-                  <p className="text-xs text-gray-500">Deleted {formatDateTime(selected.deleted_at)}</p>
+                  <h2 className="text-lg font-semibold leading-tight text-gray-900 truncate">
+                    Transaction #{selected.id}
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    Deleted {formatDateTime(selected.deleted_at)}
+                  </p>
                 </div>
               </div>
               <button
@@ -498,7 +641,9 @@ export default function DeletedTransactions() {
             <div className="px-6 py-5 space-y-5">
               <div className="px-4 py-5 text-center border border-gray-200 bg-gray-50">
                 <p className={statLabelClass}>Amount</p>
-                <p className="mt-1 text-3xl font-bold text-gray-900">{formatCurrency(amountOf(selected))}</p>
+                <p className="mt-1 text-3xl font-bold text-gray-900">
+                  {formatCurrency(amountOf(selected))}
+                </p>
                 <div className="flex justify-center gap-2 mt-2">
                   <StatusBadge status={selected.status} />
                   <PaymentBadge method={selected.payment_method} />
@@ -514,7 +659,9 @@ export default function DeletedTransactions() {
                 ].map(([rowLabel, value]) => (
                   <div key={rowLabel} className="px-3 py-2.5 bg-white">
                     <div className={statLabelClass}>{rowLabel}</div>
-                    <div className="mt-0.5 text-sm font-medium text-gray-900 truncate">{value}</div>
+                    <div className="mt-0.5 text-sm font-medium text-gray-900 truncate">
+                      {value}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -523,18 +670,35 @@ export default function DeletedTransactions() {
                 <div className="border border-gray-200">
                   <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2 border-b border-gray-200 bg-gray-50">
                     <span className={statLabelClass}>Item</span>
-                    <span className={`${statLabelClass} w-12 text-right`}>Qty</span>
-                    <span className={`${statLabelClass} w-24 text-right`}>Price</span>
+                    <span className={`${statLabelClass} w-12 text-right`}>
+                      Qty
+                    </span>
+                    <span className={`${statLabelClass} w-24 text-right`}>
+                      Price
+                    </span>
                   </div>
                   <ul className="overflow-y-auto divide-y divide-gray-100 max-h-64">
                     {selectedItems.map((item, index) => (
-                      <li key={item.id ?? index} className="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2.5">
+                      <li
+                        key={item.id ?? index}
+                        className="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2.5"
+                      >
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{itemName(item, index)}</p>
-                          {item.description && <p className="text-xs text-gray-500 truncate">{item.description}</p>}
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {itemName(item, index)}
+                          </p>
+                          {item.description && (
+                            <p className="text-xs text-gray-500 truncate">
+                              {item.description}
+                            </p>
+                          )}
                         </div>
-                        <span className="w-12 text-sm text-right text-gray-700">{itemQty(item) || "—"}</span>
-                        <span className="w-24 text-sm font-medium text-right text-gray-900">{formatCurrency(itemPrice(item))}</span>
+                        <span className="w-12 text-sm text-right text-gray-700">
+                          {itemQty(item) || "—"}
+                        </span>
+                        <span className="w-24 text-sm font-medium text-right text-gray-900">
+                          {formatCurrency(itemPrice(item))}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -544,40 +708,56 @@ export default function DeletedTransactions() {
               {selected.notes && (
                 <div>
                   <p className={`${statLabelClass} mb-1.5`}>Notes</p>
-                  <p className="px-4 py-3 text-sm text-gray-700 border border-gray-200 bg-gray-50">{selected.notes}</p>
+                  <p className="px-4 py-3 text-sm text-gray-700 border border-gray-200 bg-gray-50">
+                    {selected.notes}
+                  </p>
                 </div>
               )}
 
               {selectedItems.length === 0 && !selected.notes && (
                 <div className="grid gap-px bg-gray-200 border border-gray-200">
-                  <SummaryRow label="Items" value="No item details on this record" />
+                  <SummaryRow
+                    label="Items"
+                    value="No item details on this record"
+                  />
                 </div>
               )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <button type="button" onClick={() => setSelectedTransaction(null)} className={secondaryButtonClass}>
+              <button
+                type="button"
+                onClick={() => setSelectedTransaction(null)}
+                className={secondaryButtonClass}
+              >
                 Close
               </button>
             </div>
           </div>
         </div>
       )}
-
-      <h1 className="hidden mb-1 text-xl font-normal text-gray-800 md:block">Deleted Transactions</h1>
-      <p className="hidden mb-5 text-sm text-gray-500 md:block">An audit trail of sales that were removed from the records</p>
+      <p className="hidden mb-5 text-sm text-gray-500 md:block">
+        An audit trail of sales that were removed from the records
+      </p>
 
       <div className="space-y-5">
         {/* Summary Tiles */}
         <div className="grid grid-cols-2 gap-px bg-gray-200 border border-gray-200 lg:grid-cols-4">
           {tiles.map(({ icon: Icon, iconClass, label: tileLabel, value }) => (
-            <div key={tileLabel} className="flex items-center gap-3 px-4 py-4 bg-white">
-              <div className={`flex items-center justify-center w-10 h-10 shrink-0 ${iconClass}`}>
+            <div
+              key={tileLabel}
+              className="flex items-center gap-3 px-4 py-4 bg-white"
+            >
+              <div
+                className={`flex items-center justify-center w-10 h-10 shrink-0 ${iconClass}`}
+              >
                 <Icon size={18} />
               </div>
               <div className="min-w-0">
                 <div className={statLabelClass}>{tileLabel}</div>
-                <div className="text-lg font-bold leading-tight text-gray-900 truncate">{loading ? "…" : value}</div>
+                <div className="text-lg font-bold leading-tight text-gray-900 truncate">
+                  {loading ? "…" : value}
+                </div>
               </div>
             </div>
           ))}
@@ -587,7 +767,9 @@ export default function DeletedTransactions() {
           {/* Header */}
           <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-200">
             <div className="flex items-baseline min-w-0 gap-2">
-              <h2 className="text-base font-semibold text-gray-900">Deleted Records</h2>
+              <h2 className="text-base font-semibold text-gray-900">
+                Deleted Records
+              </h2>
               <span className="text-xs text-gray-500 truncate">
                 {loading
                   ? "Loading…"
@@ -609,7 +791,10 @@ export default function DeletedTransactions() {
                 disabled={loading}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-60"
               >
-                <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={13}
+                  className={loading ? "animate-spin" : ""}
+                />
                 Refresh
               </button>
               <button
@@ -644,17 +829,26 @@ export default function DeletedTransactions() {
                 onClick={() => setShowFilters((open) => !open)}
                 aria-expanded={showFilters}
                 className={`flex items-center h-8 gap-1.5 px-2.5 text-xs font-medium transition-colors md:hidden ${
-                  showFilters || statusFilter !== "all" || paymentMethodFilter !== "all" || dateFilter !== "all"
+                  showFilters ||
+                  statusFilter !== "all" ||
+                  paymentMethodFilter !== "all" ||
+                  dateFilter !== "all"
                     ? "bg-blue-600 text-white"
                     : "bg-gray-100 text-gray-700"
                 }`}
               >
-                {showFilters ? <X size={13} /> : <SlidersHorizontal size={13} />}
+                {showFilters ? (
+                  <X size={13} />
+                ) : (
+                  <SlidersHorizontal size={13} />
+                )}
                 Filters
               </button>
               <div className="hidden md:contents">{filterFields}</div>
             </div>
-            {showFilters && <div className="grid gap-2 mt-2 md:hidden">{filterFields}</div>}
+            {showFilters && (
+              <div className="grid gap-2 mt-2 md:hidden">{filterFields}</div>
+            )}
           </div>
 
           {loading ? (
@@ -669,7 +863,10 @@ export default function DeletedTransactions() {
               title="Couldn't load deleted transactions"
               hint={error}
               action={
-                <button onClick={fetchDeletedTransactions} className={secondaryButtonClass}>
+                <button
+                  onClick={fetchDeletedTransactions}
+                  className={secondaryButtonClass}
+                >
                   Try again
                 </button>
               }
@@ -677,11 +874,22 @@ export default function DeletedTransactions() {
           ) : sortedTransactions.length === 0 ? (
             <EmptyState
               icon={Archive}
-              title={transactions.length === 0 ? "No deleted transactions" : "No transactions match your filters"}
-              hint={transactions.length === 0 ? "Sales removed from the sales list will appear here" : "Try a different search or filter"}
+              title={
+                transactions.length === 0
+                  ? "No deleted transactions"
+                  : "No transactions match your filters"
+              }
+              hint={
+                transactions.length === 0
+                  ? "Sales removed from the sales list will appear here"
+                  : "Try a different search or filter"
+              }
               action={
                 hasFilters && (
-                  <button onClick={clearFilters} className={secondaryButtonClass}>
+                  <button
+                    onClick={clearFilters}
+                    className={secondaryButtonClass}
+                  >
                     Clear filters
                   </button>
                 )
@@ -704,14 +912,57 @@ export default function DeletedTransactions() {
                   </colgroup>
                   <thead className="border-b border-gray-200 bg-gray-50">
                     <tr>
-                      <SortHeader column="id" className="px-5" {...sortProps}>ID</SortHeader>
-                      <SortHeader column="total_amount" className="px-3" align="right" {...sortProps}>Amount</SortHeader>
-                      <SortHeader column="status" className="px-3" {...sortProps}>Status</SortHeader>
-                      <SortHeader column="payment_method" className="px-3" {...sortProps}>Payment</SortHeader>
-                      <SortHeader column="customer_id" className="px-3" {...sortProps}>Customer</SortHeader>
-                      <SortHeader column="processed_by" className="px-3" {...sortProps}>Processed By</SortHeader>
-                      <SortHeader column="deleted_at" className="px-3" {...sortProps}>Deleted</SortHeader>
-                      <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>View</th>
+                      <SortHeader column="id" className="px-5" {...sortProps}>
+                        ID
+                      </SortHeader>
+                      <SortHeader
+                        column="total_amount"
+                        className="px-3"
+                        align="right"
+                        {...sortProps}
+                      >
+                        Amount
+                      </SortHeader>
+                      <SortHeader
+                        column="status"
+                        className="px-3"
+                        {...sortProps}
+                      >
+                        Status
+                      </SortHeader>
+                      <SortHeader
+                        column="payment_method"
+                        className="px-3"
+                        {...sortProps}
+                      >
+                        Payment
+                      </SortHeader>
+                      <SortHeader
+                        column="customer_id"
+                        className="px-3"
+                        {...sortProps}
+                      >
+                        Customer
+                      </SortHeader>
+                      <SortHeader
+                        column="processed_by"
+                        className="px-3"
+                        {...sortProps}
+                      >
+                        Processed By
+                      </SortHeader>
+                      <SortHeader
+                        column="deleted_at"
+                        className="px-3"
+                        {...sortProps}
+                      >
+                        Deleted
+                      </SortHeader>
+                      <th
+                        className={`px-5 py-2.5 text-right ${statLabelClass}`}
+                      >
+                        View
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -721,7 +972,9 @@ export default function DeletedTransactions() {
                         onClick={() => setSelectedTransaction(t)}
                         className="transition-colors cursor-pointer hover:bg-blue-50/50"
                       >
-                        <td className="px-5 py-3 font-medium text-gray-900 truncate">#{t.id}</td>
+                        <td className="px-5 py-3 font-medium text-gray-900 truncate">
+                          #{t.id}
+                        </td>
                         <td className="px-3 py-3 font-semibold text-right text-gray-900 truncate">
                           {formatCurrency(amountOf(t))}
                         </td>
@@ -731,15 +984,27 @@ export default function DeletedTransactions() {
                         <td className="px-3 py-3">
                           <PaymentBadge method={t.payment_method} />
                         </td>
-                        <td className="px-3 py-3 text-gray-700 truncate">{t.customer_id || "—"}</td>
-                        <td className="px-3 py-3 text-gray-700 truncate" title={t.processed_by}>
+                        <td className="px-3 py-3 text-gray-700 truncate">
+                          {t.customer_id || "—"}
+                        </td>
+                        <td
+                          className="px-3 py-3 text-gray-700 truncate"
+                          title={t.processed_by}
+                        >
                           {t.processed_by || "System"}
                         </td>
                         <td className="px-3 py-3">
-                          <div className="text-gray-900 truncate">{formatDay(t.deleted_at)}</div>
-                          <div className="text-xs text-gray-500">{formatClock(t.deleted_at)}</div>
+                          <div className="text-gray-900 truncate">
+                            {formatDay(t.deleted_at)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {formatClock(t.deleted_at)}
+                          </div>
                         </td>
-                        <td className="px-5 py-2" onClick={(e) => e.stopPropagation()}>
+                        <td
+                          className="px-5 py-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <div className="flex justify-end">
                             <button
                               onClick={() => setSelectedTransaction(t)}
@@ -768,10 +1033,16 @@ export default function DeletedTransactions() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-900">#{t.id}</p>
-                          <p className="text-xs text-gray-500">Deleted {formatDateTime(t.deleted_at)}</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            #{t.id}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Deleted {formatDateTime(t.deleted_at)}
+                          </p>
                         </div>
-                        <p className="text-sm font-bold text-gray-900 whitespace-nowrap">{formatCurrency(amountOf(t))}</p>
+                        <p className="text-sm font-bold text-gray-900 whitespace-nowrap">
+                          {formatCurrency(amountOf(t))}
+                        </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 mt-2">
                         <StatusBadge status={t.status} />
@@ -780,11 +1051,15 @@ export default function DeletedTransactions() {
                       <div className="grid grid-cols-2 gap-px mt-3 bg-gray-200 border border-gray-200">
                         <div className="px-2.5 py-2 bg-white">
                           <div className={statLabelClass}>Customer</div>
-                          <div className="text-xs font-semibold text-gray-900 truncate">{t.customer_id || "N/A"}</div>
+                          <div className="text-xs font-semibold text-gray-900 truncate">
+                            {t.customer_id || "N/A"}
+                          </div>
                         </div>
                         <div className="px-2.5 py-2 bg-white">
                           <div className={statLabelClass}>Processed By</div>
-                          <div className="text-xs font-semibold text-gray-900 truncate">{t.processed_by || "System"}</div>
+                          <div className="text-xs font-semibold text-gray-900 truncate">
+                            {t.processed_by || "System"}
+                          </div>
                         </div>
                       </div>
                     </button>
@@ -795,7 +1070,8 @@ export default function DeletedTransactions() {
               {/* Pagination */}
               <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-gray-200 bg-gray-50">
                 <span className="text-xs text-gray-500">
-                  Showing {pageStart + 1}–{pageStart + pageRows.length} of {sortedTransactions.length}
+                  Showing {pageStart + 1}–{pageStart + pageRows.length} of{" "}
+                  {sortedTransactions.length}
                 </span>
                 {pageCount > 1 && (
                   <div className="flex items-center">
