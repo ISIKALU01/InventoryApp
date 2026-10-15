@@ -6,6 +6,7 @@ import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 import { AuthProvider } from '../context/AuthContext';
 import RouteGuard from '../components/RouteGuard';
+import IdleSignOut from '../components/IdleSignOut';
 import { isPublicPath } from '../../utils/permissions';
 import { APPEARANCE_KEY, applyAppearance, loadAppearance } from '../../utils/appearance';
 
@@ -48,6 +49,7 @@ export default function MyApp({
             </Layout>
           )}
         </RouteGuard>
+        <IdleSignOut />
       </main>
     </AuthProvider>
   );

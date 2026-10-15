@@ -34,6 +34,15 @@ const PAYMENT_METHODS = [
 
 const CUSTOMER_METHODS = ["customer_balance", "credit_limit"];
 
+// Card and transfer money settles into one of the business's bank accounts,
+// so the cashier picks which one and its balance is credited with the sale
+const BANK_METHODS = ["card", "bank_transfer"];
+
+const bankLabel = (bank) =>
+	[bank?.bank_name, bank?.account_number, bank?.account_name].filter(Boolean).join(" · ");
+
+const toKobo = (amount) => Math.round((parseFloat(amount) || 0) * 100);
+
 const TOAST_DURATION = { success: 3000, error: 5000 };
 
 // Queued (parked) orders live in this browser; the nav allows up to three
@@ -300,6 +309,9 @@ export default function SalesInvoice() {
 	const [paymentMethod, setPaymentMethod] = useState("");
 	const [selectedCustomer, setSelectedCustomer] = useState("");
 	const [customers, setCustomers] = useState([]);
+	const [bankAccounts, setBankAccounts] = useState(null); // null = not loaded yet
+	const [bankLoadError, setBankLoadError] = useState("");
+	const [receivingBank, setReceivingBank] = useState(""); // bank account id
 	const [processing, setProcessing] = useState(false);
 	const [orderError, setOrderError] = useState("");
 	const [completedOrder, setCompletedOrder] = useState(null);
@@ -329,6 +341,26 @@ export default function SalesInvoice() {
 	}, [cart]);
 
 	const needsCustomer = CUSTOMER_METHODS.includes(paymentMethod);
+	const needsBank = BANK_METHODS.includes(paymentMethod);
+
+	const fetchBankAccounts = useCallback(async () => {
+		setBankLoadError("");
+		try {
+			const response = await http.get("/bank-accounts");
+			setBankAccounts(toList(response.data, "bank_accounts"));
+		} catch (err) {
+			console.error("Error fetching bank accounts:", err);
+			setBankAccounts(null);
+			setBankLoadError(
+				err.response?.data?.message || "Could not load bank accounts. Please try again."
+			);
+		}
+	}, []);
+
+	// Load the accounts the first time a card or transfer payment is chosen
+	useEffect(() => {
+		if (needsBank && bankAccounts === null && !bankLoadError) fetchBankAccounts();
+	}, [needsBank, bankAccounts, bankLoadError, fetchBankAccounts]);
 
 	useEffect(() => {
 		// A customer picked for one method may not qualify for another
@@ -745,6 +777,33 @@ export default function SalesInvoice() {
 		setShowOrderModal(false);
 	};
 
+	const findBank = (list, id) => list.find((bank) => String(bank.id) === String(id));
+
+	// Add the sale to the receiving account's balance. The order already carries
+	// bank_account_id, so if the server credited the account itself (the balance
+	// moved by the sale amount) nothing more is done here; that keeps the money
+	// from being counted twice. Returns the account as it now stands.
+	const creditReceivingBank = async (bankId, balanceBefore, amount) => {
+		const response = await http.get("/bank-accounts");
+		const bank = findBank(toList(response.data, "bank_accounts"), bankId);
+		if (!bank) throw new Error("The bank account no longer exists.");
+
+		const current = toKobo(bank.balance);
+		if (current - balanceBefore >= toKobo(amount)) return bank;
+
+		const balance = (current + toKobo(amount)) / 100;
+		await http.put(`/bank-accounts/${bankId}`, {
+			bank_name: bank.bank_name,
+			account_number: bank.account_number,
+			account_name: bank.account_name,
+			account_type: bank.account_type,
+			branch: bank.branch ?? "",
+			description: bank.description ?? "",
+			balance,
+		});
+		return { ...bank, balance };
+	};
+
 	// Process the order
 	const handleProcessOrder = async () => {
 		try {
@@ -756,22 +815,57 @@ export default function SalesInvoice() {
 				quantity: item.default_quantity_added,
 			}));
 
+			const bankId = needsBank ? receivingBank : "";
+
+			// Read the balance just before the sale, to tell afterwards
+			// whether the server has already credited it
+			let balanceBefore = 0;
+			if (bankId) {
+				const banks = toList((await http.get("/bank-accounts")).data, "bank_accounts");
+				const bank = findBank(banks, bankId);
+				if (!bank) {
+					setBankAccounts(banks);
+					setReceivingBank("");
+					setOrderError("That bank account no longer exists. Choose another one.");
+					return;
+				}
+				balanceBefore = toKobo(bank.balance);
+			}
+
 			const orderData = {
 				customer_id: selectedCustomer || null,
 				store_id: orderStore || undefined,
 				items: orderItems,
 				payment_method: paymentMethod,
+				bank_account_id: bankId ? Number(bankId) : null,
 			};
 
 			const response = await http.post("/orders", orderData);
 
 			if (response.data) {
+				const bank = bankId ? findBank(bankAccounts || [], bankId) : null;
+				let bankNotCredited = false;
+				if (bankId) {
+					try {
+						const credited = await creditReceivingBank(bankId, balanceBefore, total);
+						setBankAccounts((prev) =>
+							(prev || []).map((b) => (String(b.id) === String(bankId) ? { ...b, ...credited } : b))
+						);
+					} catch (err) {
+						// The sale is recorded either way; flag the balance for an accountant
+						console.error("Error crediting bank account:", err);
+						bankNotCredited = true;
+					}
+				}
+
 				setCompletedOrder({
 					total,
 					itemCount,
 					method:
 						PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label || paymentMethod,
 					customer: customers.find((c) => String(c.id) === String(selectedCustomer))?.name,
+					bank: bank ? bankLabel(bank) : null,
+					bankNotCredited,
 				});
 				setCart([]);
 				setShowOrderModal(false);
@@ -945,6 +1039,7 @@ export default function SalesInvoice() {
 	const canConfirm =
 		Boolean(paymentMethod) &&
 		(!needsCustomer || selectedCustomer) &&
+		(!needsBank || receivingBank) &&
 		!needsOrderStore &&
 		!processing;
 
@@ -1051,6 +1146,54 @@ export default function SalesInvoice() {
 								))}
 							</Select>
 						</div>
+
+						{needsBank && (
+							<div>
+								<label htmlFor="receiving-bank" className={labelClass}>
+									Receiving Bank Account
+								</label>
+								{bankLoadError ? (
+									<div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-red-700 border border-red-200 bg-red-50">
+										<span>{bankLoadError}</span>
+										<button
+											type="button"
+											onClick={fetchBankAccounts}
+											className="font-semibold underline shrink-0"
+										>
+											Try again
+										</button>
+									</div>
+								) : (
+									<>
+										<Select
+											id="receiving-bank"
+											value={receivingBank}
+											onChange={(e) => {
+												setOrderError("");
+												setReceivingBank(e.target.value);
+											}}
+											disabled={processing || bankAccounts === null}
+										>
+											<option value="">
+												{bankAccounts === null ? "Loading accounts…" : "Select the account paid into"}
+											</option>
+											{(bankAccounts || []).map((bank) => (
+												<option key={bank.id} value={bank.id}>
+													{bankLabel(bank)}
+												</option>
+											))}
+										</Select>
+										<p className="mt-1.5 text-xs text-gray-500">
+											{bankAccounts?.length === 0
+												? "No bank accounts yet. An accountant can add them in Bank Management."
+												: `The ${
+														paymentMethod === "card" ? "card payment" : "transfer"
+												  } is added to this account's balance.`}
+										</p>
+									</>
+								)}
+							</div>
+						)}
 
 						{needsCustomer && (
 							<div>
@@ -1245,10 +1388,24 @@ export default function SalesInvoice() {
 						<div className="grid gap-px bg-gray-200 border border-gray-200">
 							<SummaryRow label="Items" value={completedOrder.itemCount} />
 							<SummaryRow label="Payment" value={completedOrder.method} />
+							{completedOrder.bank && <SummaryRow label="Paid into" value={completedOrder.bank} />}
 							{completedOrder.customer && (
 								<SummaryRow label="Customer" value={completedOrder.customer} />
 							)}
 						</div>
+						{completedOrder.bankNotCredited && (
+							<div
+								role="alert"
+								className="flex items-start gap-3 px-4 py-3 mt-4 text-sm border text-amber-900 border-amber-300 bg-amber-50"
+							>
+								<AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+								<p>
+									The sale is recorded, but the bank balance wasn&apos;t updated. Ask an accountant
+									to add {formatNaira(completedOrder.total)} to {completedOrder.bank} in Bank
+									Management.
+								</p>
+							</div>
+						)}
 					</div>
 					<ModalFooter>
 						<button

@@ -217,7 +217,6 @@ export default function Sidebar({ onToggle }) {
         ${isOpen ? 'w-64' : (isMobile ? '-translate-x-full' : 'w-20')}
         ${isMobile ? 'shadow-2xl' : 'shadow-xl'}
         flex flex-col
-        scrollbar-thin scrollbar-thumb-indigo-600 scrollbar-track-indigo-800 scrollbar-thumb-rounded-full
       `}>
         {/* Logo and toggle button */}
         <div className="flex items-center justify-between p-4 border-b border-indigo-700 flex-shrink-0">
@@ -236,7 +235,7 @@ export default function Sidebar({ onToggle }) {
         </div>
 
         {/* Navigation items - Scrollable area */}
-        <nav className="mt-6 flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin">
+        <nav className="mt-6 flex-1 min-h-0 overflow-y-auto overscroll-contain sidebar-scroll">
           <ul className="space-y-2 px-2">
             {visibleMenu.map((item) => {
               const isActive = isMenuItemActive(item);
@@ -387,28 +386,15 @@ export default function Sidebar({ onToggle }) {
         </button>
       )}
 
-      {/* Add custom scrollbar styles */}
+      {/* The menu still scrolls, but without a scrollbar: fixed scrollbar
+          colours would clash with the theme picked in Settings */}
       <style jsx global>{`
-        /* Webkit browsers (Chrome, Safari) */
-        .scrollbar-thin::-webkit-scrollbar {
-          width: 6px;
+        .sidebar-scroll {
+          scrollbar-width: none; /* Firefox */
+          -ms-overflow-style: none; /* old Edge */
         }
-        .scrollbar-thin::-webkit-scrollbar-track {
-          background: #3730a3; /* indigo-800 */
-          border-radius: 0;
-        }
-        .scrollbar-thin::-webkit-scrollbar-thumb {
-          background: #4f46e5; /* indigo-600 */
-          border-radius: 3px;
-        }
-        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-          background: #6366f1; /* indigo-500 */
-        }
-        
-        /* Firefox */
-        .scrollbar-thin {
-          scrollbar-width: thin;
-          scrollbar-color: #4f46e5 #3730a3; /* thumb and track color */
+        .sidebar-scroll::-webkit-scrollbar {
+          display: none; /* Chrome, Safari, Edge */
         }
       `}</style>
     </>

@@ -28,14 +28,6 @@ export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrde
       name: 'Sales List', 
       path: '/transaction/sales-list'
     },
-    { 
-      name: 'Sales Summary', 
-      path: '/transaction/sales-summary'
-    },
-    { 
-      name: 'Payment Analysis', 
-      path: '/transaction/payment-analysis'
-    },
   ];
   // Only the tabs this user may open
   const navItems = allNavItems.filter((item) => canAccessPath(user, item.path));
