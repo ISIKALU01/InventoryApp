@@ -1,6 +1,7 @@
 // components/Layout.js
 import { useRouter } from 'next/router';
 import Sidebar from './Sidebar';
+import InboxBell from './InboxBell';
 import { useState, useEffect } from 'react';
 
 // Pages of the supplier-to-payment flow (they live under /inventory and /folio)
@@ -71,10 +72,11 @@ export default function Layout({ children }) {
                 router.pathname === '/accounts' ? 'Accounts' :
                 router.pathname === '/deletedTransactions' ? 'Sales' :
                 router.pathname === '/settings' ? 'Settings' :
+                router.pathname === '/inbox' ? 'Inbox' :
                 router.pathname.startsWith('/folio') ? 'Folio' : ''}
               </h1>
             </div>
-            {/* Add any header buttons or user info here */}
+            <InboxBell />
           </div>
         </div>
         

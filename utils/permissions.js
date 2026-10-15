@@ -10,7 +10,7 @@
 export const PUBLIC_PATHS = ["/", "/unauthorized"];
 
 // Pages every logged-in user may open
-export const ANY_USER_PATHS = ["/settings"];
+export const ANY_USER_PATHS = ["/settings", "/inbox"];
 
 // Page -> permission needed. An array means "any one of these".
 export const PAGE_PERMISSIONS = {

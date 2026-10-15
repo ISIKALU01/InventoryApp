@@ -284,6 +284,15 @@ export const supplierAPI = {
   verifySupplier: (id, data) =>
     apiRequest(`/suppliers/${id}/verify`, { method: "POST", body: data, errorLabel: "Failed to verify supplier" }),
 
+  seniorCheckSupplier: (id, note) =>
+    apiRequest(`/suppliers/${id}/senior-check`, { method: "POST", body: { note }, errorLabel: "Failed to record the senior check" }),
+
+  approveSupplier: (id, note) =>
+    apiRequest(`/suppliers/${id}/approve`, { method: "POST", body: { note }, errorLabel: "Failed to approve supplier" }),
+
+  sendBackSupplier: (id, reason) =>
+    apiRequest(`/suppliers/${id}/send-back`, { method: "POST", body: { reason }, errorLabel: "Failed to send supplier back" }),
+
   suspendSupplier: (id, reason) =>
     apiRequest(`/suppliers/${id}/suspend`, { method: "POST", body: { reason }, errorLabel: "Failed to suspend supplier" }),
 

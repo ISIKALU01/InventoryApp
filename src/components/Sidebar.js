@@ -28,6 +28,7 @@ import {
   FaRoute,
   FaHistory,
   FaUsersCog,
+  FaInbox,
   FaUserCheck,
   FaUserShield,
   FaCalculator,
@@ -53,6 +54,7 @@ import { canAccessPath } from '../../utils/permissions';
 // shows only when one of its items is visible.
 const MENU = [
   { name: 'Dashboard', path: '/dashboard', icon: <FaChartPie className="w-5 h-5" /> },
+  { name: 'Inbox', path: '/inbox', icon: <FaInbox className="w-5 h-5" /> },
   {
     name: 'Sales',
     icon: <FaCashRegister className="w-5 h-5" />,

@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Ban,
   Building2,
+  CheckCircle2,
   Clock,
   History,
   Landmark,
@@ -53,7 +54,7 @@ import {
   useToast,
 } from "../../components/ui/Boxy";
 
-const BANK_HINT = "Changing bank details of a verified supplier cancels the verification.";
+const BANK_HINT = "Changing bank details cancels the supplier's checks: it needs all three again.";
 
 const SUPPLIER_FIELDS = [
   { name: "name", label: "Supplier Name", required: true, placeholder: "Legal or trading name" },
@@ -94,7 +95,29 @@ const EMPTY_SUPPLIER = {
 const STATUS_BADGE = {
   verified: "text-green-800 bg-green-50",
   pending: "text-amber-800 bg-amber-50",
+  junior_checked: "text-blue-800 bg-blue-50",
+  senior_checked: "text-purple-800 bg-purple-50",
   suspended: "text-red-700 bg-red-50",
+};
+
+// The three checks, in order: who does each, and the status it waits at
+const CHECK_STEPS = [
+  { key: "junior", waitsAt: ["pending", "suspended"], permission: "suppliers.verify", title: "Junior check", who: "Junior accountant" },
+  { key: "senior", waitsAt: ["junior_checked"], permission: "suppliers.senior-check", title: "Senior check", who: "Senior accountant" },
+  { key: "approval", waitsAt: ["senior_checked"], permission: "suppliers.approve", title: "Final approval", who: "Admin" },
+];
+
+const stepWaitingFor = (supplier) => CHECK_STEPS.find((step) => step.waitsAt.includes(supplier.status));
+
+// Each check must be done by a different person; why this user can't do the next one
+const blockedReason = (supplier, step, userId) => {
+  if (!step || !userId) return null;
+  const did = (key) => supplier.checks?.[key]?.by?.id === userId;
+  if (step.key === "junior" && supplier.added_by?.id === userId) return "You added this supplier, so someone else must check it.";
+  if (step.key === "senior" && did("junior")) return "You did the junior check, so someone else must do the senior check.";
+  if (step.key === "senior" && supplier.added_by?.id === userId) return "You added this supplier, so someone else must check it.";
+  if (step.key === "approval" && (did("junior") || did("senior"))) return "You did one of the checks, so another admin must give the final approval.";
+  return null;
 };
 
 const VERIFY_METHODS = [
@@ -124,8 +147,124 @@ const formatWhen = (value) =>
   value ? new Date(value).toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
 
 // ---------------------------------------------------------------------------
-// Verify / suspend
+// Three checks / suspend
 // ---------------------------------------------------------------------------
+
+const CheckList = ({ supplier }) => (
+  <ol className="grid gap-2 sm:grid-cols-3">
+    {CHECK_STEPS.map((step, index) => {
+      const done = supplier.checks?.[step.key];
+      const isNext = stepWaitingFor(supplier)?.key === step.key;
+      return (
+        <li key={step.key} className={`p-3 border ${done ? "border-green-200 bg-green-50/50" : isNext ? "border-amber-300 bg-amber-50/50" : "border-gray-200"}`}>
+          <p className="flex items-center gap-2 font-semibold text-gray-900">
+            {done ? <CheckCircle2 size={15} className="text-green-600" /> : <Clock size={15} className={isNext ? "text-amber-600" : "text-gray-300"} />}
+            {index + 1}. {step.title}
+          </p>
+          <p className="text-xs text-gray-600">{step.who}</p>
+          {done ? (
+            <p className="mt-1 text-xs text-gray-700">
+              {done.by?.name || "—"}, {formatWhen(done.at)}
+              {done.method_label && <span className="block">{done.method_label}: {done.reference}</span>}
+              {done.note && <span className="block">Note: {done.note}</span>}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-gray-500">{isNext ? "Waiting" : "Not yet"}</p>
+          )}
+        </li>
+      );
+    })}
+  </ol>
+);
+
+// Senior check or final approval: review the details and the earlier checks,
+// then sign, or send it back to the start with a reason
+const ReviewModal = ({ supplier, step, userId, onClose, onDone }) => {
+  const [note, setNote] = useState("");
+  const [sendingBack, setSendingBack] = useState(false);
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const blocked = blockedReason(supplier, step, userId);
+  const isApproval = step.key === "approval";
+
+  const run = async (request, action) => {
+    setSaving(true);
+    setError("");
+    try {
+      onDone(await request(), action);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title={isApproval ? "Final Approval" : "Senior Check"} subtitle={supplier.name} icon={ShieldCheck} iconClass={isApproval ? "bg-green-600" : "bg-blue-600"} onClose={onClose} busy={saving} maxWidth="max-w-2xl">
+      <div className="px-6 py-5 space-y-4 text-sm">
+        {error && <ErrorBox title="Not saved" message={error} />}
+        {blocked && <p className="px-3 py-2 text-amber-900 border border-amber-300 bg-amber-50">{blocked}</p>}
+        <p className="text-gray-700">
+          {isApproval
+            ? "The junior and senior accountants have checked these details. Your approval makes the supplier verified, so it can be paid."
+            : "Check the details and the junior accountant's proof. After you, an admin gives the final approval."}
+        </p>
+        <dl className="grid grid-cols-1 gap-px bg-gray-200 border border-gray-200 sm:grid-cols-2">
+          {[
+            ["Bank", supplier.bank_name],
+            ["Account number", supplier.account_number],
+            ["Account name", supplier.account_name],
+            ["Contact", [supplier.contact_name, supplier.phone].filter(Boolean).join(" · ")],
+            ["Added by", supplier.added_by?.name],
+          ].map(([label, value]) => (
+            <div key={label} className="px-3 py-2 bg-white">
+              <dt className={statLabelClass}>{label}</dt>
+              <dd className="font-medium text-gray-900">{value || "—"}</dd>
+            </div>
+          ))}
+        </dl>
+        <CheckList supplier={supplier} />
+
+        {sendingBack ? (
+          <div>
+            <label htmlFor="send-back-reason" className={labelClass}>What needs to be fixed?</label>
+            <input id="send-back-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={255} autoFocus disabled={saving} placeholder="e.g. Account name doesn't match the bank letter" className={fieldClass()} />
+            <p className="mt-1 text-xs text-gray-500">All checks are cleared and the junior accountant starts again.</p>
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="review-note" className={labelClass}>Note <span className="font-normal text-gray-400 normal-case">(optional)</span></label>
+            <input id="review-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={255} disabled={saving || Boolean(blocked)} placeholder={isApproval ? "e.g. Approved" : "e.g. Bank letter seen"} className={fieldClass()} />
+          </div>
+        )}
+      </div>
+      <ModalFooter className="justify-between">
+        {sendingBack ? (
+          <>
+            <button type="button" onClick={() => setSendingBack(false)} disabled={saving} className={secondaryButtonClass}>Back</button>
+            <button type="button" disabled={saving || !reason.trim()} onClick={() => run(() => supplierAPI.sendBackSupplier(supplier.id, reason.trim()), "sent_back")} className={dangerButtonClass}>
+              {saving && <Loader2 size={16} className="animate-spin" />} Send back
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={() => setSendingBack(true)} disabled={saving} className={secondaryButtonClass}>Send back</button>
+            <button
+              type="button"
+              disabled={saving || Boolean(blocked)}
+              onClick={() => run(() => (isApproval ? supplierAPI.approveSupplier(supplier.id, note.trim() || null) : supplierAPI.seniorCheckSupplier(supplier.id, note.trim() || null)), step.key)}
+              className={primaryButtonClass}
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+              {isApproval ? "Give final approval" : "Senior check done"}
+            </button>
+          </>
+        )}
+      </ModalFooter>
+    </ModalShell>
+  );
+};
 
 const VerifyModal = ({ supplier, onClose, onDone }) => {
   const [method, setMethod] = useState("phone_call");
@@ -151,13 +290,16 @@ const VerifyModal = ({ supplier, onClose, onDone }) => {
   };
 
   return (
-    <ModalShell title="Verify Supplier" subtitle={supplier.name} icon={ShieldCheck} iconClass="bg-green-600" onClose={onClose} busy={saving} maxWidth="max-w-lg">
+    <ModalShell title="Junior Check" subtitle={supplier.name} icon={ShieldCheck} iconClass="bg-green-600" onClose={onClose} busy={saving} maxWidth="max-w-lg">
       <form onSubmit={submit}>
         <div className="px-6 py-5 space-y-4 text-sm">
-          {error && <ErrorBox title="Not verified" message={error} />}
+          {error && <ErrorBox title="Not saved" message={error} />}
+          {supplier.sent_back_reason && (
+            <p className="px-3 py-2 text-amber-900 border border-amber-300 bg-amber-50">Sent back: {supplier.sent_back_reason}</p>
+          )}
           <p className="text-gray-700">
             Confirm these details <strong>directly with the supplier or their bank</strong>, not from the invoice or
-            from the person who added them.
+            from the person who added them. After you, the senior accountant checks them and an admin gives the final approval.
           </p>
           <dl className="grid grid-cols-1 gap-px bg-gray-200 border border-gray-200 sm:grid-cols-2">
             {[
@@ -198,7 +340,7 @@ const VerifyModal = ({ supplier, onClose, onDone }) => {
           <button type="button" onClick={onClose} disabled={saving} className={secondaryButtonClass}>Cancel</button>
           <button type="submit" disabled={saving} className={primaryButtonClass}>
             {saving ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
-            {saving ? "Verifying…" : "Mark as verified"}
+            {saving ? "Saving…" : "Junior check done"}
           </button>
         </ModalFooter>
       </form>
@@ -234,7 +376,7 @@ const SuspendModal = ({ supplier, onClose, onDone }) => {
         <div className="px-6 py-5 space-y-4 text-sm">
           {error && <ErrorBox title="Not suspended" message={error} />}
           <p className="text-gray-700">
-            The supplier can&apos;t be paid until it is verified again. Use this when something looks wrong, or you stop
+            The supplier can&apos;t be paid until it has all three checks again. Use this when something looks wrong, or you stop
             buying from them.
           </p>
           <div>
@@ -291,13 +433,8 @@ const DetailsModal = ({ supplier, onClose }) => {
     ["Payment terms", supplier.payment_terms_days ? `${supplier.payment_terms_days} days after delivery` : "On delivery"],
     ["Added by", supplier.added_by?.name],
   ];
-  if (supplier.verification) {
-    rows.push(
-      ["Verified by", `${supplier.verification.by?.name || "—"} on ${formatWhen(supplier.verification.at)}`],
-      ["How", `${supplier.verification.method_label}: ${supplier.verification.reference}`]
-    );
-  }
   if (supplier.suspended_reason) rows.push(["Suspended because", supplier.suspended_reason]);
+  if (supplier.sent_back_reason) rows.push(["Sent back because", supplier.sent_back_reason]);
 
   return (
     <ModalShell title={supplier.name} subtitle="Supplier details and history" icon={Building2} onClose={onClose} maxWidth="max-w-2xl">
@@ -310,6 +447,11 @@ const DetailsModal = ({ supplier, onClose }) => {
             </div>
           ))}
         </dl>
+
+        <div>
+          <p className={`${statLabelClass} mb-2`}>Verification: three checks by three people</p>
+          <CheckList supplier={supplier} />
+        </div>
 
         <div>
           <p className={`${statLabelClass} mb-2`}>History</p>
@@ -326,7 +468,7 @@ const DetailsModal = ({ supplier, onClose }) => {
                   <History size={14} className="mt-0.5 text-gray-400 shrink-0" />
                   <div className="min-w-0">
                     <p className="text-gray-900">{entry.description}</p>
-                    {entry.changes && entry.action !== "verified" && (
+                    {entry.changes && entry.action !== "junior_checked" && (
                       <ul className="mt-0.5 text-xs text-gray-600">
                         {Object.entries(entry.changes).map(([field, change]) => (
                           <li key={field}>
@@ -359,9 +501,14 @@ const DetailsModal = ({ supplier, onClose }) => {
 export default function SupplierManagement() {
   // Several roles can look at suppliers; procurement (and admins) change them;
   // junior accountants (and admins) verify or suspend them
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const canManage = can("suppliers.manage");
   const canVerify = can("suppliers.verify");
+  // The next check on a supplier, if this user may do it
+  const myStep = (s) => {
+    const step = stepWaitingFor(s);
+    return step && can(step.permission) ? step : null;
+  };
   const [suppliers, setSuppliers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -370,6 +517,7 @@ export default function SupplierManagement() {
   const [formSupplier, setFormSupplier] = useState(null); // {} = new, supplier = edit
   const [supplierToDelete, setSupplierToDelete] = useState(null);
   const [toVerify, setToVerify] = useState(null);
+  const [toReview, setToReview] = useState(null); // { supplier, step } for the senior check or final approval
   const [toSuspend, setToSuspend] = useState(null);
   const [viewing, setViewing] = useState(null);
   const { notify, toastElement } = useToast();
@@ -404,18 +552,18 @@ export default function SupplierManagement() {
       const saved = unwrap(await supplierAPI.updateSupplier(formSupplier.id, payload), "supplier");
       if (saved?.id) replaceSupplier(saved);
       else await fetchSuppliers();
-      const lostVerification = formSupplier.status === "verified" && saved?.status === "pending";
+      const lostVerification = ["junior_checked", "senior_checked", "verified"].includes(formSupplier.status) && saved?.status === "pending";
       notify(
         lostVerification ? "error" : "success",
         lostVerification
-          ? `${values.name}'s bank details changed, so it must be verified again before it can be paid.`
+          ? `${values.name}'s bank details changed, so it needs all three checks again before it can be paid.`
           : `${values.name} was saved.`,
         lostVerification ? "Verification cancelled" : "Supplier updated"
       );
     } else {
       await supplierAPI.createSupplier(payload);
       await fetchSuppliers();
-      notify("success", `${values.name} was added. A junior accountant now needs to verify it.`, "Supplier added");
+      notify("success", `${values.name} was added. It now needs a junior check, a senior check and an admin's approval.`, "Supplier added");
     }
     setFormSupplier(null);
   };
@@ -431,7 +579,18 @@ export default function SupplierManagement() {
   const handleVerified = (saved) => {
     replaceSupplier(saved);
     setToVerify(null);
-    notify("success", `${saved.name} is verified and can now be paid.`, "Supplier verified");
+    notify("success", `Junior check done. ${saved.name} now waits for the senior accountant.`, "Junior check done");
+  };
+
+  const handleReviewed = (saved, action) => {
+    replaceSupplier(saved);
+    setToReview(null);
+    const words = {
+      senior: [`Senior check done. ${saved.name} now waits for an admin's final approval.`, "Senior check done"],
+      approval: [`${saved.name} is verified and can now be paid.`, "Supplier verified"],
+      sent_back: [`${saved.name} was sent back to the junior check.`, "Sent back"],
+    };
+    notify("success", ...words[action]);
   };
 
   const handleSuspended = (saved) => {
@@ -458,16 +617,19 @@ export default function SupplierManagement() {
   const pager = usePagination(filteredSuppliers, 25, `${searchTerm}|${statusFilter}`);
 
   const count = (status) => suppliers.filter((s) => s.status === status).length;
-  const pending = count("pending");
+  const beingChecked = count("pending") + count("junior_checked") + count("senior_checked");
+  // Suppliers whose next check this user can do (and isn't blocked from)
+  const myQueue = suppliers.filter((s) => myStep(s) && !blockedReason(s, myStep(s), user?.id));
+  const myQueueStatuses = [...new Set(myQueue.map((s) => s.status))];
   const tiles = [
     { icon: Building2, iconClass: "bg-blue-50 text-blue-700", label: "Total Suppliers", value: suppliers.length },
     { icon: ShieldCheck, iconClass: "bg-green-50 text-green-700", label: "Verified", value: count("verified") },
     {
       icon: Clock,
       iconClass: "bg-amber-50 text-amber-700",
-      label: "Waiting for Verification",
-      value: pending,
-      hint: pending > 0 ? "Can't be paid until verified" : null,
+      label: "Being Checked",
+      value: beingChecked,
+      hint: beingChecked > 0 ? `${count("pending")} junior · ${count("junior_checked")} senior · ${count("senior_checked")} admin` : null,
     },
     { icon: Ban, iconClass: "bg-red-50 text-red-700", label: "Suspended", value: count("suspended") },
   ];
@@ -500,27 +662,30 @@ export default function SupplierManagement() {
     </>
   );
 
-  // Verify (pending or suspended) / suspend (anything not already suspended)
-  const verifyActions = (s, mobile = false) =>
-    canVerify && (
+  // The next check, when it's this user's to do / suspend (anything not already suspended)
+  const openStep = (s, step) => (step.key === "junior" ? setToVerify(s) : setToReview({ supplier: s, step }));
+  const verifyActions = (s, mobile = false) => {
+    const step = myStep(s);
+    const noBank = step?.key === "junior" && !s.has_bank_details;
+    return (
       <>
-        {s.status !== "verified" && (
+        {step && (
           <button
-            onClick={() => setToVerify(s)}
-            disabled={!s.has_bank_details}
+            onClick={() => openStep(s, step)}
+            disabled={noBank}
             className={
               mobile
                 ? "flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-40"
                 : `${iconButtonClass()} hover:text-green-600 disabled:opacity-40 disabled:cursor-not-allowed`
             }
-            title={s.has_bank_details ? "Verify" : "Add bank details before verifying"}
-            aria-label={`Verify ${s.name}`}
+            title={noBank ? "Add bank details before checking" : step.title}
+            aria-label={`${step.title}: ${s.name}`}
           >
             <ShieldCheck size={mobile ? 13 : 15} />
-            {mobile && "Verify"}
+            {mobile && step.title}
           </button>
         )}
-        {s.status !== "suspended" && (
+        {canVerify && s.status !== "suspended" && (
           <button
             onClick={() => setToSuspend(s)}
             className={mobile ? "flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50" : iconButtonClass("red")}
@@ -533,6 +698,7 @@ export default function SupplierManagement() {
         )}
       </>
     );
+  };
 
   let body;
   if (loading && suppliers.length === 0) {
@@ -722,13 +888,15 @@ export default function SupplierManagement() {
       <div className="mt-5 space-y-5">
         <StatTiles tiles={tiles} loading={loading && suppliers.length === 0} columns="sm:grid-cols-2 lg:grid-cols-4" />
 
-        {canVerify && pending > 0 && (
+        {myQueue.length > 0 && (
           <div className="flex items-center gap-2 px-4 py-3 text-sm border text-amber-800 border-amber-200 bg-amber-50">
             <Clock size={15} className="shrink-0" />
-            {pending} supplier{pending === 1 ? " is" : "s are"} waiting for you to verify their bank details.
-            <button onClick={() => setStatusFilter("pending")} className="ml-auto font-semibold underline whitespace-nowrap">
-              Show them
-            </button>
+            {myQueue.length} supplier{myQueue.length === 1 ? " is" : "s are"} waiting for your {myStep(myQueue[0]).title.toLowerCase()}.
+            {myQueueStatuses.length === 1 && (
+              <button onClick={() => setStatusFilter(myQueueStatuses[0])} className="ml-auto font-semibold underline whitespace-nowrap">
+                Show them
+              </button>
+            )}
           </div>
         )}
 
@@ -764,7 +932,9 @@ export default function SupplierManagement() {
               <FilterSelect value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
                 <option value="">All Suppliers</option>
                 <option value="verified">Verified</option>
-                <option value="pending">Waiting for verification</option>
+                <option value="pending">Waiting for junior check</option>
+                <option value="junior_checked">Waiting for senior check</option>
+                <option value="senior_checked">Waiting for admin approval</option>
                 <option value="suspended">Suspended</option>
               </FilterSelect>
             }
@@ -778,7 +948,7 @@ export default function SupplierManagement() {
         <FormModal
           key={formSupplier.id || "new"}
           title={isEditing ? "Edit Supplier" : "Add Supplier"}
-          subtitle={isEditing ? formSupplier.name : "A junior accountant will verify the bank details"}
+          subtitle={isEditing ? formSupplier.name : "Then a junior check, a senior check and an admin's approval"}
           icon={isEditing ? Pencil : Building2}
           fields={SUPPLIER_FIELDS}
           initialValues={
@@ -807,7 +977,10 @@ export default function SupplierManagement() {
         />
       )}
 
-      {canVerify && toVerify && <VerifyModal supplier={toVerify} onClose={() => setToVerify(null)} onDone={handleVerified} />}
+      {toVerify && <VerifyModal supplier={toVerify} onClose={() => setToVerify(null)} onDone={handleVerified} />}
+      {toReview && (
+        <ReviewModal supplier={toReview.supplier} step={toReview.step} userId={user?.id} onClose={() => setToReview(null)} onDone={handleReviewed} />
+      )}
       {canVerify && toSuspend && <SuspendModal supplier={toSuspend} onClose={() => setToSuspend(null)} onDone={handleSuspended} />}
       {viewing && <DetailsModal supplier={suppliers.find((s) => s.id === viewing.id) || viewing} onClose={() => setViewing(null)} />}
     </div>

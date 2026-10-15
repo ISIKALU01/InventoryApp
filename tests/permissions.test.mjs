@@ -20,7 +20,7 @@ const ALL = [
   "sales.audit", "customers.view", "customers.manage", "customers.deposit", "expenses.manage",
   "catalog.view", "inventory.view", "products.manage", "inventory.manage", "stores.manage",
   "stock-transfers.manage", "requisitions.view", "requisitions.create", "requisitions.approve",
-  "suppliers.view", "suppliers.manage", "suppliers.verify", "purchase-orders.view",
+  "suppliers.view", "suppliers.manage", "suppliers.verify", "suppliers.senior-check", "suppliers.approve", "purchase-orders.view",
   "purchase-orders.manage", "goods-receipts.view", "goods-receipts.create", "goods-receipts.store-check",
   "goods-receipts.post-stock", "goods-receipts.procurement-check", "sor.view", "sor.count", "sor.store-sign",
   "sor.stock-sign", "sor.return", "supplier-payments.view", "supplier-payments.request",
@@ -55,7 +55,7 @@ const ROLE_PERMISSIONS = {
   ],
   senior_accountant: [
     "dashboard.view", "reports.view", "sales.view", "sales.audit", "customers.view", "customers.deposit",
-    "expenses.manage", "catalog.view", "suppliers.view", "purchase-orders.view", "banking.view",
+    "expenses.manage", "catalog.view", "suppliers.view", "suppliers.senior-check", "purchase-orders.view", "banking.view",
     "banking.manage", "payments.manage", "goods-receipts.view", "sor.view",
     "supplier-payments.view", "supplier-payments.approve", "supplier-payments.pay",
     "follow-up.view", "follow-up.manage",
@@ -96,6 +96,14 @@ test("public pages are open to everyone, other pages need a login", () => {
 
 test("settings is open to every logged-in user, even with no permissions", () => {
   assert.equal(canAccessPath({ permissions: [] }, "/settings"), true);
+});
+
+test("every logged-in user has an inbox", () => {
+  for (const role of Object.keys(ROLE_PERMISSIONS)) {
+    assert.equal(canAccessPath(userWith(role), "/inbox"), true, role);
+  }
+  assert.equal(canAccessPath({ permissions: [] }, "/inbox"), true);
+  assert.equal(canAccessPath(null, "/inbox"), false);
 });
 
 test("pages nobody has classified are closed, even to admins", () => {

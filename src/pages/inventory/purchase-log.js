@@ -236,12 +236,12 @@ const OrderForm = ({ existing, suppliers, stores, products, onClose, onSaved }) 
                 <option value="">Choose a supplier</option>
                 {usableSuppliers.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name}{s.status === "pending" ? " (waiting for verification)" : ""}
+                    {s.name}{s.status !== "verified" ? ` (${String(s.status_label || "not verified").toLowerCase()})` : ""}
                   </option>
                 ))}
               </select>
-              {supplier?.status === "pending" && (
-                <p className="mt-1 text-xs text-amber-700">This supplier isn&apos;t verified yet. You can order, but it can&apos;t be paid until a junior accountant verifies it.</p>
+              {supplier && supplier.status !== "verified" && (
+                <p className="mt-1 text-xs text-amber-700">This supplier isn&apos;t verified yet ({String(supplier.status_label).toLowerCase()}). You can order, but it can&apos;t be paid until it has all three checks: junior accountant, senior accountant, then an admin.</p>
               )}
               {supplier && <p className="mt-1 text-xs text-gray-500">Payment terms: {supplier.payment_terms_days ? `${supplier.payment_terms_days} days after delivery` : "on delivery"}</p>}
             </div>
