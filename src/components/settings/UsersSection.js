@@ -8,6 +8,7 @@ import {
   FaExclamationTriangle,
   FaPlus,
   FaSave,
+  FaStore,
   FaTrash,
   FaUserCog,
   FaUserPlus,
@@ -228,6 +229,226 @@ const RoleGuide = ({ roles, permissionLabels }) => {
   );
 };
 
+// Which stores someone works at: one, several, or all. They sell from these
+// stores and see only their sales, stock and expenses. Admins have them all.
+const storesLine = (u) => {
+  if (u.role === "admin") return "All stores (admin)";
+  const access = u.store_access;
+  if (!access) return null;
+  if (access.all) return "All stores";
+  return access.stores.length ? access.stores.map((s) => s.name).join(", ") : null;
+};
+
+const StoresModal = ({ user, onClose, onSaved }) => {
+  const [stores, setStores] = useState(null);
+  const [all, setAll] = useState(Boolean(user.store_access?.all));
+  const [chosen, setChosen] = useState(() => new Set((user.store_access?.all ? [] : user.store_access?.stores || []).map((s) => s.id)));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    http
+      .get("/stores")
+      .then(({ data }) => setStores((Array.isArray(data) ? data : data?.data || []).sort((a, b) => String(a.name).localeCompare(String(b.name)))))
+      .catch(() => setStores([]));
+  }, []);
+
+  const toggle = (id) =>
+    setChosen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const save = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const { data } = await http.put(`/users/${user.id}/stores`, { all_stores: all, store_ids: all ? [] : [...chosen] });
+      onSaved(data);
+    } catch (err) {
+      setError(messageFrom(err, "Could not save the stores."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const optionClass = (on) => `flex-1 px-3 py-2 text-sm font-semibold border ${on ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`;
+
+  return (
+    <ModalShell title="Stores" subtitle={`Where ${user.name} works`} icon={FaStore} onClose={onClose} busy={saving}>
+      <div className="px-6 py-5 space-y-4 text-sm">
+        {error && <p className="px-3 py-2 text-red-700 border border-red-200 bg-red-50">{error}</p>}
+        <p className="text-gray-600">
+          {user.name} sells from these stores, and only sees their sales, stock and expenses. With one store, it&apos;s chosen for them automatically.
+        </p>
+        <div className="flex">
+          <button type="button" onClick={() => setAll(false)} className={optionClass(!all)}>Chosen stores</button>
+          <button type="button" onClick={() => setAll(true)} className={`${optionClass(all)} -ml-px`}>All stores</button>
+        </div>
+        {all ? (
+          <p className="text-gray-700">Every store, including ones added later.</p>
+        ) : stores === null ? (
+          <p className="text-gray-500">Loading stores…</p>
+        ) : (
+          <ul className="border border-gray-200 divide-y divide-gray-100">
+            {stores.map((store) => (
+              <li key={store.id}>
+                <label className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                  <input type="checkbox" checked={chosen.has(store.id)} onChange={() => toggle(store.id)} disabled={saving} className="accent-blue-600" />
+                  <span className="flex-1">{store.name}</span>
+                  <span className="text-xs text-gray-500">{store.type === "back_store" ? "Back store" : "Shop"}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <ModalFooter>
+        <button type="button" onClick={onClose} disabled={saving} className={secondaryButtonClass}>Cancel</button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || (!all && chosen.size === 0)}
+          className="flex items-center px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+        >
+          {saving ? <Spinner /> : <FaSave className="mr-2 text-xs" />} Save stores
+        </button>
+      </ModalFooter>
+    </ModalShell>
+  );
+};
+
+// Pick people from a role (some or all of them) and give them the same
+// stores, or all stores. Only the people ticked change, so people in one role
+// can still have different stores.
+const BulkStoresModal = ({ users, roles, onClose, onSaved }) => {
+  const assignable = roles.filter((r) => r.value !== "admin" && users.some((u) => u.role === r.value));
+  const [role, setRole] = useState(assignable[0]?.value || "");
+  const [picked, setPicked] = useState(() => new Set());
+  const [stores, setStores] = useState(null);
+  const [all, setAll] = useState(false);
+  const [chosen, setChosen] = useState(() => new Set());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    http
+      .get("/stores")
+      .then(({ data }) => setStores((Array.isArray(data) ? data : data?.data || []).sort((a, b) => String(a.name).localeCompare(String(b.name)))))
+      .catch(() => setStores([]));
+  }, []);
+
+  const people = users.filter((u) => u.role === role);
+  const allPicked = people.length > 0 && people.every((u) => picked.has(u.id));
+  const toggleIn = (setter) => (id) =>
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const togglePerson = toggleIn(setPicked);
+  const toggleStore = toggleIn(setChosen);
+
+  const changeRole = (value) => {
+    setRole(value);
+    setPicked(new Set());
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const { data } = await http.put("/users/stores", { user_ids: [...picked], all_stores: all, store_ids: all ? [] : [...chosen] });
+      onSaved(data);
+    } catch (err) {
+      setError(messageFrom(err, "Could not save the stores."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const optionClass = (on) => `flex-1 px-3 py-2 text-sm font-semibold border ${on ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`;
+
+  return (
+    <ModalShell title="Assign Stores" subtitle="Pick people from a role and give them stores" icon={FaStore} onClose={onClose} busy={saving} maxWidth="max-w-2xl">
+      <div className="px-6 py-5 space-y-5 text-sm">
+        {error && <p className="px-3 py-2 text-red-700 border border-red-200 bg-red-50">{error}</p>}
+
+        <div>
+          <label htmlFor="bulk-role" className={`${statLabelClass} block mb-1.5`}>1. Role</label>
+          <select id="bulk-role" value={role} onChange={(e) => changeRole(e.target.value)} disabled={saving} className="w-full px-3 py-2.5 text-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {assignable.map((r) => (
+              <option key={r.value} value={r.value}>{r.label} ({users.filter((u) => u.role === r.value).length})</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className={statLabelClass}>2. People ({picked.size} ticked)</p>
+            <button type="button" onClick={() => setPicked(allPicked ? new Set() : new Set(people.map((u) => u.id)))} disabled={saving || people.length === 0} className="text-xs font-semibold text-blue-700 hover:underline">
+              {allPicked ? "Untick all" : "Tick all"}
+            </button>
+          </div>
+          <ul className="overflow-y-auto border border-gray-200 divide-y divide-gray-100 max-h-56">
+            {people.map((u) => (
+              <li key={u.id}>
+                <label className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                  <input type="checkbox" checked={picked.has(u.id)} onChange={() => togglePerson(u.id)} disabled={saving} className="accent-blue-600" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-gray-900 truncate">{u.name}</span>
+                    <span className="block text-xs text-gray-500 truncate">Now: {storesLine(u) || "no store"}</span>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="space-y-2">
+          <p className={statLabelClass}>3. Stores for the people ticked</p>
+          <div className="flex">
+            <button type="button" onClick={() => setAll(false)} className={optionClass(!all)}>Chosen stores</button>
+            <button type="button" onClick={() => setAll(true)} className={`${optionClass(all)} -ml-px`}>All stores</button>
+          </div>
+          {all ? (
+            <p className="text-gray-700">Every store, including ones added later.</p>
+          ) : stores === null ? (
+            <p className="text-gray-500">Loading stores…</p>
+          ) : (
+            <ul className="grid gap-px bg-gray-200 border border-gray-200 sm:grid-cols-2">
+              {stores.map((store) => (
+                <li key={store.id} className="bg-white">
+                  <label className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" checked={chosen.has(store.id)} onChange={() => toggleStore(store.id)} disabled={saving} className="accent-blue-600" />
+                    <span className="flex-1">{store.name}</span>
+                    <span className="text-xs text-gray-500">{store.type === "back_store" ? "Back store" : "Shop"}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-gray-500">Only the people ticked change. You can still change one person on their own with the shop icon next to them.</p>
+        </div>
+      </div>
+      <ModalFooter>
+        <button type="button" onClick={onClose} disabled={saving} className={secondaryButtonClass}>Cancel</button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || picked.size === 0 || (!all && chosen.size === 0)}
+          className="flex items-center px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+        >
+          {saving ? <Spinner /> : <FaSave className="mr-2 text-xs" />} Save for {picked.size} {picked.size === 1 ? "person" : "people"}
+        </button>
+      </ModalFooter>
+    </ModalShell>
+  );
+};
+
 export default function UsersSection({ notify }) {
   const { user: currentUser, refresh } = useAuth();
   const [users, setUsers] = useState([]);
@@ -239,6 +460,8 @@ export default function UsersSection({ notify }) {
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [assigning, setAssigning] = useState(null);
+  const [bulkAssigning, setBulkAssigning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -273,6 +496,23 @@ export default function UsersSection({ notify }) {
     setEditing(undefined);
     notify("success", `${saved.name} is now ${saved.role_label || saved.role}.`, isEdit ? "User updated" : "User created");
     if (saved.id === currentUser?.id) refresh();
+    // A new person has no store yet: choose where they work straight away
+    if (!isEdit && saved.role !== "admin") setAssigning(saved);
+  };
+
+  const handleBulkSaved = (result) => {
+    const byId = Object.fromEntries(result.users.map((u) => [u.id, u]));
+    setUsers((prev) => prev.map((u) => (byId[u.id] ? { ...u, ...byId[u.id] } : u)));
+    setBulkAssigning(false);
+    notify("success", `Stores saved for ${result.updated} ${result.updated === 1 ? "person" : "people"}.`, "Stores saved");
+    if (byId[currentUser?.id]) refresh();
+  };
+
+  const handleStoresSaved = (saved) => {
+    setUsers((prev) => prev.map((u) => (u.id === saved.id ? { ...u, ...saved } : u)));
+    setAssigning(null);
+    notify("success", `${saved.name} now works at ${storesLine(saved) || "no store"}.`, "Stores saved");
+    if (saved.id === currentUser?.id) refresh();
   };
 
   const confirmDelete = async () => {
@@ -292,6 +532,16 @@ export default function UsersSection({ notify }) {
   };
 
   const addButton = (
+    <div className="flex gap-2">
+    <button
+      type="button"
+      onClick={() => setBulkAssigning(true)}
+      disabled={loading || users.every((u) => u.role === "admin")}
+      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-blue-700 transition-colors border border-blue-600 bg-white hover:bg-blue-50 disabled:opacity-50"
+    >
+      <FaStore className="text-[11px]" />
+      Assign stores
+    </button>
     <button
       type="button"
       onClick={() => setEditing(null)}
@@ -301,6 +551,7 @@ export default function UsersSection({ notify }) {
       <FaPlus className="text-[11px]" />
       Add User
     </button>
+    </div>
   );
 
   return (
@@ -345,11 +596,26 @@ export default function UsersSection({ notify }) {
                         {u.name} {isSelf && <span className="ml-1 text-xs font-normal text-gray-500">(you)</span>}
                       </p>
                       <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                      <p className={`text-xs truncate ${storesLine(u) ? "text-gray-600" : "text-amber-700"}`}>
+                        <FaStore className="inline mr-1 text-[10px]" />
+                        {storesLine(u) || "No store yet: can't sell"}
+                      </p>
                     </div>
                     <span className="hidden sm:inline-block px-2 py-0.5 text-[11px] font-semibold text-blue-700 bg-blue-50 whitespace-nowrap">
                       {u.role_label || u.role}
                     </span>
                     <div className="flex shrink-0">
+                      {u.role !== "admin" && (
+                        <button
+                          type="button"
+                          onClick={() => setAssigning(u)}
+                          className="flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+                          title="Stores"
+                          aria-label={`Stores for ${u.name}`}
+                        >
+                          <FaStore className="text-sm" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setEditing(u)}
@@ -383,6 +649,9 @@ export default function UsersSection({ notify }) {
       </Panel>
 
       {roles.length > 0 && <RoleGuide roles={roles} permissionLabels={permissionLabels} />}
+
+      {assigning && <StoresModal user={assigning} onClose={() => setAssigning(null)} onSaved={handleStoresSaved} />}
+      {bulkAssigning && <BulkStoresModal users={users} roles={roles} onClose={() => setBulkAssigning(false)} onSaved={handleBulkSaved} />}
 
       {editing !== undefined && (
         <UserFormModal

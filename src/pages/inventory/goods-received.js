@@ -3,6 +3,7 @@
 // rejected, and three sign-offs: store manager (goods checked), inventory
 // officer (posted into stock) and procurement (PO, invoice and GRN match).
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { storesFor } from "../../../utils/permissions";
 import { useRouter } from "next/router";
 import { AlertTriangle, CheckCircle2, Circle, Download, History, Loader2, Pencil, Plus, RefreshCw, Trash2, Truck } from "lucide-react";
 import PurchasingNav from "../../components/PurchasingNav";
@@ -642,7 +643,7 @@ const Tick = ({ done, label }) => (
 
 export default function GoodsReceived() {
   const router = useRouter();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const canRecord = can("goods-receipts.create");
 
   const [receipts, setReceipts] = useState([]);
@@ -681,10 +682,11 @@ export default function GoodsReceived() {
     Promise.all([http.get("/suppliers"), http.get("/stores")])
       .then(([s, st]) => {
         setSuppliers(toList(s.data));
-        setStores(toList(st.data).sort((a, b) => String(a.name).localeCompare(String(b.name))));
+        // Deliveries can only be recorded into a store you work at
+        setStores(storesFor(user, toList(st.data)).sort((a, b) => String(a.name).localeCompare(String(b.name))));
       })
       .catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- the user is loaded before any page renders; the server checks stores too
 
   // Purchase Orders links here with ?po=ID to record a delivery for that order
   useEffect(() => {

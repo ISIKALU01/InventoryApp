@@ -18,7 +18,7 @@ export const PAGE_PERMISSIONS = {
   "/authorizeUser": "users.manage",
   "/team": "users.manage",
   "/transaction/sales-invoice": "sales.create",
-  "/transaction/expenses": "expenses.manage",
+  "/transaction/expenses": ["expenses.view", "expenses.manage"],
   "/transaction/sales-list": "sales.view",
   "/transaction/sales-summary": "reports.view",
   "/transaction/payment-analysis": "reports.view",
@@ -53,6 +53,15 @@ export const HOME_PATHS = [
   "/folio/supply-management",
   "/settings",
 ];
+
+// The stores this person works at, out of a list from GET /stores. Admins and
+// people with "all stores" get the whole list.
+export function storesFor(user, stores) {
+  const access = user?.store_access;
+  if (!access || access.all) return stores || [];
+  const mine = new Set((access.stores || []).map((s) => String(s.id)));
+  return (stores || []).filter((store) => mine.has(String(store.id)));
+}
 
 export function hasPermission(user, permission) {
   if (!permission) return false;

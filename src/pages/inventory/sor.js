@@ -3,6 +3,7 @@
 // then the store manager and inventory officer sign it. Only a signed count
 // is paid. Unsold units can be returned to the supplier.
 import { useCallback, useEffect, useState } from "react";
+import { storesFor } from "../../../utils/permissions";
 import { AlertTriangle, CheckCircle2, Circle, Download, History, Loader2, RefreshCw, Scale, Undo2 } from "lucide-react";
 import PurchasingNav from "../../components/PurchasingNav";
 import http from "../../../services/http";
@@ -356,6 +357,7 @@ const DetailsModal = ({ line: initial, stores, onClose, onChanged }) => {
 // ---------------------------------------------------------------------------
 
 export default function SorReconciliation() {
+  const { user } = useAuth();
   const [lines, setLines] = useState([]);
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
@@ -390,10 +392,11 @@ export default function SorReconciliation() {
     Promise.all([http.get("/suppliers"), http.get("/stores")])
       .then(([s, st]) => {
         setSuppliers(toList(s.data));
-        setStores(toList(st.data).sort((a, b) => String(a.name).localeCompare(String(b.name))));
+        // Returns leave from a store you work at
+        setStores(storesFor(user, toList(st.data)).sort((a, b) => String(a.name).localeCompare(String(b.name))));
       })
       .catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- the user is loaded before any page renders; the server checks stores too
 
   const exportCsv = () => {
     // Same columns as the client's SOR sheet

@@ -1,6 +1,7 @@
 // Expiry: stock that has expired or expires soon, with its value at cost.
 // Expired units stay listed (sales skip them) until someone disposes of them.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { storesFor } from "../../../utils/permissions";
 import Head from "next/head";
 import { FaCalendarTimes, FaExclamationTriangle, FaTrash } from "react-icons/fa";
 import InventoryNav from "../../components/InventoryNav";
@@ -50,7 +51,7 @@ const SummaryTile = ({ title, figures, tone }) => (
 );
 
 export default function Expiry() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const canDispose = can("inventory.manage");
 
   const [show, setShow] = useState("attention");
@@ -97,9 +98,9 @@ export default function Expiry() {
   useEffect(() => {
     http
       .get("/stores")
-      .then(({ data }) => setStores((Array.isArray(data) ? data : data?.data || []).sort((a, b) => String(a.name).localeCompare(String(b.name)))))
+      .then(({ data }) => setStores(storesFor(user, Array.isArray(data) ? data : data?.data || []).sort((a, b) => String(a.name).localeCompare(String(b.name)))))
       .catch(() => setStores([]));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- the user is loaded before any page renders; the server checks stores too
 
   const openDispose = (batch) => {
     setToDispose(batch);

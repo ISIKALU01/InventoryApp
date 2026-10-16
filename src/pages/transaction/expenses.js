@@ -1,1200 +1,777 @@
-// pages/transaction/expenses.js
-import { useState, useEffect, useRef } from "react";
+// Expenses: store managers request expenses for their store; approvers
+// (chosen by the admin in Settings) approve them, paid from the store's cash
+// at hand, or reject them. Accountants record expenses already paid from the
+// bank. Each store's cash at hand, and an analysis of where money goes.
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { BarChart3, Banknote, CheckCircle2, Clock, Download, History, Landmark, Loader2, Plus, Receipt, RefreshCw, Scale, Wallet, XCircle } from "lucide-react";
 import TransactionNav from "../../components/TransactionNav";
+import http from "../../../services/http";
+import { useAuth } from "../../context/AuthContext";
+import { storesFor } from "../../../utils/permissions";
 import {
-  AlertTriangle,
-  CalendarDays,
-  CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  Eye,
-  Loader2,
-  Pencil,
-  Plus,
-  Receipt,
-  Search,
-  SlidersHorizontal,
-  Trash2,
-  Wallet,
-  X,
-  XCircle,
-} from "lucide-react";
+  Badge,
+  EmptyState,
+  ErrorBox,
+  FilterSelect,
+  LoadingState,
+  ModalFooter,
+  ModalShell,
+  PageTitle,
+  PanelHeader,
+  StatTiles,
+  dangerButtonClass,
+  fieldClass,
+  filterFieldClass,
+  formatDay,
+  formatNaira,
+  labelClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+  statLabelClass,
+  toList,
+  toolbarButtonClass,
+  useToast,
+} from "../../components/ui/Boxy";
 
-import { expenseAPI, userAPI } from "../../../services/api";
+const STATUS_BADGE = {
+  pending: "text-amber-800 bg-amber-50",
+  approved: "text-green-800 bg-green-50",
+  rejected: "text-red-700 bg-red-50",
+  cancelled: "text-gray-600 bg-gray-100",
+};
 
-const PAGE_SIZE = 25;
-const TOAST_DURATION = { success: 3000, error: 5000 };
+const money = (value) => formatNaira(Number(value || 0));
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const monthStart = () => `${todayIso().slice(0, 8)}01`;
+const nowTime = () => new Date().toTimeString().slice(0, 5);
+const errorText = (err, fallback) => {
+  const errors = err.response?.data?.errors;
+  return (errors && Object.values(errors)[0]?.[0]) || err.response?.data?.message || fallback;
+};
+const csvCell = (value) => {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+const downloadCsv = (name, headers, rows) => {
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const url = window.URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${name}-${todayIso()}.csv`;
+  link.click();
+  window.URL.revokeObjectURL(url);
+};
+
+const StatusBadge = ({ expense }) => <Badge className={STATUS_BADGE[expense.status] || "text-gray-700 bg-gray-100"}>{expense.status_label || expense.status}</Badge>;
 
 // ---------------------------------------------------------------------------
-// Data helpers
+// Request (store managers) / record a bank-paid expense (accountants)
 // ---------------------------------------------------------------------------
 
-const pad = (n) => String(n).padStart(2, "0");
-
-// Calendar day in the user's timezone (an ISO slice of "now" would use UTC)
-const todayKey = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
-
-const nowTime = () => {
-  const d = new Date();
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
-// Expense dates come back as "YYYY-MM-DD" or a full ISO string; keep the
-// calendar day as written rather than shifting it through UTC
-const dateKeyOf = (value) => String(value || "").slice(0, 10);
-
-const dateOnly = (value) => {
-  const m = dateKeyOf(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
-};
-
-const timeKeyOf = (value) => String(value || "").slice(0, 5);
-
-// Sortable "YYYY-MM-DD HH:MM" for newest-first ordering
-const sortKey = (expense) => `${dateKeyOf(expense.date)} ${timeKeyOf(expense.time) || "00:00"}`;
-
-const formatDisplayDate = (value) => {
-  const date = dateOnly(value);
-  return date
-    ? date.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })
-    : value || "N/A";
-};
-
-// "HH:MM" or "HH:MM:SS" to 12-hour time
-const formatDisplayTime = (value) => {
-  const [h, m] = timeKeyOf(value).split(":");
-  if (h === undefined || m === undefined || h === "") return value || "";
-  const hours = Number(h);
-  return `${hours % 12 || 12}:${m} ${hours >= 12 ? "PM" : "AM"}`;
-};
-
-const amountOf = (expense) => parseFloat(expense.amount) || 0;
-
-const formatCurrency = (amount) =>
-  `₦${Number(amount || 0).toLocaleString("en-NG", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-
-// "jane.doe@x.com" -> "Jane.doe"
-const usernameFromEmail = (email) => {
-  const name = (email || "").split("@")[0];
-  return name ? name.charAt(0).toUpperCase() + name.slice(1) : "";
-};
-
-const toList = (data) => {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.data)) return data.data;
-  throw new Error("Unexpected response format");
-};
-
-// ---------------------------------------------------------------------------
-// Shared pieces (same look as the sales list and sales point)
-// ---------------------------------------------------------------------------
-
-// Slim, flat filter field: square corners, no border or focus ring
-const filterFieldClass =
-  "block w-full h-8 px-2.5 text-xs text-gray-800 bg-gray-100 border-0 rounded-none outline-none shadow-none appearance-none transition-colors placeholder:text-gray-400 focus:bg-gray-50 focus:outline-none focus:ring-0";
-
-// Form field in modals: same flat look at a comfortable size
-const fieldClass =
-  "block w-full h-10 px-3 text-sm text-gray-800 bg-gray-100 border-0 rounded-none outline-none shadow-none transition-colors placeholder:text-gray-400 focus:bg-gray-50 focus:outline-none focus:ring-0 read-only:text-gray-500 read-only:cursor-not-allowed";
-
-const labelClass = "block mb-1.5 text-xs font-semibold tracking-wide text-gray-600 uppercase";
-
-const statLabelClass = "text-[10px] font-semibold tracking-wide text-gray-500 uppercase";
-
-const primaryButtonClass =
-  "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-none transition-colors hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed";
-
-const dangerButtonClass =
-  "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-red-600 rounded-none transition-colors hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed";
-
-const secondaryButtonClass =
-  "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-none transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed";
-
-const iconButtonClass =
-  "flex items-center justify-center w-8 h-8 text-gray-500 transition-colors hover:bg-gray-100";
-
-// Borderless dropdown with its own chevron in place of the browser arrow
-const Select = ({ className = "", children, ...props }) => (
-  <div className={`relative ${className}`}>
-    <select {...props} className={`${filterFieldClass} pr-7 cursor-pointer`}>
-      {children}
-    </select>
-    <ChevronDown
-      size={13}
-      className="absolute text-gray-400 -translate-y-1/2 pointer-events-none right-2.5 top-1/2"
-    />
-  </div>
-);
-
-const EmptyState = ({ icon: Icon, title, hint, tone = "gray", action }) => (
-  <div className="flex flex-col items-center justify-center px-5 py-14 text-center">
-    <div
-      className={`flex items-center justify-center w-12 h-12 mb-3 ${
-        tone === "red" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-400"
-      }`}
-    >
-      <Icon size={22} />
-    </div>
-    <p className="text-sm font-medium text-gray-700">{title}</p>
-    {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
-    {action && <div className="mt-4">{action}</div>}
-  </div>
-);
-
-const ErrorBox = ({ title, message }) => (
-  <div
-    role="alert"
-    className="flex items-start gap-3 px-4 py-3 text-sm text-red-800 border border-red-200 bg-red-50"
-  >
-    <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-600" />
-    <div>
-      <p className="font-semibold">{title}</p>
-      <p className="mt-0.5 text-red-700">{message}</p>
-    </div>
-  </div>
-);
-
-// Toast for quick confirmations and failures; the bar shows time left
-const Toast = ({ toast, onClose }) => {
-  const isError = toast.type === "error";
-  const Icon = isError ? XCircle : CheckCircle2;
-
-  return (
-    <div
-      role={isError ? "alert" : "status"}
-      className="fixed z-[60] top-4 right-4 left-4 sm:left-auto sm:w-96 toast-in"
-    >
-      <div
-        className={`relative overflow-hidden bg-white border border-gray-200 border-l-4 shadow-xl ${
-          isError ? "border-l-red-600" : "border-l-green-600"
-        }`}
-      >
-        <div className="flex items-start gap-3 px-4 py-3.5">
-          <Icon
-            size={20}
-            className={`mt-0.5 shrink-0 ${isError ? "text-red-600" : "text-green-600"}`}
-          />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-900">
-              {toast.title || (isError ? "Something went wrong" : "Done")}
-            </p>
-            <p className="mt-0.5 text-sm text-gray-600 break-words">{toast.message}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Dismiss"
-            className="flex items-center justify-center w-7 h-7 -mr-1 text-gray-400 transition-colors shrink-0 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <div
-          className={`h-1 toast-progress ${isError ? "bg-red-600/30" : "bg-green-600/30"}`}
-          style={{ animationDuration: `${TOAST_DURATION[toast.type]}ms` }}
-        />
-      </div>
-    </div>
-  );
-};
-
-// Floating panel over a lightly blurred page
-const ModalShell = ({
-  title,
-  subtitle,
-  icon: Icon,
-  iconClass = "bg-blue-600",
-  onClose,
-  busy = false,
-  maxWidth = "max-w-md",
-  children,
-}) => (
-  <div
-    className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 overflow-y-auto bg-gray-900/20 backdrop-blur-[2px]"
-    onClick={(e) => {
-      if (e.target === e.currentTarget && !busy) onClose();
-    }}
-  >
-    <div
-      role="dialog"
-      aria-modal="true"
-      className={`relative w-full ${maxWidth} bg-white border border-gray-300 rounded-none shadow-2xl modal-in`}
-    >
-      <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center min-w-0 gap-3">
-          <div className={`flex items-center justify-center w-10 h-10 text-white shrink-0 ${iconClass}`}>
-            <Icon size={20} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold leading-tight text-gray-900 truncate">{title}</h2>
-            {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={busy}
-          aria-label="Close"
-          className="flex items-center justify-center w-8 h-8 text-gray-400 transition-colors shrink-0 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
-        >
-          <X size={16} />
-        </button>
-      </div>
-      {children}
-    </div>
-  </div>
-);
-
-const ModalFooter = ({ children, className = "justify-end" }) => (
-  <div className={`flex flex-wrap gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 ${className}`}>
-    {children}
-  </div>
-);
-
-const SummaryRow = ({ label, value, strong = false }) => (
-  <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-white">
-    <span className={strong ? "text-sm font-semibold text-gray-900" : "text-sm text-gray-600"}>
-      {label}
-    </span>
-    <span
-      className={`text-right ${
-        strong ? "text-base font-bold text-gray-900" : "text-sm font-medium text-gray-900"
-      }`}
-    >
-      {value}
-    </span>
-  </div>
-);
-
-const StatTile = ({ icon: Icon, iconClass, label, value }) => (
-  <div className="flex items-center gap-3 px-4 py-4 bg-white">
-    <div className={`flex items-center justify-center w-10 h-10 shrink-0 ${iconClass}`}>
-      <Icon size={18} />
-    </div>
-    <div className="min-w-0">
-      <div className={statLabelClass}>{label}</div>
-      <div className="text-lg font-bold leading-tight text-gray-900 truncate">{value}</div>
-    </div>
-  </div>
-);
-
-const CategoryBadge = ({ category }) =>
-  category ? (
-    <span className="inline-block px-2 py-0.5 text-[11px] font-medium text-blue-800 bg-blue-50 whitespace-nowrap">
-      {category}
-    </span>
-  ) : (
-    <span className="text-gray-400">—</span>
-  );
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-
-const emptyForm = (postedBy = "") => ({
-  description: "",
-  category: "",
-  amount: "",
-  date: todayKey(),
-  time: nowTime(),
-  posted_by: postedBy,
-  location: "",
-});
-
-export default function Expenses() {
-  const [transactions, setTransactions] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedLocation, setSelectedLocation] = useState("");
-  const [selectedUser, setSelectedUser] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [page, setPage] = useState(1);
-  const [postedBy, setPostedBy] = useState("");
-
-  // Add / edit form
-  const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [editingExpense, setEditingExpense] = useState(null);
-  const [expenseFormData, setExpenseFormData] = useState(emptyForm());
+const ExpenseForm = ({ mode, existing, stores, categories, onClose, onSaved }) => {
+  const { user } = useAuth();
+  const isRequest = mode === "request";
+  const fixedStore = user?.store_access && !user.store_access.all && stores.length === 1 ? stores[0] : null;
+  const [values, setValues] = useState({
+    store_id: existing?.store_id ? String(existing.store_id) : fixedStore ? String(fixedStore.id) : "",
+    category: existing?.category || "",
+    amount: existing ? String(Number(existing.amount)) : "",
+    description: existing?.description || "",
+    date: existing?.date ? String(existing.date).slice(0, 10) : todayIso(),
+    time: existing?.time || nowTime(),
+    receipt_ref: existing?.receipt_ref || "",
+  });
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState("");
+  const [error, setError] = useState("");
+  const set = (field) => (e) => setValues((prev) => ({ ...prev, [field]: e.target.value }));
 
-  // Details and delete
-  const [viewExpense, setViewExpense] = useState(null);
-  const [expenseToDelete, setExpenseToDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
+  const categoryOptions = useMemo(() => {
+    const names = categories.map((c) => c.name);
+    return existing?.category && !names.includes(existing.category) ? [existing.category, ...names] : names;
+  }, [categories, existing]);
 
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
+  const ready = values.category && Number(values.amount) > 0 && values.description.trim() && (values.store_id || fixedStore) && !saving;
 
-  const notify = (type, message, title) => {
-    clearTimeout(toastTimer.current);
-    setToast({ id: Date.now(), type, message, title });
-    toastTimer.current = setTimeout(() => setToast(null), TOAST_DURATION[type]);
-  };
-
-  const closeToast = () => {
-    clearTimeout(toastTimer.current);
-    setToast(null);
-  };
-
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
-
-  // "Posted by" is always the signed-in user, never someone else
-  const fetchPostedBy = async () => {
-    try {
-      const userData = await userAPI.getCurrentUser();
-      setPostedBy(usernameFromEmail(userData?.email));
-    } catch (err) {
-      console.error("Error fetching current user:", err);
-    }
-  };
-
-  // Fetch expenses from API
-  const fetchExpenses = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      setTransactions(toList(await expenseAPI.getAllExpenses()));
-    } catch (err) {
-      setError(err.message);
-      console.error("Error fetching expenses:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load expenses and user data on component mount
-  useEffect(() => {
-    fetchExpenses();
-    fetchPostedBy();
-  }, []);
-
-  // Newest first by date then time; ties fall back to the higher id
-  const sortedTransactions = [...transactions].sort((a, b) => {
-    const diff = sortKey(b).localeCompare(sortKey(a));
-    return diff !== 0 ? diff : (Number(b.id) || 0) - (Number(a.id) || 0);
-  });
-
-  const locations = [...new Set(transactions.map((t) => t.location).filter(Boolean))].sort();
-  const postedByUsers = [...new Set(transactions.map((t) => t.posted_by).filter(Boolean))].sort();
-  const categories = [...new Set(transactions.map((t) => t.category).filter(Boolean))].sort();
-
-  // Filter transactions based on filters
-  const term = searchTerm.trim().toLowerCase();
-  const filteredTransactions = sortedTransactions.filter((t) => {
-    const matchesSearch =
-      term === "" ||
-      [t.description, t.category, t.posted_by, t.location, t.amount].some(
-        (field) => field !== undefined && field !== null && field.toString().toLowerCase().includes(term)
-      );
-    const matchesDate = selectedDate === "" || dateKeyOf(t.date) === selectedDate;
-    const matchesLocation = selectedLocation === "" || t.location === selectedLocation;
-    const matchesUser = selectedUser === "" || t.posted_by === selectedUser;
-    return matchesSearch && matchesDate && matchesLocation && matchesUser;
-  });
-
-  const hasFilters = Boolean(searchTerm || selectedDate || selectedLocation || selectedUser);
-
-  // Back to the first page whenever the result set changes
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm, selectedDate, selectedLocation, selectedUser]);
-
-  const pageCount = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const pageStart = (currentPage - 1) * PAGE_SIZE;
-  const pageRows = filteredTransactions.slice(pageStart, pageStart + PAGE_SIZE);
-
-  // Totals
-  const totalExpenses = transactions.reduce((sum, t) => sum + amountOf(t), 0);
-  const today = todayKey();
-  const todayExpenses = transactions.filter((t) => dateKeyOf(t.date) === today);
-  const todayTotal = todayExpenses.reduce((sum, t) => sum + amountOf(t), 0);
-  const filteredTotal = filteredTransactions.reduce((sum, t) => sum + amountOf(t), 0);
-
-  const clearFilters = () => {
-    setSearchTerm("");
-    setSelectedDate("");
-    setSelectedLocation("");
-    setSelectedUser("");
-  };
-
-  const exportToCSV = () => {
-    if (filteredTransactions.length === 0) {
-      notify("error", "There are no expenses to export.", "Nothing to export");
-      return;
-    }
-
-    const headers = ["Description", "Category", "Amount", "Date", "Time", "Posted By", "Location"];
-    const csvData = filteredTransactions.map((t) => [
-      t.description,
-      t.category,
-      amountOf(t).toFixed(2),
-      dateKeyOf(t.date),
-      timeKeyOf(t.time),
-      t.posted_by,
-      t.location,
-    ]);
-
-    const csvContent = [
-      headers.join(","),
-      ...csvData.map((row) => row.map((field) => `"${String(field ?? "").replace(/"/g, '""')}"`).join(",")),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `expenses-report-${todayKey()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-
-    notify(
-      "success",
-      `${filteredTransactions.length} expense${filteredTransactions.length === 1 ? "" : "s"} exported.`,
-      "Export ready"
-    );
-  };
-
-  // ---- Add / edit -------------------------------------------------------
-
-  const handleMakeExpense = () => {
-    setEditingExpense(null);
-    setExpenseFormData(emptyForm(postedBy));
-    setFormError("");
-    setShowExpenseForm(true);
-  };
-
-  const handleEditExpense = (expense) => {
-    setViewExpense(null);
-    setEditingExpense(expense);
-    setExpenseFormData({
-      description: expense.description || "",
-      category: expense.category || "",
-      amount: expense.amount ?? "",
-      date: dateKeyOf(expense.date),
-      time: timeKeyOf(expense.time),
-      posted_by: expense.posted_by || postedBy,
-      location: expense.location || "",
-    });
-    setFormError("");
-    setShowExpenseForm(true);
-  };
-
-  const handleCloseExpenseForm = () => {
-    if (saving) return;
-    setShowExpenseForm(false);
-    setEditingExpense(null);
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormError("");
-    setExpenseFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmitExpense = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-
-    const amount = parseFloat(expenseFormData.amount);
-    if (!(amount > 0)) {
-      setFormError("Enter an amount greater than zero.");
-      return;
-    }
-
+    if (!ready) return;
+    setSaving(true);
+    setError("");
+    const body = {
+      store_id: Number(values.store_id || fixedStore?.id),
+      category: values.category,
+      amount: Number(values.amount),
+      description: values.description.trim(),
+      date: values.date,
+      receipt_ref: values.receipt_ref.trim() || null,
+      // Correcting keeps who posted it; a new record is posted by you
+      ...(isRequest ? {} : existing ? { time: values.time } : { time: values.time, posted_by: user?.name || "Accounts" }),
+    };
     try {
-      setSaving(true);
-      setFormError("");
-      const expenseData = { ...expenseFormData, amount };
-
-      if (editingExpense) {
-        await expenseAPI.updateExpense(editingExpense.id, expenseData);
-      } else {
-        await expenseAPI.createExpense(expenseData);
-      }
-
-      await fetchExpenses();
-      setShowExpenseForm(false);
-      setEditingExpense(null);
-      notify(
-        "success",
-        `${expenseData.description} · ${formatCurrency(amount)}`,
-        editingExpense ? "Expense updated" : "Expense posted"
-      );
+      const { data } = isRequest
+        ? await http.post("/expense-requests", body)
+        : existing
+        ? await http.put(`/expenses/${existing.id}`, body)
+        : await http.post("/expenses", body);
+      onSaved(data, isRequest ? "requested" : existing ? "updated" : "recorded");
     } catch (err) {
-      console.error(`Error ${editingExpense ? "updating" : "creating"} expense:`, err);
-      setFormError(err.message || "Please try again.");
+      setError(errorText(err, "Could not save the expense."));
     } finally {
       setSaving(false);
     }
   };
 
-  // ---- Delete -----------------------------------------------------------
+  return (
+    <ModalShell
+      title={isRequest ? "Request an Expense" : existing ? `Correct ${existing.reference}` : "Record a Bank-paid Expense"}
+      subtitle={isRequest ? "Paid from your store's cash once it is approved" : "Already paid from the bank; doesn't touch store cash"}
+      icon={Receipt}
+      onClose={onClose}
+      busy={saving}
+      maxWidth="max-w-lg"
+    >
+      <form onSubmit={submit}>
+        <div className="px-6 py-5 space-y-4 text-sm">
+          {error && <ErrorBox title="Not saved" message={error} />}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="exp-store" className={labelClass}>Store</label>
+              {fixedStore ? (
+                <p id="exp-store" className={`${fieldClass()} bg-gray-50`}>{fixedStore.name}</p>
+              ) : (
+                <select id="exp-store" value={values.store_id} onChange={set("store_id")} disabled={saving} className={fieldClass()}>
+                  <option value="">Choose the store</option>
+                  {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              )}
+            </div>
+            <div>
+              <label htmlFor="exp-category" className={labelClass}>Category</label>
+              <select id="exp-category" value={values.category} onChange={set("category")} disabled={saving} className={fieldClass()}>
+                <option value="">Choose a category</option>
+                {categoryOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="exp-amount" className={labelClass}>Amount (₦)</label>
+              <input id="exp-amount" type="number" min="0.01" step="0.01" value={values.amount} onChange={set("amount")} disabled={saving} className={fieldClass()} />
+            </div>
+            <div>
+              <label htmlFor="exp-date" className={labelClass}>Date</label>
+              <input id="exp-date" type="date" value={values.date} max={todayIso()} onChange={set("date")} disabled={saving} className={fieldClass()} />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="exp-description" className={labelClass}>What it&apos;s for</label>
+            <input id="exp-description" value={values.description} onChange={set("description")} maxLength={255} disabled={saving} placeholder="e.g. Diesel for the generator" className={fieldClass()} />
+          </div>
+          <div>
+            <label htmlFor="exp-receipt" className={labelClass}>Receipt or invoice no. <span className="font-normal text-gray-400 normal-case">(optional)</span></label>
+            <input id="exp-receipt" value={values.receipt_ref} onChange={set("receipt_ref")} maxLength={100} disabled={saving} className={fieldClass()} />
+          </div>
+        </div>
+        <ModalFooter>
+          <button type="button" onClick={onClose} disabled={saving} className={secondaryButtonClass}>Cancel</button>
+          <button type="submit" disabled={!ready} className={primaryButtonClass}>
+            {saving && <Loader2 size={16} className="animate-spin" />}
+            {isRequest ? "Send for approval" : existing ? "Save" : "Record expense"}
+          </button>
+        </ModalFooter>
+      </form>
+    </ModalShell>
+  );
+};
 
-  const handleDeleteExpense = (expense) => {
-    setDeleteError("");
-    setExpenseToDelete(expense);
-  };
+// ---------------------------------------------------------------------------
+// Details: approve / reject / cancel / correct / delete
+// ---------------------------------------------------------------------------
 
-  const closeDelete = () => {
-    if (!deleting) setExpenseToDelete(null);
-  };
+const DetailsModal = ({ expense, cash, onClose, onChanged, onEdit }) => {
+  const { user, can } = useAuth();
+  const [history, setHistory] = useState(null);
+  const [mode, setMode] = useState(null); // approve | reject | delete
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  const confirmDelete = async () => {
-    const expense = expenseToDelete;
+  useEffect(() => {
+    http.get(`/expenses/${expense.id}/history`).then(({ data }) => setHistory(toList(data))).catch(() => setHistory([]));
+  }, [expense.id, expense.status]);
+
+  const pending = expense.status === "pending";
+  const mine = expense.requested_by?.id === user?.id;
+  const canDecide = pending && can("expenses.approve") && !mine;
+  const canCancel = pending && can("expenses.request") && (mine || user?.role === "admin");
+  const correctable = can("expenses.manage") && !pending && !(expense.status === "approved" && expense.paid_from === "cash");
+  const storeCash = cash.find((c) => c.store.id === expense.store_id);
+  const short = canDecide && storeCash?.set_up && Number(storeCash.balance) < Number(expense.amount);
+
+  const run = async (request, action) => {
+    setBusy(true);
+    setError("");
     try {
-      setDeleting(true);
-      setDeleteError("");
-      await expenseAPI.deleteExpense(expense.id);
-      setTransactions((prev) => prev.filter((t) => t.id !== expense.id));
-      setExpenseToDelete(null);
-      if (viewExpense?.id === expense.id) setViewExpense(null);
-      notify("success", `${expense.description || "The expense"} was deleted.`, "Expense deleted");
+      const response = await request();
+      onChanged(response?.data || null, action);
+      setMode(null);
     } catch (err) {
-      console.error("Error deleting expense:", err);
-      setDeleteError(err.message || "Could not delete this expense. Please try again.");
+      setError(errorText(err, "That didn't work. Please try again."));
     } finally {
-      setDeleting(false);
+      setBusy(false);
     }
   };
 
-  // Escape closes the top-most dialog
-  useEffect(() => {
-    if (!showExpenseForm && !viewExpense && !expenseToDelete) return;
-    const onKey = (e) => {
-      if (e.key !== "Escape") return;
-      if (expenseToDelete) closeDelete();
-      else if (showExpenseForm) handleCloseExpenseForm();
-      else setViewExpense(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+  return (
+    <ModalShell title={expense.reference || "Expense"} subtitle={`${expense.category} · ${expense.store?.name || expense.location || "—"}`} icon={Receipt} onClose={onClose} busy={busy} maxWidth="max-w-2xl">
+      <div className="px-6 py-5 space-y-5 text-sm">
+        {error && <ErrorBox title="Not done" message={error} />}
+        <dl className="grid grid-cols-2 gap-px bg-gray-200 border border-gray-200 sm:grid-cols-3">
+          {[
+            ["Status", <StatusBadge key="s" expense={expense} />],
+            ["Amount", money(expense.amount)],
+            ["Paid from", expense.paid_from_label],
+            ["Date", formatDay(expense.date)],
+            ["Store", expense.store?.name || expense.location || "—"],
+            ["Receipt", expense.receipt_ref || "—"],
+            ["Requested by", expense.requested_by?.name || expense.posted_by || "—"],
+            ["Decided by", expense.decided_by ? `${expense.decided_by.name}, ${formatDay(expense.decided_at)}` : "—"],
+            ["Note", expense.decision_note || "—"],
+          ].map(([label, value]) => (
+            <div key={label} className="px-3 py-2 bg-white">
+              <dt className={statLabelClass}>{label}</dt>
+              <dd className="text-gray-900 break-words">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="text-gray-800">{expense.description}</p>
 
-  const filterFields = (
-    <>
-      <div>
-        <label htmlFor="filter-date" className={`${labelClass} md:sr-only`}>Date</label>
-        <input
-          id="filter-date"
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className={filterFieldClass}
-        />
+        {canDecide && storeCash && (
+          <p className={`px-3 py-2 border ${!storeCash.set_up || short ? "text-amber-900 border-amber-300 bg-amber-50" : "text-gray-700 border-gray-200 bg-gray-50"}`}>
+            {storeCash.set_up
+              ? `${storeCash.store.name} has ${money(storeCash.balance)} cash at hand${short ? ": not enough. Give the store cash first (Store cash tab)." : "."}`
+              : `${storeCash.store.name}'s cash isn't set up yet. Count its cash first (Store cash tab).`}
+          </p>
+        )}
+
+        {mode && (
+          <div className="p-3 space-y-2 border border-gray-200 bg-gray-50">
+            {mode === "delete" ? (
+              <p>Delete {expense.reference}? This can&apos;t be undone.</p>
+            ) : (
+              <>
+                <label htmlFor="exp-note" className={labelClass}>{mode === "reject" ? "Why is it rejected?" : "Note (optional)"}</label>
+                <input id="exp-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} autoFocus disabled={busy} className={fieldClass()} />
+              </>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setMode(null)} disabled={busy} className={secondaryButtonClass}>Back</button>
+              <button
+                type="button"
+                disabled={busy || (mode === "reject" && !note.trim())}
+                onClick={() =>
+                  mode === "approve"
+                    ? run(() => http.post(`/expenses/${expense.id}/approve`, { note: note.trim() || null }), "approved")
+                    : mode === "reject"
+                    ? run(() => http.post(`/expenses/${expense.id}/reject`, { reason: note.trim() }), "rejected")
+                    : run(() => http.delete(`/expenses/${expense.id}`).then(() => null), "deleted")
+                }
+                className={mode === "approve" ? primaryButtonClass : dangerButtonClass}
+              >
+                {busy && <Loader2 size={16} className="animate-spin" />}
+                {mode === "approve" ? "Approve and pay from cash" : mode === "reject" ? "Reject" : "Delete"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <p className={`${statLabelClass} mb-2`}>History</p>
+          {history === null ? (
+            <p className="text-gray-500">Loading…</p>
+          ) : history.length === 0 ? (
+            <p className="text-gray-500">Nothing recorded (an older expense).</p>
+          ) : (
+            <ul className="border border-gray-200 divide-y divide-gray-100">
+              {history.map((entry) => (
+                <li key={entry.id} className="flex gap-3 px-3 py-2">
+                  <History size={14} className="mt-0.5 text-gray-400 shrink-0" />
+                  <div>
+                    <p className="text-gray-900">{entry.description}</p>
+                    <p className="text-xs text-gray-500">{entry.by?.name || "Someone"} · {formatDay(entry.at)}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
-      <div>
-        <label htmlFor="filter-location" className={`${labelClass} md:sr-only`}>Location</label>
-        <Select
-          id="filter-location"
-          value={selectedLocation}
-          onChange={(e) => setSelectedLocation(e.target.value)}
-        >
-          <option value="">All Locations</option>
-          {locations.map((location) => (
-            <option key={location} value={location}>{location}</option>
-          ))}
-        </Select>
-      </div>
-      <div>
-        <label htmlFor="filter-user" className={`${labelClass} md:sr-only`}>Posted By</label>
-        <Select id="filter-user" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
-          <option value="">All Users</option>
-          {postedByUsers.map((user) => (
-            <option key={user} value={user}>{user}</option>
-          ))}
-        </Select>
-      </div>
-    </>
+      {!mode && (canDecide || canCancel || correctable) && (
+        <ModalFooter className="justify-between">
+          <div className="flex gap-2">
+            {canCancel && <button type="button" disabled={busy} onClick={() => run(() => http.post(`/expenses/${expense.id}/cancel`), "cancelled")} className={secondaryButtonClass}>Cancel request</button>}
+            {correctable && <button type="button" onClick={() => onEdit(expense)} className={secondaryButtonClass}>Correct</button>}
+            {correctable && <button type="button" onClick={() => setMode("delete")} className={secondaryButtonClass}>Delete</button>}
+          </div>
+          {canDecide && (
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setNote(""); setMode("reject"); }} className={dangerButtonClass}><XCircle size={16} /> Reject</button>
+              <button type="button" onClick={() => { setNote(""); setMode("approve"); }} disabled={!storeCash?.set_up || short} className={primaryButtonClass}><CheckCircle2 size={16} /> Approve</button>
+            </div>
+          )}
+        </ModalFooter>
+      )}
+      {mine && pending && !canCancel && <p className="px-6 pb-4 text-xs text-gray-500">Someone else approves your request.</p>}
+    </ModalShell>
   );
+};
+
+// ---------------------------------------------------------------------------
+// Store cash
+// ---------------------------------------------------------------------------
+
+const CashActionModal = ({ store, action, onClose, onDone }) => {
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const titles = { count: "Count the Cash", float: "Give the Store Cash", banked: "Cash Taken to the Bank" };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const { data } = action === "count"
+        ? await http.post(`/store-cash/${store.store.id}/count`, { counted_amount: Number(amount), note: note.trim() || null })
+        : await http.post(`/store-cash/${store.store.id}/entries`, { type: action, amount: Number(amount), note: note.trim() || null });
+      onDone(data, action);
+    } catch (err) {
+      setError(errorText(err, "Could not save."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ModalShell title={titles[action]} subtitle={store.store.name} icon={Wallet} onClose={onClose} busy={busy} maxWidth="max-w-md">
+      <form onSubmit={submit}>
+        <div className="px-6 py-5 space-y-4 text-sm">
+          {error && <ErrorBox title="Not saved" message={error} />}
+          <p className="text-gray-600">
+            {action === "count"
+              ? store.set_up
+                ? `The system expects ${money(store.balance)}. Enter what's actually there; any difference is recorded as short or over.`
+                : "Enter the cash in the store now. Its cash at hand starts from this count."
+              : action === "float"
+              ? "Cash handed to the store, e.g. a float or top-up for expenses."
+              : `Cash removed from the store and lodged at the bank. The store has ${money(store.balance)}.`}
+          </p>
+          <div>
+            <label htmlFor="cash-amount" className={labelClass}>{action === "count" ? "Cash counted (₦)" : "Amount (₦)"}</label>
+            <input id="cash-amount" type="number" min={action === "count" ? "0" : "0.01"} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus disabled={busy} className={fieldClass()} />
+          </div>
+          <div>
+            <label htmlFor="cash-note" className={labelClass}>Note <span className="font-normal text-gray-400 normal-case">(optional)</span></label>
+            <input id="cash-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} disabled={busy} placeholder={action === "banked" ? "e.g. GTBank Lekki, teller 4471" : ""} className={fieldClass()} />
+          </div>
+        </div>
+        <ModalFooter>
+          <button type="button" onClick={onClose} disabled={busy} className={secondaryButtonClass}>Cancel</button>
+          <button type="submit" disabled={busy || amount === "" || Number(amount) < 0} className={primaryButtonClass}>
+            {busy && <Loader2 size={16} className="animate-spin" />} Save
+          </button>
+        </ModalFooter>
+      </form>
+    </ModalShell>
+  );
+};
+
+const CashHistoryModal = ({ store, onClose }) => {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    http.get(`/store-cash/${store.store.id}`).then(({ data: d }) => setData(d)).catch(() => setData({ history: [] }));
+  }, [store.store.id]);
+
+  return (
+    <ModalShell title={`${store.store.name}: Cash History`} subtitle="Counts, cash given, cash banked and expenses paid" icon={History} onClose={onClose} maxWidth="max-w-2xl">
+      <div className="px-6 py-5 text-sm">
+        {data === null ? (
+          <p className="text-gray-500">Loading…</p>
+        ) : data.history.length === 0 ? (
+          <p className="text-gray-500">Nothing yet.</p>
+        ) : (
+          <ul className="border border-gray-200 divide-y divide-gray-100">
+            {data.history.map((row, i) => (
+              <li key={`${row.type}-${i}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                <span>
+                  <span className="font-semibold text-gray-900">{row.label}</span>
+                  {row.counted_amount !== null && row.counted_amount !== undefined && <span className="text-gray-600"> · counted {money(row.counted_amount)}</span>}
+                  {(row.reference || row.note) && <span className="block text-xs text-gray-500">{[row.reference, row.note].filter(Boolean).join(" · ")}</span>}
+                  <span className="block text-xs text-gray-400">{row.by?.name || "—"} · {formatDay(row.at)}</span>
+                </span>
+                <span className={`font-semibold tabular-nums ${Number(row.amount) < 0 ? "text-red-700" : "text-green-700"}`}>
+                  {Number(row.amount) > 0 ? "+" : ""}{money(row.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </ModalShell>
+  );
+};
+
+const CashTab = ({ cash, canManageCash, onAction, onHistory }) =>
+  cash.length === 0 ? (
+    <EmptyState icon={Wallet} title="No stores" hint="Stores you work at appear here." />
+  ) : (
+    <div className="grid gap-px bg-gray-200 sm:grid-cols-2 xl:grid-cols-3">
+      {cash.map((c) => (
+        <div key={c.store.id} className="p-5 space-y-3 bg-white">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-semibold text-gray-900">{c.store.name}</p>
+              <p className="text-xs text-gray-500">{c.set_up ? `Tracked since ${formatDay(c.since)}` : "Cash not set up yet"}</p>
+            </div>
+            <button type="button" onClick={() => onHistory(c)} className="text-xs font-semibold text-blue-700 hover:underline">History</button>
+          </div>
+          <p className="text-2xl font-bold text-gray-900 tabular-nums">{c.set_up ? money(c.balance) : "—"}</p>
+          {c.set_up && (
+            <dl className="grid grid-cols-2 text-xs text-gray-600 gap-x-3 gap-y-1">
+              <dt>Cash sales</dt><dd className="text-right tabular-nums">+{money(c.cash_sales)}</dd>
+              <dt>Cash given</dt><dd className="text-right tabular-nums">+{money(c.given)}</dd>
+              <dt>Expenses paid</dt><dd className="text-right tabular-nums">−{money(c.cash_expenses)}</dd>
+              <dt>Taken to bank</dt><dd className="text-right tabular-nums">−{money(c.banked)}</dd>
+              <dt>Count differences</dt><dd className="text-right tabular-nums">{money(c.count_differences)}</dd>
+            </dl>
+          )}
+          {c.pending_requests?.count > 0 && <p className="text-xs text-amber-700">{c.pending_requests.count} waiting for approval ({money(c.pending_requests.total)})</p>}
+          {canManageCash && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button type="button" onClick={() => onAction(c, "count")} className={secondaryButtonClass}><Scale size={14} /> Count</button>
+              {c.set_up && <button type="button" onClick={() => onAction(c, "float")} className={secondaryButtonClass}><Banknote size={14} /> Give cash</button>}
+              {c.set_up && <button type="button" onClick={() => onAction(c, "banked")} className={secondaryButtonClass}><Landmark size={14} /> To bank</button>}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+// ---------------------------------------------------------------------------
+// Analysis
+// ---------------------------------------------------------------------------
+
+const AnalysisTab = ({ stores }) => {
+  const [from, setFrom] = useState(monthStart());
+  const [to, setTo] = useState(todayIso());
+  const [storeId, setStoreId] = useState("");
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setData(null);
+    http
+      .get("/expenses/analysis", { params: { from, to, store_id: storeId || undefined } })
+      .then(({ data: d }) => { setData(d); setError(""); })
+      .catch((err) => setError(errorText(err, "Could not load the analysis.")));
+  }, [from, to, storeId]);
+
+  const exportCsv = () =>
+    downloadCsv(`expense-analysis-${from}-to-${to}`, ["Category", "Total", "Count", "Share of spending %"], data.by_category.map((r) => [r.category, r.total, r.count, r.share]));
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-gray-200">
+        <label className="flex items-center gap-2 text-sm text-gray-600">From <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={filterFieldClass} /></label>
+        <label className="flex items-center gap-2 text-sm text-gray-600">To <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className={filterFieldClass} /></label>
+        <FilterSelect value={storeId} onChange={(e) => setStoreId(e.target.value)} aria-label="Store">
+          <option value="">All my stores</option>
+          {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </FilterSelect>
+        <button type="button" onClick={exportCsv} disabled={!data} className={toolbarButtonClass.secondary}><Download size={13} /> Export CSV</button>
+      </div>
+      {error ? (
+        <EmptyState icon={BarChart3} tone="red" title="Couldn't load the analysis" hint={error} />
+      ) : data === null ? (
+        <LoadingState label="Working it out…" />
+      ) : (
+        <div className="p-5 space-y-6">
+          <StatTiles
+            columns="sm:grid-cols-2 lg:grid-cols-4"
+            tiles={[
+              { icon: Receipt, iconClass: "text-blue-700 bg-blue-50", label: "Spent (approved)", value: money(data.total), hint: `${data.count} expenses` },
+              { icon: BarChart3, iconClass: "text-purple-700 bg-purple-50", label: "Sales in the same period", value: money(data.sales) },
+              { icon: Scale, iconClass: "text-green-700 bg-green-50", label: "Expenses ÷ sales", value: data.share_of_sales === null ? "—" : `${data.share_of_sales}%` },
+              { icon: Clock, iconClass: "text-amber-700 bg-amber-50", label: "Waiting for approval", value: money(data.pending.total), hint: `${data.pending.count} requests` },
+            ]}
+          />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div>
+              <p className={`${statLabelClass} mb-2`}>By category</p>
+              {data.by_category.length === 0 ? <p className="text-sm text-gray-500">No approved expenses in this period.</p> : (
+                <ul className="space-y-2">
+                  {data.by_category.map((row) => (
+                    <li key={row.category}>
+                      <div className="flex justify-between text-sm"><span className="text-gray-900">{row.category} <span className="text-xs text-gray-500">({row.count})</span></span><span className="font-semibold tabular-nums">{money(row.total)}</span></div>
+                      <div className="h-2 mt-1 bg-gray-100"><div className="h-2 bg-blue-600" style={{ width: `${row.share || 0}%` }} /></div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="space-y-6">
+              <div>
+                <p className={`${statLabelClass} mb-2`}>By store</p>
+                <ul className="text-sm border border-gray-200 divide-y divide-gray-100">
+                  {data.by_store.map((row) => (
+                    <li key={row.store.id ?? "none"} className="flex justify-between gap-3 px-3 py-2">
+                      <span>{row.store.name}<span className="block text-xs text-gray-500">{row.share_of_sales === null ? "" : `${row.share_of_sales}% of its sales`}</span></span>
+                      <span className="font-semibold tabular-nums">{money(row.total)}</span>
+                    </li>
+                  ))}
+                  {data.by_store.length === 0 && <li className="px-3 py-2 text-gray-500">—</li>}
+                </ul>
+              </div>
+              <div>
+                <p className={`${statLabelClass} mb-2`}>By month</p>
+                <ul className="text-sm border border-gray-200 divide-y divide-gray-100">
+                  {data.by_month.map((row) => (
+                    <li key={row.month} className="flex justify-between px-3 py-2"><span>{row.month}</span><span className="font-semibold tabular-nums">{money(row.total)}</span></li>
+                  ))}
+                  {data.by_month.length === 0 && <li className="px-3 py-2 text-gray-500">—</li>}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default function Expenses() {
+  const { user, can } = useAuth();
+  const [tab, setTab] = useState("expenses");
+  const [expenses, setExpenses] = useState([]);
+  const [cash, setCash] = useState([]);
+  const [allStores, setAllStores] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [storeId, setStoreId] = useState("");
+  const [category, setCategory] = useState("");
+  const [form, setForm] = useState(null); // { mode, existing }
+  const [viewing, setViewing] = useState(null);
+  const [cashAction, setCashAction] = useState(null);
+  const [cashHistory, setCashHistory] = useState(null);
+  const { notify, toastElement } = useToast();
+
+  const myStores = storesFor(user, allStores);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [e, c] = await Promise.all([http.get("/expenses"), http.get("/store-cash")]);
+      setExpenses(toList(e.data));
+      setCash(toList(c.data));
+    } catch (err) {
+      setError(errorText(err, "Could not load expenses."));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    Promise.all([http.get("/stores"), http.get("/expense-categories")])
+      .then(([s, c]) => {
+        setAllStores(toList(s.data).sort((a, b) => String(a.name).localeCompare(String(b.name))));
+        setCategories(toList(c.data));
+      })
+      .catch(() => {});
+  }, [load]);
+
+  const waiting = expenses.filter((e) => e.status === "pending");
+  const myTurn = can("expenses.approve") ? waiting.filter((e) => e.requested_by?.id !== user?.id) : [];
+  const thisMonth = expenses.filter((e) => e.status === "approved" && String(e.date).slice(0, 7) === todayIso().slice(0, 7));
+  const cashTotal = cash.filter((c) => c.set_up).reduce((sum, c) => sum + Number(c.balance), 0);
+
+  const shown = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return expenses
+      .filter((e) => tab !== "waiting" || e.status === "pending")
+      .filter((e) => !status || e.status === status)
+      .filter((e) => !storeId || String(e.store_id) === storeId)
+      .filter((e) => !category || e.category === category)
+      .filter((e) => !term || [e.reference, e.description, e.category, e.location, e.posted_by, e.receipt_ref, e.amount].some((v) => String(v || "").toLowerCase().includes(term)));
+  }, [expenses, tab, status, storeId, category, search]);
+
+  const exportCsv = () =>
+    downloadCsv("expenses", ["Reference", "Date", "Store", "Category", "Description", "Amount", "Status", "Paid from", "Receipt", "Requested by", "Decided by", "Decided on", "Note"],
+      shown.map((e) => [e.reference, String(e.date).slice(0, 10), e.store?.name || e.location, e.category, e.description, e.amount, e.status_label, e.paid_from_label, e.receipt_ref, e.requested_by?.name || e.posted_by, e.decided_by?.name, e.decided_at?.slice(0, 10), e.decision_note]));
+
+  const handleSaved = (saved, action) => {
+    setForm(null);
+    const words = { requested: `${saved.reference} was sent for approval.`, recorded: `${saved.reference} was recorded.`, updated: `${saved.reference} was corrected.` };
+    notify("success", words[action], "Saved");
+    load();
+  };
+
+  const handleChanged = (saved, action) => {
+    const words = { approved: "Approved and paid from the store's cash.", rejected: "Rejected.", cancelled: "Request cancelled.", deleted: "Deleted." };
+    notify("success", words[action], "Done");
+    setViewing(action === "deleted" ? null : saved);
+    load();
+  };
+
+  const tiles = [
+    { icon: Receipt, iconClass: "text-blue-700 bg-blue-50", label: "Spent this month", value: money(thisMonth.reduce((s, e) => s + Number(e.amount), 0)), hint: `${thisMonth.length} approved` },
+    { icon: Clock, iconClass: "text-amber-700 bg-amber-50", label: "Waiting for approval", value: waiting.length, hint: waiting.length ? money(waiting.reduce((s, e) => s + Number(e.amount), 0)) : undefined },
+    { icon: Wallet, iconClass: "text-green-700 bg-green-50", label: "Cash at hand", value: money(cashTotal), hint: `${cash.filter((c) => c.set_up).length} of ${cash.length} stores set up` },
+    { icon: CheckCircle2, iconClass: "text-purple-700 bg-purple-50", label: "Your turn", value: myTurn.length, hint: can("expenses.approve") ? "Requests for you to decide" : "You don't approve expenses" },
+  ];
+
+  const tabClass = (key) => `px-4 py-2 text-sm font-semibold border ${tab === key ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`;
 
   return (
     <div className="pt-0 mt-0 font-raleway">
-      {toast && <Toast key={toast.id} toast={toast} onClose={closeToast} />}
-
-      {/* Expense Details Modal */}
-      {viewExpense && (
-        <ModalShell
-          title="Expense Details"
-          subtitle={`${formatDisplayDate(viewExpense.date)} · ${formatDisplayTime(viewExpense.time)}`}
-          icon={Receipt}
-          onClose={() => setViewExpense(null)}
-        >
-          <div className="px-6 py-5 space-y-4">
-            <div className="px-4 py-5 text-center border border-gray-200 bg-gray-50">
-              <p className={statLabelClass}>Amount</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">{formatCurrency(amountOf(viewExpense))}</p>
-            </div>
-            <div className="grid gap-px bg-gray-200 border border-gray-200">
-              <SummaryRow label="Description" value={viewExpense.description || "—"} />
-              <SummaryRow label="Category" value={<CategoryBadge category={viewExpense.category} />} />
-              <SummaryRow label="Location" value={viewExpense.location || "—"} />
-              <SummaryRow label="Posted By" value={viewExpense.posted_by || "—"} />
-            </div>
-          </div>
-          <ModalFooter className="justify-between">
-            <button
-              type="button"
-              onClick={() => handleDeleteExpense(viewExpense)}
-              className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
-            >
-              <Trash2 size={16} />
-              Delete
-            </button>
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setViewExpense(null)} className={secondaryButtonClass}>
-                Close
-              </button>
-              <button type="button" onClick={() => handleEditExpense(viewExpense)} className={primaryButtonClass}>
-                <Pencil size={16} />
-                Edit
-              </button>
-            </div>
-          </ModalFooter>
-        </ModalShell>
-      )}
-
-      {/* Expense Form Modal */}
-      {showExpenseForm && (
-        <ModalShell
-          title={editingExpense ? "Edit Expense" : "Post Expense"}
-          subtitle={editingExpense ? "Update the details of this expense" : "Record money spent from the business"}
-          icon={editingExpense ? Pencil : Plus}
-          onClose={handleCloseExpenseForm}
-          busy={saving}
-          maxWidth="max-w-lg"
-        >
-          <form onSubmit={handleSubmitExpense}>
-            <div className="px-6 py-5 space-y-4">
-              {formError && (
-                <ErrorBox
-                  title={editingExpense ? "Expense not updated" : "Expense not posted"}
-                  message={formError}
-                />
-              )}
-
-              <div>
-                <label htmlFor="expense-description" className={labelClass}>Description</label>
-                <input
-                  id="expense-description"
-                  type="text"
-                  name="description"
-                  value={expenseFormData.description}
-                  onChange={handleInputChange}
-                  className={fieldClass}
-                  required
-                  autoFocus
-                  placeholder="What was the money spent on?"
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="expense-category" className={labelClass}>Category</label>
-                  <input
-                    id="expense-category"
-                    type="text"
-                    name="category"
-                    list="expense-categories"
-                    value={expenseFormData.category}
-                    onChange={handleInputChange}
-                    className={fieldClass}
-                    required
-                    placeholder="e.g. Transport"
-                  />
-                  <datalist id="expense-categories">
-                    {categories.map((category) => (
-                      <option key={category} value={category} />
-                    ))}
-                  </datalist>
-                </div>
-
-                <div>
-                  <label htmlFor="expense-amount" className={labelClass}>Amount</label>
-                  <div className="relative">
-                    <span className="absolute text-sm text-gray-500 -translate-y-1/2 pointer-events-none left-3 top-1/2">
-                      ₦
-                    </span>
-                    <input
-                      id="expense-amount"
-                      type="number"
-                      name="amount"
-                      value={expenseFormData.amount}
-                      onChange={handleInputChange}
-                      className={`${fieldClass} pl-7`}
-                      required
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="expense-date" className={labelClass}>Date</label>
-                  <input
-                    id="expense-date"
-                    type="date"
-                    name="date"
-                    value={expenseFormData.date}
-                    onChange={handleInputChange}
-                    className={fieldClass}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="expense-time" className={labelClass}>Time</label>
-                  <input
-                    id="expense-time"
-                    type="time"
-                    name="time"
-                    value={expenseFormData.time}
-                    onChange={handleInputChange}
-                    className={fieldClass}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="expense-location" className={labelClass}>Location</label>
-                <input
-                  id="expense-location"
-                  type="text"
-                  name="location"
-                  list="expense-locations"
-                  value={expenseFormData.location}
-                  onChange={handleInputChange}
-                  className={fieldClass}
-                  required
-                  placeholder="Where was it spent?"
-                />
-                <datalist id="expense-locations">
-                  {locations.map((location) => (
-                    <option key={location} value={location} />
-                  ))}
-                </datalist>
-              </div>
-
-              <div>
-                <label htmlFor="expense-posted-by" className={labelClass}>Posted By</label>
-                <input
-                  id="expense-posted-by"
-                  type="text"
-                  name="posted_by"
-                  value={expenseFormData.posted_by}
-                  className={fieldClass}
-                  required
-                  readOnly
-                  placeholder="Auto-filled from your account"
-                />
-                <p className="mt-1.5 text-xs text-gray-500">Filled in from your account.</p>
-              </div>
-            </div>
-
-            <ModalFooter>
-              <button
-                type="button"
-                onClick={handleCloseExpenseForm}
-                disabled={saving}
-                className={secondaryButtonClass}
-              >
-                Cancel
-              </button>
-              <button type="submit" disabled={saving} className={primaryButtonClass}>
-                {saving && <Loader2 size={16} className="animate-spin" />}
-                {saving ? "Saving…" : editingExpense ? "Update Expense" : "Post Expense"}
-              </button>
-            </ModalFooter>
-          </form>
-        </ModalShell>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {expenseToDelete && (
-        <ModalShell
-          title="Delete Expense"
-          subtitle="This can't be undone"
-          icon={Trash2}
-          iconClass="bg-red-600"
-          onClose={closeDelete}
-          busy={deleting}
-        >
-          <div className="px-6 py-5 space-y-4">
-            {deleteError && <ErrorBox title="Not deleted" message={deleteError} />}
-            <p className="text-sm text-gray-600">
-              You&apos;re about to permanently delete this expense from the records.
-            </p>
-            <div className="grid gap-px bg-gray-200 border border-gray-200">
-              <SummaryRow label="Description" value={expenseToDelete.description || "—"} />
-              <SummaryRow label="Date" value={formatDisplayDate(expenseToDelete.date)} />
-              <SummaryRow label="Amount" value={formatCurrency(amountOf(expenseToDelete))} strong />
-            </div>
-          </div>
-          <ModalFooter>
-            <button type="button" onClick={closeDelete} disabled={deleting} className={secondaryButtonClass}>
-              Cancel
-            </button>
-            <button type="button" onClick={confirmDelete} disabled={deleting} className={dangerButtonClass}>
-              {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-              {deleting ? "Deleting…" : "Delete Expense"}
-            </button>
-          </ModalFooter>
-        </ModalShell>
-      )}
-
-      <h1 className="hidden mb-2 text-xl font-normal text-gray-800 md:block">Expenses</h1>
+      {toastElement}
+      <PageTitle title="Expenses" description="Requests, approvals, each store's cash at hand, and where the money goes" />
       <TransactionNav />
 
-      <div className="mt-5 space-y-5">
-        {/* Summary Tiles */}
-        <div className="grid grid-cols-1 gap-px bg-gray-200 border border-gray-200 sm:grid-cols-3">
-          <StatTile
-            icon={Wallet}
-            iconClass="bg-red-50 text-red-700"
-            label="Total Expenses"
-            value={loading ? "…" : formatCurrency(totalExpenses)}
-          />
-          <StatTile
-            icon={CalendarDays}
-            iconClass="bg-amber-50 text-amber-700"
-            label="Spent Today"
-            value={loading ? "…" : formatCurrency(todayTotal)}
-          />
-          <StatTile
-            icon={Receipt}
-            iconClass="bg-blue-50 text-blue-700"
-            label="Expenses Today"
-            value={loading ? "…" : todayExpenses.length}
-          />
+      <div className="mt-5">
+        <StatTiles tiles={tiles} loading={loading && expenses.length === 0} columns="sm:grid-cols-2 lg:grid-cols-4" />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 mt-5">
+        <div className="flex flex-wrap" role="tablist">
+          {[["expenses", "All expenses"], ["waiting", `Waiting for approval${waiting.length ? ` (${waiting.length})` : ""}`], ["cash", "Store cash"], ["analysis", "Analysis"]].map(([key, label], i) => (
+            <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`${tabClass(key)} ${i ? "-ml-px" : ""}`}>{label}</button>
+          ))}
         </div>
+        <div className="flex flex-wrap gap-2">
+          {can("expenses.request") && (
+            <button type="button" onClick={() => setForm({ mode: "request" })} className={toolbarButtonClass.primary}><Plus size={14} /> Request expense</button>
+          )}
+          {can("expenses.manage") && (
+            <button type="button" onClick={() => setForm({ mode: "record" })} className={toolbarButtonClass.secondary}><Landmark size={13} /> Record bank-paid expense</button>
+          )}
+        </div>
+      </div>
 
-        {/* Expenses Log */}
-        <section className="bg-white border border-gray-200">
-          {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-200">
-            <div className="flex items-baseline min-w-0 gap-2">
-              <h2 className="text-base font-semibold text-gray-900">Expenses</h2>
-              <span className="text-xs text-gray-500 truncate">
-                {loading
-                  ? "Loading…"
-                  : `${filteredTransactions.length} ${hasFilters ? "matching" : "total"} · ${formatCurrency(filteredTotal)} · newest first`}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              {hasFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                >
-                  <X size={14} />
-                  Clear filters
-                </button>
+      <section className="mt-3 bg-white border border-gray-200">
+        {tab === "cash" ? (
+          <>
+            <PanelHeader title="Cash at hand" meta="Cash sales + cash given − expenses paid − cash banked">
+              <button onClick={load} disabled={loading} className={toolbarButtonClass.secondary}><RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh</button>
+            </PanelHeader>
+            <CashTab cash={cash} canManageCash={can("cash.manage")} onAction={(c, action) => setCashAction({ store: c, action })} onHistory={setCashHistory} />
+          </>
+        ) : tab === "analysis" ? (
+          <>
+            <PanelHeader title="Analysis" meta="Approved expenses only" />
+            <AnalysisTab stores={myStores} />
+          </>
+        ) : (
+          <>
+            <PanelHeader title={tab === "waiting" ? "Waiting for approval" : "Expenses"} meta={loading ? "Loading…" : `${shown.length} shown`}>
+              <button onClick={exportCsv} disabled={shown.length === 0} className={toolbarButtonClass.secondary}><Download size={13} /> Export CSV</button>
+              <button onClick={load} disabled={loading} className={toolbarButtonClass.secondary}><RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh</button>
+            </PanelHeader>
+            <div className="flex flex-wrap gap-3 px-5 py-3 border-b border-gray-200">
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reference, description, amount…" aria-label="Search expenses" className={`${filterFieldClass} flex-1 min-w-[12rem]`} />
+              {tab === "expenses" && (
+                <FilterSelect value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
+                  <option value="">Any status</option>
+                  <option value="pending">Waiting for approval</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="cancelled">Cancelled</option>
+                </FilterSelect>
               )}
-              <button
-                type="button"
-                onClick={exportToCSV}
-                disabled={loading}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-green-600 hover:bg-green-700 disabled:opacity-50"
-              >
-                <Download size={14} />
-                Export
-              </button>
-              <button
-                type="button"
-                onClick={handleMakeExpense}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700"
-              >
-                <Plus size={14} />
-                Post Expense
-              </button>
+              <FilterSelect value={storeId} onChange={(e) => setStoreId(e.target.value)} aria-label="Store">
+                <option value="">All my stores</option>
+                {myStores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </FilterSelect>
+              <FilterSelect value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+                <option value="">Any category</option>
+                {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </FilterSelect>
             </div>
-          </div>
-
-          {/* Filters */}
-          <div className="px-5 py-3 border-b border-gray-200">
-            <div className="flex gap-2 md:grid md:grid-cols-[minmax(0,1fr)_9rem_11rem_11rem]">
-              <div className="relative flex-1 min-w-0">
-                <Search
-                  size={13}
-                  className="absolute text-gray-400 -translate-y-1/2 pointer-events-none left-2.5 top-1/2"
-                />
-                <input
-                  type="search"
-                  placeholder="Search by description, category, location or amount"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`${filterFieldClass} pl-8`}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowFilters((open) => !open)}
-                aria-expanded={showFilters}
-                className={`flex items-center h-8 gap-1.5 px-2.5 text-xs font-medium transition-colors md:hidden ${
-                  showFilters || selectedDate || selectedLocation || selectedUser
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                {showFilters ? <X size={13} /> : <SlidersHorizontal size={13} />}
-                Filters
-              </button>
-              <div className="hidden md:contents">{filterFields}</div>
-            </div>
-            {showFilters && <div className="grid gap-2 mt-2 md:hidden">{filterFields}</div>}
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center gap-3 py-14 text-sm text-gray-500">
-              <Loader2 size={20} className="text-blue-600 animate-spin" />
-              Loading expenses…
-            </div>
-          ) : error ? (
-            <EmptyState
-              icon={AlertTriangle}
-              tone="red"
-              title="Couldn't load expenses"
-              hint={error}
-              action={
-                <button type="button" onClick={fetchExpenses} className={secondaryButtonClass}>
-                  Try again
-                </button>
-              }
-            />
-          ) : filteredTransactions.length === 0 ? (
-            <EmptyState
-              icon={Receipt}
-              title={transactions.length === 0 ? "No expenses yet" : "No expenses match your filters"}
-              hint={transactions.length === 0 ? "Posted expenses will appear here" : "Try a different search or filter"}
-              action={
-                hasFilters ? (
-                  <button type="button" onClick={clearFilters} className={secondaryButtonClass}>
-                    Clear filters
-                  </button>
-                ) : (
-                  <button type="button" onClick={handleMakeExpense} className={primaryButtonClass}>
-                    <Plus size={16} />
-                    Post Expense
-                  </button>
-                )
-              }
-            />
-          ) : (
-            <>
-              {/* Desktop Table */}
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full text-sm">
-                  <thead className="border-b border-gray-200 bg-gray-50">
-                    <tr className="text-left">
-                      <th className={`px-5 py-2.5 ${statLabelClass}`}>Date &amp; Time</th>
-                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Description</th>
-                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Category</th>
-                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Posted By</th>
-                      <th className={`px-3 py-2.5 ${statLabelClass}`}>Location</th>
-                      <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Amount</th>
-                      <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {pageRows.map((t) => (
-                      <tr
-                        key={t.id}
-                        onClick={() => setViewExpense(t)}
-                        className="transition-colors cursor-pointer hover:bg-blue-50/50"
-                      >
-                        <td className="px-5 py-3 whitespace-nowrap">
-                          <div className="font-medium text-gray-900">{formatDisplayDate(t.date)}</div>
-                          <div className="text-xs text-gray-500">{formatDisplayTime(t.time)}</div>
-                        </td>
-                        <td className="max-w-[16rem] px-3 py-3 text-gray-900 truncate">{t.description}</td>
-                        <td className="px-3 py-3">
-                          <CategoryBadge category={t.category} />
-                        </td>
-                        <td className="max-w-[10rem] px-3 py-3 text-gray-700 truncate">{t.posted_by}</td>
-                        <td className="max-w-[10rem] px-3 py-3 text-gray-700 truncate">{t.location}</td>
-                        <td className="px-3 py-3 font-semibold text-right text-gray-900 whitespace-nowrap">
-                          {formatCurrency(amountOf(t))}
-                        </td>
-                        <td className="px-5 py-2" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex justify-end gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setViewExpense(t)}
-                              className={`${iconButtonClass} hover:text-blue-600`}
-                              title="View"
-                              aria-label={`View ${t.description}`}
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleEditExpense(t)}
-                              className={`${iconButtonClass} hover:text-green-600`}
-                              title="Edit"
-                              aria-label={`Edit ${t.description}`}
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteExpense(t)}
-                              className={`${iconButtonClass} hover:text-red-600`}
-                              title="Delete"
-                              aria-label={`Delete ${t.description}`}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile Cards */}
-              <ul className="divide-y divide-gray-100 md:hidden">
-                {pageRows.map((t) => (
-                  <li key={t.id} className="px-5 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{t.description}</p>
-                        <p className="text-xs text-gray-500">
-                          {formatDisplayDate(t.date)} · {formatDisplayTime(t.time)}
-                        </p>
-                      </div>
-                      <p className="text-sm font-bold text-gray-900 whitespace-nowrap">
-                        {formatCurrency(amountOf(t))}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center mt-2 text-xs text-gray-600 gap-x-3 gap-y-1">
-                      <CategoryBadge category={t.category} />
-                      {t.location && <span>{t.location}</span>}
-                      {t.posted_by && <span>By {t.posted_by}</span>}
-                    </div>
-
-                    <div className="grid grid-cols-3 mt-3 border border-gray-200 divide-x divide-gray-200">
-                      <button
-                        type="button"
-                        onClick={() => setViewExpense(t)}
-                        className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        <Eye size={14} /> View
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEditExpense(t)}
-                        className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        <Pencil size={14} /> Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteExpense(t)}
-                        className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    </div>
+            {loading && expenses.length === 0 ? (
+              <LoadingState label="Loading expenses…" />
+            ) : error ? (
+              <EmptyState icon={Receipt} tone="red" title="Couldn't load expenses" hint={error} action={<button onClick={load} className={secondaryButtonClass}>Try again</button>} />
+            ) : shown.length === 0 ? (
+              <EmptyState icon={Receipt} title={tab === "waiting" ? "Nothing waiting for approval" : "No expenses match"} hint={can("expenses.request") ? "Request an expense when your store needs to spend cash." : "Expenses appear here once they are requested or recorded."} />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {shown.map((e) => (
+                  <li key={e.id}>
+                    <button type="button" onClick={() => setViewing(e)} className="flex flex-wrap items-center justify-between w-full gap-3 px-5 py-3 text-left hover:bg-blue-50/50">
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-gray-900">
+                          <span className="font-mono text-xs font-normal text-gray-500">{e.reference}</span>
+                          {e.category}
+                          <StatusBadge expense={e} />
+                          {e.status === "pending" && myTurn.some((m) => m.id === e.id) && <Badge className="text-amber-800 bg-amber-50">Your turn</Badge>}
+                        </span>
+                        <span className="block text-xs text-gray-600 truncate max-w-[40rem]">{e.description} · {e.store?.name || e.location || "—"} · {e.requested_by?.name || e.posted_by}</span>
+                      </span>
+                      <span className="text-right">
+                        <span className="block text-sm font-semibold text-gray-900 tabular-nums">{money(e.amount)}</span>
+                        <span className="block text-xs text-gray-500">{formatDay(e.date)} · {e.paid_from_label}</span>
+                      </span>
+                    </button>
                   </li>
                 ))}
               </ul>
+            )}
+          </>
+        )}
+      </section>
 
-              {/* Pagination */}
-              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-gray-200 bg-gray-50">
-                <span className="text-xs text-gray-500">
-                  Showing {pageStart + 1}–{pageStart + pageRows.length} of {filteredTransactions.length}
-                </span>
-                {pageCount > 1 && (
-                  <div className="flex items-center">
-                    <button
-                      type="button"
-                      onClick={() => setPage(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      aria-label="Previous page"
-                      className="flex items-center justify-center w-8 h-8 text-gray-600 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <ChevronLeft size={16} />
-                    </button>
-                    <span className="flex items-center h-8 px-3 text-xs font-medium text-gray-700 bg-white border-gray-300 border-y">
-                      Page {currentPage} of {pageCount}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setPage(currentPage + 1)}
-                      disabled={currentPage === pageCount}
-                      aria-label="Next page"
-                      className="flex items-center justify-center w-8 h-8 text-gray-600 transition-colors bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </section>
-      </div>
-
-      <style jsx global>{`
-        @keyframes toast-in {
-          from {
-            opacity: 0;
-            transform: translateY(-8px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes toast-progress {
-          from {
-            width: 100%;
-          }
-          to {
-            width: 0%;
-          }
-        }
-        @keyframes modal-in {
-          from {
-            opacity: 0;
-            transform: translateY(8px) scale(0.98);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        .toast-in {
-          animation: toast-in 0.2s ease-out;
-        }
-        .toast-progress {
-          animation-name: toast-progress;
-          animation-timing-function: linear;
-          animation-fill-mode: forwards;
-        }
-        .modal-in {
-          animation: modal-in 0.18s ease-out;
-        }
-      `}</style>
+      {form && (
+        <ExpenseForm
+          mode={form.mode}
+          existing={form.existing}
+          stores={myStores}
+          categories={categories}
+          onClose={() => setForm(null)}
+          onSaved={handleSaved}
+        />
+      )}
+      {viewing && !form && (
+        <DetailsModal
+          key={`${viewing.id}-${viewing.status}`}
+          expense={viewing}
+          cash={cash}
+          onClose={() => setViewing(null)}
+          onChanged={handleChanged}
+          onEdit={(e) => { setViewing(null); setForm({ mode: "record", existing: e }); }}
+        />
+      )}
+      {cashAction && (
+        <CashActionModal
+          store={cashAction.store}
+          action={cashAction.action}
+          onClose={() => setCashAction(null)}
+          onDone={(data, action) => {
+            setCashAction(null);
+            const words = { count: data.difference !== undefined && Number(data.difference) !== 0 && cashAction.store.set_up ? `Counted. Difference: ${money(data.difference)}.` : "Counted.", float: "Cash given to the store.", banked: "Recorded as taken to the bank." };
+            notify("success", words[action], cashAction.store.store.name);
+            load();
+          }}
+        />
+      )}
+      {cashHistory && <CashHistoryModal store={cashHistory} onClose={() => setCashHistory(null)} />}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 // pages/transaction/sales-invoice.js
 import TransactionNav from "../../components/TransactionNav";
 import ProductPicker from "../../components/ProductPicker";
+import { useAuth } from "../../context/AuthContext";
+import { storesFor } from "../../../utils/permissions";
 import { useState, useEffect, useRef, useCallback } from "react";
 import http from "../../../services/http";
 import { BARCODE_PATTERN, createScanBuffer, findProductByCode } from "../../../utils/barcode";
@@ -295,9 +297,16 @@ export default function SalesInvoice() {
 	const [inventory, setInventory] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
+	const { user } = useAuth();
 	const [stores, setStores] = useState([]);
 	const [selectedStore, setSelectedStore] = useState(""); // store id, "" = all stores
 	const [orderStore, setOrderStore] = useState(""); // store the order is sold from
+	// The shops this person sells from: their assigned shops, or every shop for
+	// admins and people with all stores. With exactly one, it's fixed.
+	const myShops = storesFor(user, stores).filter((store) => !isBackStore(store));
+	const limitedToSome = user?.store_access && !user.store_access.all;
+	const fixedShop = limitedToSome && myShops.length === 1 ? myShops[0] : null;
+	const noShop = limitedToSome && stores.length > 0 && myShops.length === 0;
 	const [searchTerm, setSearchTerm] = useState("");
 	const [filteredInventory, setFilteredInventory] = useState([]);
 	const [addingId, setAddingId] = useState(null);
@@ -448,6 +457,14 @@ export default function SalesInvoice() {
 
 		fetchStores();
 	}, []);
+
+	// Someone who works at one shop always sells from it
+	useEffect(() => {
+		if (fixedShop) {
+			setSelectedStore(String(fixedShop.id));
+			setOrderStore(String(fixedShop.id));
+		}
+	}, [fixedShop?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const storeName = (id) =>
 		storeNameOf(stores.find((store) => String(store.id) === String(id)));
@@ -1097,6 +1114,11 @@ export default function SalesInvoice() {
 							</div>
 						)}
 
+						{fixedShop ? (
+							<p className="px-3 py-2 text-sm text-gray-700 border border-gray-200 bg-gray-50">
+								Selling from <span className="font-semibold">{storeNameOf(fixedShop)}</span>, your store.
+							</p>
+						) : (
 						<div>
 							<label htmlFor="order-store" className={labelClass}>
 								Sell From Store
@@ -1111,7 +1133,7 @@ export default function SalesInvoice() {
 								disabled={processing}
 							>
 								<option value="">Select store</option>
-								{stores.filter((store) => !isBackStore(store)).map((store) => (
+								{myShops.map((store) => (
 									<option key={store.id} value={store.id}>
 										{storeNameOf(store)}
 									</option>
@@ -1124,6 +1146,7 @@ export default function SalesInvoice() {
 								</p>
 							)}
 						</div>
+						)}
 
 						<div>
 							<label htmlFor="payment-method" className={labelClass}>
@@ -1272,7 +1295,7 @@ export default function SalesInvoice() {
 						const shops = shopStock(p.stores);
 						return { ...p, stores: shops, stock: totalStock(shops) };
 					})}
-					stores={stores.filter((store) => !isBackStore(store))}
+					stores={myShops}
 					storeId={orderStore || selectedStore}
 					disabledReason={browseReason}
 					addedIds={cart.map((item) => item.product_id)}
@@ -1435,20 +1458,31 @@ export default function SalesInvoice() {
 				<section className="flex-1 min-w-0 bg-white border border-gray-200">
 					<PanelHeader title="Products" meta={listMeta} />
 
+					{noShop && (
+						<p className="px-5 py-3 text-sm border-b text-amber-900 border-amber-200 bg-amber-50">
+							You aren&apos;t assigned to a store yet, so you can&apos;t sell. Ask an admin to assign you to your shop.
+						</p>
+					)}
 					<div className="grid gap-2 px-5 py-3 border-b border-gray-200 sm:grid-cols-[minmax(0,12rem)_1fr]">
+						{fixedShop ? (
+							<p className={`${filterFieldClass} flex items-center font-medium`} title="Your store">
+								{storeNameOf(fixedShop)}
+							</p>
+						) : (
 						<Select
 							slim
 							value={selectedStore}
 							onChange={handleStoreChange}
 							aria-label="Filter by store"
 						>
-							<option value="">All Shops</option>
-							{stores.filter((store) => !isBackStore(store)).map((store) => (
+							<option value="">{limitedToSome ? "All my shops" : "All Shops"}</option>
+							{myShops.map((store) => (
 								<option key={store.id} value={store.id}>
 									{storeNameOf(store)}
 								</option>
 							))}
 						</Select>
+						)}
 
 						<div>
 							<div className="flex gap-2">

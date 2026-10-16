@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { storesFor } from "../../../utils/permissions";
 import InventoryNav from "../../components/InventoryNav";
 import ExpiryAlert from "../../components/ExpiryAlert";
 import { useAuth } from "../../context/AuthContext";
@@ -1722,6 +1723,7 @@ const EditStockModal = ({
 
 // Main Inventory Component
 export default function Inventory() {
+  const { user: currentUser } = useAuth();
   // Store managers and procurement can look at stock; inventory officers (and admins) change it
   const { can } = useAuth();
   const canManage = can("inventory.manage");
@@ -1793,7 +1795,7 @@ export default function Inventory() {
   const fetchStores = async () => {
     try {
       const data = await storeAPI.getAllStores();
-      setStores(Array.isArray(data) ? data : []);
+      setStores(storesFor(currentUser, Array.isArray(data) ? data : []));
     } catch (error) {
       console.error("Error fetching stores:", error);
       setError((prev) => prev || `Stores: ${error.message}`);
@@ -2083,7 +2085,7 @@ export default function Inventory() {
       }
     };
     loadData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- the user is loaded before any page renders; the server checks stores too
 
   // Filter inventory based on filters
   useEffect(() => {

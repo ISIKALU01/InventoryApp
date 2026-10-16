@@ -1,6 +1,7 @@
 // Store Requisitions: a store asks for stock to be bought; procurement
 // approves or rejects; approved requests become purchase orders.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { storesFor } from "../../../utils/permissions";
 import { CheckCircle2, ClipboardList, History, List, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X, XCircle } from "lucide-react";
 import PurchasingNav from "../../components/PurchasingNav";
 import ProductPicker from "../../components/ProductPicker";
@@ -546,11 +547,11 @@ export default function StoreRequisitions() {
   useEffect(() => {
     Promise.all([http.get("/stores"), http.get("/products")])
       .then(([storesResponse, productsResponse]) => {
-        setStores(toList(storesResponse.data).sort((a, b) => String(a.name).localeCompare(String(b.name))));
+        setStores(storesFor(user, toList(storesResponse.data)).sort((a, b) => String(a.name).localeCompare(String(b.name))));
         setProducts(toList(productsResponse.data));
       })
       .catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- the user is loaded before any page renders; the server checks stores too
 
   const handleSaved = (saved, wasEdit) => {
     setForm(undefined);

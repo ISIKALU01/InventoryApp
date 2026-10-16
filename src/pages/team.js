@@ -35,6 +35,13 @@ const loginStatus = (user) => {
   return { key: "away", label: "Not signed in today", className: "text-gray-600 bg-gray-100" };
 };
 
+// Where someone works: all stores, their stores, or none yet
+const storesOf = (user) => {
+  if (user.role === "admin" || user.store_access?.all) return "All stores";
+  const names = (user.store_access?.stores || []).map((s) => s.name);
+  return names.length ? names.join(", ") : null;
+};
+
 const initials = (name) =>
   String(name || "?")
     .split(/\s+/)
@@ -99,6 +106,7 @@ const PersonModal = ({ person, role, catalogue, onClose }) => {
           <Badge className="text-blue-800 bg-blue-50">{person.role_label || role?.label || person.role}</Badge>
           <Badge className={status.className}>{status.label}</Badge>
           <span className="text-xs text-gray-500">Joined {formatDay(person.created_at)}</span>
+          <span className="text-xs text-gray-700">Works at: <span className="font-semibold">{storesOf(person) || "no store yet"}</span></span>
         </div>
         {role?.description && <p className="text-gray-700">{role.description}</p>}
         <div className="flex items-center justify-between">
@@ -152,7 +160,7 @@ export default function StaffAndRoles() {
   const staff = useMemo(() => {
     const term = query.trim().toLowerCase();
     return users
-      .filter((u) => !term || [u.name, u.email, u.role_label].some((v) => String(v || "").toLowerCase().includes(term)))
+      .filter((u) => !term || [u.name, u.email, u.role_label, storesOf(u)].some((v) => String(v || "").toLowerCase().includes(term)))
       .filter((u) => !roleFilter || u.role === roleFilter)
       .filter((u) => !statusFilter || loginStatus(u).key === statusFilter)
       .sort((a, b) => String(a.name).localeCompare(String(b.name)));
@@ -217,7 +225,7 @@ export default function StaffAndRoles() {
           <div className="flex flex-wrap gap-3 px-5 py-3 border-b border-gray-200">
             <div className="relative flex-1 min-w-[14rem]">
               <Search size={14} className="absolute text-gray-400 -translate-y-1/2 left-3 top-1/2" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name, email or role" aria-label="Search staff" className={`${filterFieldClass} w-full pl-8`} />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name, email, role or store" aria-label="Search staff" className={`${filterFieldClass} w-full pl-8`} />
             </div>
             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} aria-label="Role" className={filterFieldClass}>
               <option value="">All roles</option>
@@ -244,6 +252,7 @@ export default function StaffAndRoles() {
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold text-gray-900 truncate">{u.name}</span>
                           <span className="block text-xs text-gray-500 truncate">{u.email}</span>
+                          <span className={`block text-xs truncate ${storesOf(u) ? "text-gray-600" : "text-amber-700"}`}>{storesOf(u) || "No store yet"}</span>
                         </span>
                       </span>
                       <span className="flex flex-wrap items-center gap-2">

@@ -2,6 +2,8 @@
 // it, who did it and the stock left after it. "Check ledger" confirms the
 // ledger still adds up to the stock everywhere.
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { storesFor } from "../../../utils/permissions";
 import { CheckCircle2, Download, History, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import InventoryNav from "../../components/InventoryNav";
 import http from "../../../services/http";
@@ -46,6 +48,7 @@ const csvCell = (value) => {
 };
 
 export default function StockLedger() {
+  const { user } = useAuth();
   const [moves, setMoves] = useState([]);
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
@@ -87,10 +90,10 @@ export default function StockLedger() {
     Promise.all([http.get("/products"), http.get("/stores")])
       .then(([p, s]) => {
         setProducts(toList(p.data).sort((a, b) => String(a.name).localeCompare(String(b.name))));
-        setStores(toList(s.data).sort((a, b) => String(a.name).localeCompare(String(b.name))));
+        setStores(storesFor(user, toList(s.data)).sort((a, b) => String(a.name).localeCompare(String(b.name))));
       })
       .catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- the user is loaded before any page renders; the server checks stores too
 
   const runCheck = async () => {
     setChecking(true);

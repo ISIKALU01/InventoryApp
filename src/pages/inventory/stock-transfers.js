@@ -2,6 +2,8 @@
 // shop so the sales point can sell it. A transfer moves every line or nothing,
 // and can't be edited afterwards: to undo one, move the stock back.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { storesFor } from "../../../utils/permissions";
 import Head from "next/head";
 import { FaArrowRight, FaExchangeAlt, FaExclamationTriangle, FaListUl, FaPlus, FaSearch, FaTimes, FaTruck } from "react-icons/fa";
 import InventoryNav from "../../components/InventoryNav";
@@ -63,8 +65,8 @@ const itemsSummary = (items = []) =>
 // New transfer
 // ---------------------------------------------------------------------------
 
-const MoveStockModal = ({ stores, products, onClose, onDone }) => {
-  const defaultFrom = stores.find(isBackStore) || stores[0];
+const MoveStockModal = ({ stores, fromStores = stores, products, onClose, onDone }) => {
+  const defaultFrom = fromStores.find(isBackStore) || fromStores[0];
   const defaultTo = stores.find((s) => !isBackStore(s) && s.id !== defaultFrom?.id) || stores.find((s) => s.id !== defaultFrom?.id);
 
   const [fromId, setFromId] = useState(defaultFrom ? String(defaultFrom.id) : "");
@@ -223,8 +225,9 @@ const MoveStockModal = ({ stores, products, onClose, onDone }) => {
             <div>
               <label htmlFor="transfer-from" className={labelClass}>From</label>
               <select id="transfer-from" value={fromId} onChange={(e) => changeFrom(e.target.value)} disabled={saving} className={fieldClass()}>
+                {/* Only stores you work at; stock can go to any store */}
                 <option value="">Choose a store</option>
-                {stores.map((store) => (
+                {fromStores.map((store) => (
                   <option key={store.id} value={store.id}>{store.name} ({typeLabel(store)})</option>
                 ))}
               </select>
@@ -382,6 +385,7 @@ const MoveStockModal = ({ stores, products, onClose, onDone }) => {
 // ---------------------------------------------------------------------------
 
 export default function StockTransfers() {
+  const { user } = useAuth();
   const [transfers, setTransfers] = useState([]);
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
@@ -556,7 +560,8 @@ export default function StockTransfers() {
         </Panel>
       </div>
 
-      {moving && <MoveStockModal stores={stores} products={products} onClose={() => setMoving(false)} onDone={handleDone} />}
+      {moving && <MoveStockModal stores={stores}
+          fromStores={storesFor(user, stores)} products={products} onClose={() => setMoving(false)} onDone={handleDone} />}
 
       {viewing && (
         <ModalShell

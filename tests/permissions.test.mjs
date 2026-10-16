@@ -11,13 +11,14 @@ import {
   hasPermission,
   homePathFor,
   normalizePath,
+  storesFor,
 } from "../utils/permissions.js";
 
 // Copy of the backend defaults (PGIMS_APP app/Support/Permissions.php, DEFAULTS), as
 // GET /api/user returns them until an admin edits a role. Admin holds all of them.
 const ALL = [
   "users.manage", "dashboard.view", "reports.view", "sales.create", "sales.view", "sales.manage",
-  "sales.audit", "customers.view", "customers.manage", "customers.deposit", "expenses.manage",
+  "sales.audit", "customers.view", "customers.manage", "customers.deposit", "expenses.manage", "expenses.view", "expenses.request", "expenses.approve", "cash.manage",
   "catalog.view", "inventory.view", "products.manage", "inventory.manage", "stores.manage",
   "stock-transfers.manage", "requisitions.view", "requisitions.create", "requisitions.approve",
   "suppliers.view", "suppliers.manage", "suppliers.verify", "suppliers.senior-check", "suppliers.approve", "purchase-orders.view",
@@ -30,7 +31,7 @@ const ALL = [
 const ROLE_PERMISSIONS = {
   admin: ALL,
   store_manager: [
-    "sales.create", "sales.view", "customers.view", "expenses.manage", "catalog.view",
+    "sales.create", "sales.view", "customers.view", "expenses.view", "expenses.request", "catalog.view",
     "inventory.view", "stock-transfers.manage", "suppliers.view", "purchase-orders.view",
     "requisitions.view", "requisitions.create",
     "goods-receipts.view", "goods-receipts.create", "goods-receipts.store-check",
@@ -50,17 +51,17 @@ const ROLE_PERMISSIONS = {
   ],
   junior_accountant: [
     "dashboard.view", "reports.view", "sales.view", "customers.view", "customers.deposit",
-    "expenses.manage", "catalog.view", "suppliers.view", "suppliers.verify", "purchase-orders.view", "banking.view", "payments.manage",
+    "expenses.manage", "expenses.view", "catalog.view", "suppliers.view", "suppliers.verify", "purchase-orders.view", "banking.view", "payments.manage",
     "goods-receipts.view", "sor.view", "supplier-payments.view", "supplier-payments.check", "follow-up.view",
   ],
   senior_accountant: [
     "dashboard.view", "reports.view", "sales.view", "sales.audit", "customers.view", "customers.deposit",
-    "expenses.manage", "catalog.view", "suppliers.view", "suppliers.senior-check", "purchase-orders.view", "banking.view",
+    "expenses.manage", "expenses.view", "expenses.approve", "cash.manage", "catalog.view", "suppliers.view", "suppliers.senior-check", "purchase-orders.view", "banking.view",
     "banking.manage", "payments.manage", "goods-receipts.view", "sor.view",
     "supplier-payments.view", "supplier-payments.approve", "supplier-payments.pay",
     "follow-up.view", "follow-up.manage",
   ],
-  staff: ["sales.create", "sales.view", "customers.view", "expenses.manage", "catalog.view"],
+  staff: ["sales.create", "sales.view", "customers.view", "catalog.view"],
 };
 
 const userWith = (role) => ({ id: 1, name: role, role, permissions: ROLE_PERMISSIONS[role] });
@@ -124,9 +125,9 @@ test("admin sees every page in the sidebar", () => {
   assert.deepEqual(visibleFor("admin"), SIDEBAR_PAGES);
 });
 
-test("cashier (staff) only sells, records expenses and sees sales", () => {
+test("cashier (staff) only sells and sees sales", () => {
   assert.deepEqual(visibleFor("staff"), [
-    "/transaction/sales-invoice", "/transaction/expenses", "/transaction/sales-list", "/settings",
+    "/transaction/sales-invoice", "/transaction/sales-list", "/settings",
   ]);
 });
 
@@ -242,4 +243,13 @@ test("every page with an access rule exists", () => {
   for (const page of Object.keys(PAGE_PERMISSIONS)) {
     assert.ok(existsSync(join(PAGES_DIR, `${page}.js`)), `${page} is listed but src/pages${page}.js doesn't exist`);
   }
+});
+
+test("people only get the stores they work at; all-store people and admins get every store", () => {
+  const stores = [{ id: 1, name: "Ikeja" }, { id: 2, name: "Lekki" }, { id: 3, name: "Back" }];
+  assert.deepEqual(storesFor({ store_access: { all: false, stores: [{ id: 2 }] } }, stores).map((s) => s.name), ["Lekki"]);
+  assert.deepEqual(storesFor({ store_access: { all: true, stores: [] } }, stores), stores);
+  assert.deepEqual(storesFor({ store_access: { all: false, stores: [] } }, stores), []);
+  // Before the user has loaded, nothing is hidden (the server still checks)
+  assert.deepEqual(storesFor(null, stores), stores);
 });

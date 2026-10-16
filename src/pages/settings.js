@@ -18,6 +18,7 @@ import {
   FaShieldAlt,
   FaPalette,
   FaDatabase,
+  FaReceipt,
   FaCheck,
   FaCheckCircle,
   FaTimesCircle,
@@ -34,6 +35,8 @@ import UsersSection from "../components/settings/UsersSection";
 import RolesSection from "../components/settings/RolesSection";
 import SecuritySection from "../components/settings/SecuritySection";
 import DataSection from "../components/settings/DataSection";
+import NotificationsSection from "../components/settings/NotificationsSection";
+import ExpensesSection from "../components/settings/ExpensesSection";
 import {
   ModalFooter,
   ModalShell,
@@ -336,10 +339,11 @@ const Switch = ({ checked, onChange, label }) => (
 const SECTIONS = [
   { id: "general", name: "General", icon: FaCog, description: "Stores and regional settings" },
   { id: "appearance", name: "Appearance", icon: FaPalette, description: "Theme, colour and size" },
-  { id: "notifications", name: "Notifications", icon: FaBell, description: "Alerts and reminders" },
+  { id: "notifications", name: "Notifications", icon: FaBell, description: "Your inbox and what reaches it" },
   { id: "security", name: "Security", icon: FaShieldAlt, description: "Password, sign-out and sessions" },
   { id: "users", name: "Users", icon: FaUserCog, description: "Accounts and roles", permission: "users.manage" },
   { id: "roles", name: "Roles & permissions", icon: FaUserShield, description: "What each role may do", permission: "users.manage" },
+  { id: "expenses", name: "Expenses", icon: FaReceipt, description: "Who approves, and expense categories", permission: "users.manage" },
   { id: "data", name: "Data Management", icon: FaDatabase, description: "Backups, exports and this device" },
 ];
 
@@ -809,7 +813,9 @@ export default function Settings() {
     if (activeSection === "appearance") return renderAppearanceSection();
     if (activeSection === "users" && can("users.manage")) return <UsersSection notify={notify} />;
     if (activeSection === "roles" && can("users.manage")) return <RolesSection notify={notify} />;
+    if (activeSection === "expenses" && can("users.manage")) return <ExpensesSection notify={notify} />;
     if (activeSection === "security") return <SecuritySection notify={notify} />;
+    if (activeSection === "notifications") return <NotificationsSection notify={notify} />;
     if (activeSection === "data") return <DataSection notify={notify} />;
 
     const section = sections.find((s) => s.id === activeSection);
