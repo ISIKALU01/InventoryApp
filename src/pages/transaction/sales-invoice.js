@@ -321,6 +321,11 @@ export default function SalesInvoice() {
 	const [bankAccounts, setBankAccounts] = useState(null); // null = not loaded yet
 	const [bankLoadError, setBankLoadError] = useState("");
 	const [receivingBank, setReceivingBank] = useState(""); // bank account id
+	// Card sales on the store's card machine: the amount is sent to it, and the
+	// sale is recorded once the card is paid
+	const [terminals, setTerminals] = useState([]);
+	const [terminalId, setTerminalId] = useState("");
+	const [posPayment, setPosPayment] = useState(null);
 	const [processing, setProcessing] = useState(false);
 	const [orderError, setOrderError] = useState("");
 	const [completedOrder, setCompletedOrder] = useState(null);
@@ -791,6 +796,9 @@ export default function SalesInvoice() {
 
 	const closeOrderModal = () => {
 		if (processing) return;
+		// Closing while the card machine waits cancels the payment on it
+		if (posPayment?.status === "pending") http.post(`/pos-payments/${posPayment.id}/cancel`).catch(() => {});
+		if (posPayment?.status !== "approved") setPosPayment(null);
 		setShowOrderModal(false);
 	};
 
@@ -822,7 +830,10 @@ export default function SalesInvoice() {
 	};
 
 	// Process the order
-	const handleProcessOrder = async () => {
+	// posPaymentId: the card machine payment that paid this sale (card sales only).
+	// Called from a click too, so anything that isn't a number is ignored.
+	const handleProcessOrder = async (posPaymentId) => {
+		const posId = typeof posPaymentId === "number" ? posPaymentId : null;
 		try {
 			setProcessing(true);
 			setOrderError("");
@@ -855,6 +866,7 @@ export default function SalesInvoice() {
 				items: orderItems,
 				payment_method: paymentMethod,
 				bank_account_id: bankId ? Number(bankId) : null,
+				pos_payment_id: posId || undefined,
 			};
 
 			const response = await http.post("/orders", orderData);
@@ -875,6 +887,7 @@ export default function SalesInvoice() {
 					}
 				}
 
+				setPosPayment(null);
 				setCompletedOrder({
 					total,
 					itemCount,
@@ -1053,8 +1066,44 @@ export default function SalesInvoice() {
 	const total = subtotal - discount;
 	const itemCount = cart.reduce((sum, item) => sum + Number(item.default_quantity_added), 0);
 
+	// The shop's card machines, when paying by card
+	const cardStore = orderStore || selectedStore;
+	const storeTerminals = terminals.filter((t) => !cardStore || String(t.store?.id) === String(cardStore));
+	const usesTerminal = paymentMethod === "card" && storeTerminals.length > 0;
+	const waitingForCard = posPayment?.status === "pending";
+
+	const chooseTerminal = (id) => {
+		setTerminalId(id);
+		try {
+			if (cardStore) window.localStorage.setItem(`sellapad.terminal.${cardStore}`, id);
+		} catch {
+			// Not remembered on this device; fine
+		}
+		const terminal = terminals.find((t) => String(t.id) === String(id));
+		if (terminal?.bank_account_id) setReceivingBank(String(terminal.bank_account_id));
+	};
+
+	const startCardPayment = async () => {
+		setOrderError("");
+		setProcessing(true);
+		try {
+			const { data } = await http.post("/pos-payments", {
+				pos_terminal_id: Number(terminalId),
+				items: cart.map((item) => ({ product_id: item.product_id, quantity: Number(item.default_quantity_added) })),
+			});
+			setPosPayment(data);
+		} catch (err) {
+			const errors = err.response?.data?.errors;
+			setOrderError((errors && Object.values(errors)[0]?.[0]) || err.response?.data?.message || "Could not send the amount to the card machine.");
+		} finally {
+			setProcessing(false);
+		}
+	};
+
 	const canConfirm =
 		Boolean(paymentMethod) &&
+		(!usesTerminal || terminalId) &&
+		!waitingForCard &&
 		(!needsCustomer || selectedCustomer) &&
 		(!needsBank || receivingBank) &&
 		!needsOrderStore &&
@@ -1063,6 +1112,47 @@ export default function SalesInvoice() {
 	useEffect(() => {
 		fetchCart();
 	}, []);
+
+	// Card machines are loaded when paying by card
+	useEffect(() => {
+		if (paymentMethod !== "card") return;
+		http
+			.get("/pos-terminals")
+			.then(({ data }) => setTerminals(toList(data, "data")))
+			.catch(() => setTerminals([]));
+	}, [paymentMethod]);
+
+	// Pick the till's card machine: the one used last on this device, or the only one
+	useEffect(() => {
+		if (!usesTerminal || storeTerminals.some((t) => String(t.id) === terminalId)) return;
+		let remembered = "";
+		try {
+			remembered = window.localStorage.getItem(`sellapad.terminal.${cardStore}`) || "";
+		} catch {
+			remembered = "";
+		}
+		const pick = storeTerminals.find((t) => String(t.id) === remembered) || (storeTerminals.length === 1 ? storeTerminals[0] : null);
+		if (pick) chooseTerminal(String(pick.id));
+	}, [usesTerminal, terminalId, cardStore, terminals]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	// Ask every 1.5 s whether the customer has paid
+	useEffect(() => {
+		if (posPayment?.status !== "pending") return undefined;
+		const timer = window.setInterval(async () => {
+			try {
+				const { data } = await http.get(`/pos-payments/${posPayment.id}`);
+				if (data.status !== "pending") setPosPayment(data);
+			} catch {
+				// Try again next time
+			}
+		}, 1500);
+		return () => window.clearInterval(timer);
+	}, [posPayment?.id, posPayment?.status]);
+
+	// Paid: record the sale with that payment
+	useEffect(() => {
+		if (posPayment?.status === "approved" && !processing) handleProcessOrder(posPayment.id);
+	}, [posPayment?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	// Escape closes whichever dialog is open
 	useEffect(() => {
@@ -1254,6 +1344,63 @@ export default function SalesInvoice() {
 							</div>
 						)}
 
+						{usesTerminal && !posPayment && (
+							<div>
+								<label htmlFor="pos-terminal" className={labelClass}>
+									Card Machine
+								</label>
+								<Select id="pos-terminal" value={terminalId} onChange={(e) => chooseTerminal(e.target.value)} disabled={processing}>
+									<option value="">Choose the card machine</option>
+									{storeTerminals.map((t) => (
+										<option key={t.id} value={t.id}>
+											{t.name}{t.online === false ? " (screen not open)" : ""}
+										</option>
+									))}
+								</Select>
+								<p className="mt-1.5 text-xs text-gray-500">The order total is sent to this machine; the sale is recorded once the card is paid.</p>
+							</div>
+						)}
+
+						{posPayment && (
+							<div
+								role="status"
+								className={`px-4 py-4 text-sm border ${
+									posPayment.status === "pending"
+										? "border-blue-200 bg-blue-50 text-blue-900"
+										: posPayment.status === "approved"
+										? "border-green-200 bg-green-50 text-green-900"
+										: "border-red-200 bg-red-50 text-red-800"
+								}`}
+							>
+								{posPayment.status === "pending" ? (
+									<div className="flex items-start gap-3">
+										<Loader2 size={20} className="mt-0.5 animate-spin shrink-0" />
+										<div className="flex-1">
+											<p className="font-semibold">{formatNaira(Number(posPayment.amount))} sent to {posPayment.terminal?.name}</p>
+											<p>Ask the customer to tap or insert their card and enter their PIN.</p>
+											<button
+												type="button"
+												onClick={() => http.post(`/pos-payments/${posPayment.id}/cancel`).then(({ data }) => setPosPayment(data)).catch(() => {})}
+												className="mt-2 text-xs font-semibold underline"
+											>
+												Cancel the card payment
+											</button>
+										</div>
+									</div>
+								) : posPayment.status === "approved" ? (
+									<p className="font-semibold">Paid{posPayment.card ? ` (${posPayment.card})` : ""}. {processing ? "Recording the sale…" : "Record the sale to finish."}</p>
+								) : (
+									<div>
+										<p className="font-semibold">{posPayment.status_label}{posPayment.message ? `: ${posPayment.message}` : ""}</p>
+										<p>Nothing was sold. Send it again, or choose another payment method.</p>
+										<button type="button" onClick={() => setPosPayment(null)} className="mt-2 text-xs font-semibold underline">
+											Try again
+										</button>
+									</div>
+								)}
+							</div>
+						)}
+
 						<div className="grid gap-px bg-gray-200 border border-gray-200">
 							<SummaryRow label="Subtotal" value={formatNaira(subtotal)} />
 							<SummaryRow
@@ -1276,12 +1423,26 @@ export default function SalesInvoice() {
 						</button>
 						<button
 							type="button"
-							onClick={handleProcessOrder}
-							disabled={!canConfirm}
+							onClick={() =>
+								posPayment?.status === "approved"
+									? handleProcessOrder(posPayment.id)
+									: usesTerminal
+									? startCardPayment()
+									: handleProcessOrder()
+							}
+							disabled={!canConfirm || (posPayment && !["approved"].includes(posPayment.status))}
 							className={primaryButtonClass}
 						>
-							{processing && <Loader2 size={16} className="animate-spin" />}
-							{processing ? "Processing…" : "Confirm Order"}
+							{(processing || waitingForCard) && <Loader2 size={16} className="animate-spin" />}
+							{waitingForCard
+								? "Waiting for the card…"
+								: processing
+								? "Processing…"
+								: posPayment?.status === "approved"
+								? "Record the sale"
+								: usesTerminal
+								? `Send ${formatNaira(total)} to card machine`
+								: "Confirm Order"}
 						</button>
 					</ModalFooter>
 				</ModalShell>

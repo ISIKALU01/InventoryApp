@@ -39,7 +39,8 @@ export default function Layout({ children }) {
   }, []);
 
   // Don't render layout on login page
-  if (router.pathname === '/') {
+  // The login page and the card machine screen have no sidebar or top bar
+  if (router.pathname === '/' || router.pathname === '/pos-device') {
     return <div>{children}</div>;
   }
 

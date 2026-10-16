@@ -25,7 +25,7 @@ const ALL = [
   "purchase-orders.manage", "goods-receipts.view", "goods-receipts.create", "goods-receipts.store-check",
   "goods-receipts.post-stock", "goods-receipts.procurement-check", "sor.view", "sor.count", "sor.store-sign",
   "sor.stock-sign", "sor.return", "supplier-payments.view", "supplier-payments.request",
-  "supplier-payments.check", "supplier-payments.approve", "supplier-payments.pay", "follow-up.view", "follow-up.manage", "banking.view", "banking.manage", "payments.manage", "notifications.manage",
+  "supplier-payments.check", "supplier-payments.approve", "supplier-payments.pay", "follow-up.view", "follow-up.manage", "banking.view", "banking.manage", "payments.manage", "pos.manage", "notifications.manage",
 ];
 
 const ROLE_PERMISSIONS = {

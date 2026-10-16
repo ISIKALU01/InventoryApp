@@ -7,7 +7,8 @@
 // screen, not for security.
 
 // Pages anyone may open, logged in or not
-export const PUBLIC_PATHS = ["/", "/unauthorized"];
+// /pos-device is the demo card machine screen: its terminal code is the key
+export const PUBLIC_PATHS = ["/", "/unauthorized", "/pos-device"];
 
 // Pages every logged-in user may open
 export const ANY_USER_PATHS = ["/settings", "/inbox"];
