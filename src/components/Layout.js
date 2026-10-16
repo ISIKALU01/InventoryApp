@@ -2,7 +2,8 @@
 import { useRouter } from 'next/router';
 import Sidebar from './Sidebar';
 import InboxBell from './InboxBell';
-import { useState, useEffect } from 'react';
+import AppGuideModal, { AppGuideButton } from './AppGuide';
+import { useState, useEffect, useCallback } from 'react';
 
 // Pages of the supplier-to-payment flow (they live under /inventory and /folio)
 const PURCHASING_PAGES = [
@@ -14,6 +15,8 @@ export default function Layout({ children }) {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const closeGuide = useCallback(() => setIsGuideOpen(false), []);
 
   useEffect(() => {
     // Check if window is available (client-side)
@@ -77,9 +80,15 @@ export default function Layout({ children }) {
                 router.pathname.startsWith('/folio') ? 'Folio' : ''}
               </h1>
             </div>
-            <InboxBell />
+            <div className="flex items-center gap-2 shrink-0">
+              <AppGuideButton onClick={() => setIsGuideOpen(true)} />
+              <InboxBell />
+            </div>
           </div>
         </div>
+
+        {/* Rendered inside .app-content so the dark theme applies to it */}
+        {isGuideOpen && <AppGuideModal onClose={closeGuide} />}
         
         {/* Page content - Centers when sidebar is closed on desktop */}
         <main className={`
