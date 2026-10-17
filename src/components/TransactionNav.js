@@ -95,17 +95,17 @@ export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrde
             </button>
             <button 
               onClick={onRecallOrder}
-              disabled={queuedOrdersCount === 0}
+              title={queuedOrdersCount === 0 ? 'No queued orders yet' : undefined}
               className={`
                 flex items-center px-2 py-1 text-xs font-medium
                 border border-gray-300 border-l-0 rounded-r-md transition-all duration-200
                 ${queuedOrdersCount === 0 
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                  ? 'bg-gray-400 text-white hover:bg-gray-500' 
                   : 'bg-indigo-600 text-white hover:bg-indigo-800'
                 }
               `}
             >
-              Recall Order
+              Recall Order {queuedOrdersCount > 0 && `(${queuedOrdersCount})`}
             </button>
           </div>
         )}
@@ -139,12 +139,12 @@ export default function TransactionNav({ onQueueOrder, onRecallOrder, queuedOrde
                 </button>
                 <button 
                   onClick={onRecallOrder}
-                  disabled={queuedOrdersCount === 0}
+                  title={queuedOrdersCount === 0 ? 'No queued orders yet' : undefined}
                   className={`
                     flex items-center px-2 py-1 text-xs font-medium
                     border border-gray-300 rounded-md transition-all duration-200
                     ${queuedOrdersCount === 0 
-                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                      ? 'bg-gray-400 text-white hover:bg-gray-500' 
                       : 'bg-indigo-600 text-white hover:bg-indigo-800'
                     }
                   `}
