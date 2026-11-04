@@ -1,0 +1,3 @@
+# Scripts must keep Unix line endings to run in bash
+*.sh text eol=lf
+.githooks/* text eol=lf

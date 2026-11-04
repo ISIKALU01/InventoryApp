@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Refuses a push whose commits carry the signs of the repo-poisoning malware
+# (see scripts/scan-malware.sh). Turn it on once per clone with:
+#   git config core.hooksPath .githooks
+zero=0000000000000000000000000000000000000000
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue # deleting a branch
+  bash "$(git rev-parse --show-toplevel)/scripts/scan-malware.sh" "$local_sha" || status=1
+done
+if [ $status -ne 0 ]; then
+  echo "Push blocked: remove the files above (and check how they got there) before pushing." >&2
+fi
+exit $status
