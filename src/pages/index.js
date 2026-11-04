@@ -120,7 +120,11 @@ export default function Login() {
 
       if (!response.ok) {
         setPendingApproval(data.status === "pending_approval");
-        setError(data.message || "Invalid email or password");
+        setError(
+          response.status === 429
+            ? "Too many sign-in attempts. Please wait a minute and try again."
+            : data.message || "Invalid email or password"
+        );
         setIsLoading(false);
         return;
       }

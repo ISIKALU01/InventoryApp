@@ -623,9 +623,35 @@ export default function SalesInvoice() {
 		return null;
 	};
 
-	//add to cart
+	// One more of a product already in the order, up to the stock there is.
+	// (Posting it to /cart again would take it out of the order instead.)
+	const addOneMore = (inCart, product, successTitle) => {
+		const quantity = Number(inCart.default_quantity_added) || 1;
+		const max = availableStock(inCart);
+		if (quantity >= max) {
+			notify("error", `Only ${max} ${product.name} in stock.`, "Not added");
+			return;
+		}
+
+		const addOne = (items) =>
+			items.map((item) =>
+				item.id === inCart.id
+					? { ...item, default_quantity_added: (Number(item.default_quantity_added) || 1) + 1 }
+					: item
+			);
+		cartRef.current = addOne(cartRef.current);
+		setCart(addOne);
+		notify("success", `${product.name} × ${quantity + 1}`, successTitle);
+	};
+
+	// Tapping a product adds it, or one more if it is already in the order
 	const handleItemClick = async (item) => {
 		if (addingId) return;
+		const inCart = cartRef.current.find((cartItem) => String(cartItem.product_id) === String(item.id));
+		if (inCart) {
+			addOneMore(inCart, item, "Item added");
+			return;
+		}
 		await addToCart(item);
 	};
 
@@ -682,22 +708,7 @@ export default function SalesInvoice() {
 			return;
 		}
 
-		const quantity = Number(inCart.default_quantity_added) || 1;
-		const max = availableStock(inCart);
-		if (quantity >= max) {
-			notify("error", `Only ${max} ${product.name} in stock.`, "Not added");
-			return;
-		}
-
-		const addOne = (items) =>
-			items.map((item) =>
-				item.id === inCart.id
-					? { ...item, default_quantity_added: (Number(item.default_quantity_added) || 1) + 1 }
-					: item
-			);
-		cartRef.current = addOne(cartRef.current);
-		setCart(addOne);
-		notify("success", `${product.name} × ${quantity + 1}`, "Scanned");
+		addOneMore(inCart, product, "Scanned");
 	};
 
 	const scanQueue = useRef(Promise.resolve());
