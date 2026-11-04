@@ -10,7 +10,6 @@
     "test": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \"tests/**/*.test.mjs\""
   },
   "dependencies": {
-    "@next/font": "^14.2.15",
     "axios": "^1.12.2",
     "chart.js": "^4.5.0",
     "jsbarcode": "3.12.3",

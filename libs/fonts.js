@@ -1,5 +1,5 @@
 // lib/fonts.js
-import { Raleway } from '@next/font/google';
+import { Raleway } from 'next/font/google';
 
 export const raleway = Raleway({
   subsets: ['latin'],
