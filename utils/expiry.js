@@ -45,3 +45,27 @@ export function describeDaysLeft(days) {
   if (days === 1) return "Expires tomorrow";
   return `${days} days left`;
 }
+
+// Look-ahead windows for the dashboard's "Expiring soon" section, in days
+// (the client asked for 40, 80 "and so on"; the API allows up to 365)
+export const DASHBOARD_EXPIRY_WINDOWS = [40, 80, 120, 180, 365];
+export const DASHBOARD_EXPIRY_DEFAULT = 40;
+
+// How urgent a batch with `days` left is: drives the dashboard colours
+export function expiryUrgency(days) {
+  if (days <= 7) return "critical";
+  if (days <= 30) return "soon";
+  return "later";
+}
+
+// Read ?show= and ?days= from the Expiry page URL (the dashboard links there
+// with its filter). Returns only the values that are valid.
+const SHOW_VALUES = ["attention", "expired", "expiring", "all"];
+export function readExpiryQuery(query = {}) {
+  const result = {};
+  const show = String(query.show ?? "");
+  if (SHOW_VALUES.includes(show)) result.show = show;
+  const days = Number(query.days);
+  if (Number.isInteger(days) && days >= 1 && days <= 365) result.days = days;
+  return result;
+}

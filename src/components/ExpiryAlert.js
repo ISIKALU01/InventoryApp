@@ -9,7 +9,9 @@ import { useAuth } from "../context/AuthContext";
 const naira = (value) =>
   `₦${Number(value || 0).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function ExpiryAlert({ className = "" }) {
+// includeExpiring=false: only mention expired stock (the dashboard has its own
+// "Expiring soon" section)
+export default function ExpiryAlert({ className = "", includeExpiring = true }) {
   const { can } = useAuth();
   const allowed = can("inventory.view");
   const [summary, setSummary] = useState(null);
@@ -27,7 +29,7 @@ export default function ExpiryAlert({ className = "" }) {
   }, [allowed]);
 
   const expired = summary?.expired?.units || 0;
-  const expiring = summary?.expiring?.units || 0;
+  const expiring = includeExpiring ? summary?.expiring?.units || 0 : 0;
   if (!allowed || (expired === 0 && expiring === 0)) return null;
 
   const parts = [];

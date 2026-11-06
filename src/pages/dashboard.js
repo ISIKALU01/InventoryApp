@@ -10,6 +10,7 @@ import DebtorCreditor from "@/components/DebtorCreditor";
 import http from "../../services/http";
 import { useAuth } from "../context/AuthContext";
 import ExpiryAlert from "@/components/ExpiryAlert";
+import ExpiringSoon from "@/components/ExpiringSoon";
 import BranchComparison from "@/components/BranchComparison";
 
 export default function Dashboard() {
@@ -158,7 +159,9 @@ export default function Dashboard() {
 						</div>
 					</div>
 
-					<ExpiryAlert className="mb-8" />
+					<ExpiryAlert className="mb-8" includeExpiring={false} />
+
+					<ExpiringSoon storeId={branch} className="mb-8" />
 
 					{/* REMAINING SECTIONS - Show for both roles */}
 					<div className={`grid grid-cols-1 ${showFinancials ? "md:grid-cols-[2fr_1fr]" : ""} gap-4 mb-8`}>

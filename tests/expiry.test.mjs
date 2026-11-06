@@ -41,3 +41,28 @@ test("describes days left in plain words", () => {
   assert.equal(describeDaysLeft(1), "Expires tomorrow");
   assert.equal(describeDaysLeft(30), "30 days left");
 });
+
+test("dashboard windows include the client's 40 and 80 days and stay within the API's 365", async () => {
+  const { DASHBOARD_EXPIRY_WINDOWS, DASHBOARD_EXPIRY_DEFAULT } = await import("../utils/expiry.js");
+  assert.ok(DASHBOARD_EXPIRY_WINDOWS.includes(40));
+  assert.ok(DASHBOARD_EXPIRY_WINDOWS.includes(80));
+  assert.ok(DASHBOARD_EXPIRY_WINDOWS.includes(DASHBOARD_EXPIRY_DEFAULT));
+  assert.ok(DASHBOARD_EXPIRY_WINDOWS.every((d) => d >= 1 && d <= 365));
+});
+
+test("urgency bands", async () => {
+  const { expiryUrgency } = await import("../utils/expiry.js");
+  assert.equal(expiryUrgency(0), "critical");
+  assert.equal(expiryUrgency(7), "critical");
+  assert.equal(expiryUrgency(8), "soon");
+  assert.equal(expiryUrgency(30), "soon");
+  assert.equal(expiryUrgency(31), "later");
+});
+
+test("reads the Expiry page filter from the URL, ignoring bad values", async () => {
+  const { readExpiryQuery } = await import("../utils/expiry.js");
+  assert.deepEqual(readExpiryQuery({ show: "expiring", days: "80" }), { show: "expiring", days: 80 });
+  assert.deepEqual(readExpiryQuery({ show: "nope", days: "400" }), {});
+  assert.deepEqual(readExpiryQuery({ days: "1.5" }), {});
+  assert.deepEqual(readExpiryQuery(), {});
+});

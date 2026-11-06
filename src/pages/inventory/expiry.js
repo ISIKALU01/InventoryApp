@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { storesFor } from "../../../utils/permissions";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import { FaCalendarTimes, FaExclamationTriangle, FaTrash } from "react-icons/fa";
 import InventoryNav from "../../components/InventoryNav";
 import http from "../../../services/http";
 import { useAuth } from "../../context/AuthContext";
-import { EXPIRY_WARNING_DAYS, describeDaysLeft } from "../../../utils/expiry";
+import { EXPIRY_WARNING_DAYS, describeDaysLeft, readExpiryQuery } from "../../../utils/expiry";
 import {
   ModalFooter,
   ModalShell,
@@ -26,7 +27,7 @@ const SHOW_OPTIONS = [
   { value: "all", label: "All batches" },
 ];
 
-const WINDOW_OPTIONS = [7, 14, 30, 60, 90];
+const WINDOW_OPTIONS = [7, 14, 30, 40, 60, 80, 90, 120, 180, 365];
 
 const naira = (value) =>
   `₦${Number(value || 0).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -52,6 +53,7 @@ const SummaryTile = ({ title, figures, tone }) => (
 
 export default function Expiry() {
   const { can, user } = useAuth();
+  const router = useRouter();
   const canDispose = can("inventory.manage");
 
   const [show, setShow] = useState("attention");
@@ -68,6 +70,17 @@ export default function Expiry() {
   const [disposing, setDisposing] = useState(false);
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
+  // Wait for the URL (?show=&days=&store_id=, e.g. from the dashboard) before loading
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!router.isReady || ready) return;
+    const fromUrl = readExpiryQuery(router.query);
+    if (fromUrl.show) setShow(fromUrl.show);
+    if (fromUrl.days) setDays(fromUrl.days);
+    if (/^\d+$/.test(String(router.query.store_id ?? ""))) setStoreId(String(router.query.store_id));
+    setReady(true);
+  }, [router.isReady, router.query, ready]);
 
   const notify = (type, message, title) => {
     clearTimeout(toastTimer.current);
@@ -92,8 +105,8 @@ export default function Expiry() {
   }, [show, days, storeId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (ready) load();
+  }, [load, ready]);
 
   useEffect(() => {
     http
@@ -164,7 +177,7 @@ export default function Expiry() {
             <label className="flex items-center gap-2">
               <span className={statLabelClass}>Warn me</span>
               <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="px-2 py-1.5 text-sm border border-gray-300">
-                {WINDOW_OPTIONS.map((option) => (
+                {(WINDOW_OPTIONS.includes(days) ? WINDOW_OPTIONS : [...WINDOW_OPTIONS, days].sort((a, b) => a - b)).map((option) => (
                   <option key={option} value={option}>{option} days ahead</option>
                 ))}
               </select>
