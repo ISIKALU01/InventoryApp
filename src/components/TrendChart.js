@@ -177,7 +177,7 @@ export default function TrendChart({ storeId = "" }) {
 					{loading ? (
 						<div className="flex justify-center items-center h-full text-gray-400">
 							<div className="animate-spin h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full mr-2"></div>
-							Loading trend...
+							Loading trend....
 						</div>
 					) : (
 						<Line data={chartData} options={chartOptions} />
