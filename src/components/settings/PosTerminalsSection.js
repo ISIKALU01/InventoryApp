@@ -1,8 +1,9 @@
 // Settings > POS terminals (admins): the card machines at each store. A card
 // sale sends the order amount to the store's machine and is recorded once the
 // card is paid. The simulator is a demo card machine: open its screen on a
-// phone or tablet with the terminal's code. Moniepoint/OPay machines are added
-// as types once their integration is confirmed.
+// phone or tablet with the terminal's code. A Moniepoint machine is found by its
+// serial number; the server needs the MONIEPOINT_* keys. Every approved card
+// payment is credited to the bank the machine settles to (see Bank Management).
 import { useCallback, useEffect, useState } from "react";
 import { FaCreditCard, FaExternalLinkAlt, FaPlus, FaRedo, FaTrash } from "react-icons/fa";
 import http from "../../../services/http";
@@ -19,7 +20,8 @@ export default function PosTerminalsSection({ notify }) {
   const [terminals, setTerminals] = useState(null);
   const [stores, setStores] = useState([]);
   const [banks, setBanks] = useState([]);
-  const [form, setForm] = useState({ name: "", store_id: "", provider: "simulator", bank_account_id: "" });
+  const EMPTY_FORM = { name: "", store_id: "", provider: "simulator", external_id: "", bank_account_id: "" };
+  const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -63,11 +65,12 @@ export default function PosTerminalsSection({ notify }) {
           name: form.name.trim(),
           store_id: Number(form.store_id),
           provider: form.provider,
+          external_id: form.provider === "moniepoint" ? form.external_id.trim() : null,
           bank_account_id: form.bank_account_id ? Number(form.bank_account_id) : null,
         }),
       `${form.name.trim()} was added.`
     );
-    if (ok) setForm({ name: "", store_id: "", provider: "simulator", bank_account_id: "" });
+    if (ok) setForm(EMPTY_FORM);
   };
 
   const deviceLink = (t) => `/pos-device?code=${encodeURIComponent(t.device_code)}`;
@@ -91,6 +94,7 @@ export default function PosTerminalsSection({ notify }) {
                   </p>
                   <p className="text-xs text-gray-500">
                     {t.provider_label}
+                    {t.provider === "moniepoint" && t.external_id ? ` · serial ${t.external_id}` : ""}
                     {t.bank_account ? ` · settles to ${t.bank_account.bank_name} ${t.bank_account.account_number}` : ""}
                   </p>
                   {t.provider === "simulator" && (
@@ -124,7 +128,7 @@ export default function PosTerminalsSection({ notify }) {
         )}
       </Panel>
 
-      <Panel title="Add a card machine" description="One per till. For now the simulator (a demo card machine); Moniepoint and OPay machines come once their integration is set up.">
+      <Panel title="Add a card machine" description="One per till. A Moniepoint machine is found by the serial number on its back. Every card payment it approves is credited to the bank it settles to.">
         <form onSubmit={add} className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <label htmlFor="pos-name" className={`${statLabelClass} block mb-1.5`}>Name</label>
@@ -141,18 +145,26 @@ export default function PosTerminalsSection({ notify }) {
             <label htmlFor="pos-provider" className={`${statLabelClass} block mb-1.5`}>Type</label>
             <select id="pos-provider" value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} className={fieldClass}>
               <option value="simulator">Simulator (demo card machine)</option>
+              <option value="moniepoint">Moniepoint</option>
             </select>
           </div>
-          <div />
+          {form.provider === "moniepoint" ? (
+            <div>
+              <label htmlFor="pos-serial" className={`${statLabelClass} block mb-1.5`}>Serial number</label>
+              <input id="pos-serial" value={form.external_id} onChange={(e) => setForm({ ...form, external_id: e.target.value })} maxLength={100} placeholder="On the back of the machine" className={`${fieldClass} font-mono`} />
+            </div>
+          ) : (
+            <div />
+          )}
           <div>
             <label htmlFor="pos-bank" className={`${statLabelClass} block mb-1.5`}>Card money settles to</label>
             <select id="pos-bank" value={form.bank_account_id} onChange={(e) => setForm({ ...form, bank_account_id: e.target.value })} className={fieldClass}>
-              <option value="">Not set (the cashier chooses)</option>
+              <option value="">Not set (card sales aren&apos;t credited to a bank)</option>
               {banks.map((b) => <option key={b.id} value={b.id}>{b.bank_name} · {b.account_number}</option>)}
             </select>
           </div>
           <div className="flex items-end">
-            <button type="submit" disabled={busy || !form.name.trim() || !form.store_id} className="flex items-center px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">
+            <button type="submit" disabled={busy || !form.name.trim() || !form.store_id || (form.provider === "moniepoint" && !form.external_id.trim())} className="flex items-center px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">
               {busy ? <Spinner /> : <FaPlus className="mr-2 text-xs" />} Add card machine
             </button>
           </div>

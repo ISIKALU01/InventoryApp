@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import FolioNav from "../../components/FolioNav";
 import { useAuth } from "../../context/AuthContext";
-import { AlertTriangle, Landmark, Layers, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, History, Landmark, Layers, Pencil, Plus, RefreshCw, Trash2, Wallet, X } from "lucide-react";
+import BankHistoryModal from "../../components/banking/BankHistoryModal";
 
 import { bankAPI } from "../../../services/api";
 import {
@@ -71,6 +72,7 @@ export default function BankManagement() {
   const [error, setError] = useState("");
   const [formBank, setFormBank] = useState(null); // {} = new, bank = edit
   const [bankToDelete, setBankToDelete] = useState(null);
+  const [historyBank, setHistoryBank] = useState(null);
   const { notify, toastElement } = useToast();
 
   // Fetch banks from API
@@ -164,17 +166,24 @@ export default function BankManagement() {
 
   const actions = (bank) => (
     <div className="flex justify-end gap-1">
-      <button onClick={() => setFormBank(bank)} className={iconButtonClass()} title="Edit" aria-label={`Edit ${bank.bank_name}`}>
-        <Pencil size={15} />
+      <button onClick={() => setHistoryBank(bank)} className={iconButtonClass()} title="History" aria-label={`History of ${bank.bank_name}`}>
+        <History size={15} />
       </button>
-      <button
-        onClick={() => setBankToDelete(bank)}
-        className={iconButtonClass("red")}
-        title="Delete"
-        aria-label={`Delete ${bank.bank_name}`}
-      >
-        <Trash2 size={15} />
-      </button>
+      {canManage && (
+        <>
+          <button onClick={() => setFormBank(bank)} className={iconButtonClass()} title="Edit" aria-label={`Edit ${bank.bank_name}`}>
+            <Pencil size={15} />
+          </button>
+          <button
+            onClick={() => setBankToDelete(bank)}
+            className={iconButtonClass("red")}
+            title="Delete"
+            aria-label={`Delete ${bank.bank_name}`}
+          >
+            <Trash2 size={15} />
+          </button>
+        </>
+      )}
     </div>
   );
 
@@ -227,7 +236,7 @@ export default function BankManagement() {
               <col className="w-[12%]" />
               <col className="w-[16%]" />
               <col />
-              {canManage && <col className="w-[5.5rem]" />}
+              <col className={canManage ? "w-[7.5rem]" : "w-[3.5rem]"} />
             </colgroup>
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr className="text-left">
@@ -236,7 +245,7 @@ export default function BankManagement() {
                 <th className={`px-3 py-2.5 ${statLabelClass}`}>Type</th>
                 <th className={`px-3 py-2.5 text-right ${statLabelClass}`}>Balance</th>
                 <th className={`px-3 py-2.5 ${statLabelClass}`}>Description</th>
-                {canManage && <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>}
+                <th className={`px-5 py-2.5 text-right ${statLabelClass}`}>Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -261,7 +270,7 @@ export default function BankManagement() {
                   <td className="px-3 py-3 text-gray-600 truncate" title={bank.description}>
                     {bank.description || "—"}
                   </td>
-                  {canManage && <td className="px-5 py-2">{actions(bank)}</td>}
+                  <td className="px-5 py-2">{actions(bank)}</td>
                 </tr>
               ))}
             </tbody>
@@ -292,22 +301,30 @@ export default function BankManagement() {
                 <span>{bank.branch || "No branch"}</span>
               </div>
               {bank.description && <p className="mt-2 text-xs text-gray-600">{bank.description}</p>}
-              {canManage && (
-                <div className="grid grid-cols-2 mt-3 border border-gray-200 divide-x divide-gray-200">
-                  <button
-                    onClick={() => setFormBank(bank)}
-                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    <Pencil size={13} /> Edit
-                  </button>
-                  <button
-                    onClick={() => setBankToDelete(bank)}
-                    className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 size={13} /> Delete
-                  </button>
-                </div>
-              )}
+              <div className={`grid ${canManage ? "grid-cols-3" : "grid-cols-1"} mt-3 border border-gray-200 divide-x divide-gray-200`}>
+                <button
+                  onClick={() => setHistoryBank(bank)}
+                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <History size={13} /> History
+                </button>
+                {canManage && (
+                  <>
+                    <button
+                      onClick={() => setFormBank(bank)}
+                      className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <Pencil size={13} /> Edit
+                    </button>
+                    <button
+                      onClick={() => setBankToDelete(bank)}
+                      className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 size={13} /> Delete
+                    </button>
+                  </>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -321,7 +338,7 @@ export default function BankManagement() {
     <div className="pt-0 mt-0 font-raleway">
       {toastElement}
 
-      <PageTitle title="Bank Management" description="The accounts your business banks with" />
+      <PageTitle title="Bank Management" description="The accounts your business banks with. Open an account's history to see every credit, including card sales." />
       <FolioNav />
 
       <div className="mt-5 space-y-5">
@@ -393,6 +410,8 @@ export default function BankManagement() {
           onClose={() => setFormBank(null)}
         />
       )}
+
+      {historyBank && <BankHistoryModal bank={historyBank} onClose={() => setHistoryBank(null)} />}
 
       {canManage && bankToDelete && (
         <ConfirmDeleteModal

@@ -257,6 +257,12 @@ export const bankAPI = {
 
   deleteBank: (id) =>
     apiRequest(`/bank-accounts/${id}`, { method: "DELETE", errorLabel: "Failed to delete bank" }),
+
+  // Credits and debits, newest first: { bank_account, summary, data, meta }
+  getHistory: (id, params = {}) => {
+    const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)).toString();
+    return apiRequest(`/bank-accounts/${id}/history${query ? `?${query}` : ""}`, { errorLabel: "Failed to load the bank history" });
+  },
 };
 
 // Suppliers
