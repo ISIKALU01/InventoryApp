@@ -3,6 +3,9 @@ import { useRouter } from 'next/router';
 import Sidebar from './Sidebar';
 import InboxBell from './InboxBell';
 import AppGuideModal, { AppGuideButton } from './AppGuide';
+import { ConnectionBadge, InstallAppButton, OfflineBanner, UpdateBanner } from '../offline/ConnectionBadge';
+import { SyncButton } from '../offline/SyncButton';
+import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useCallback } from 'react';
 
 // Pages of the supplier-to-payment flow (they live under /inventory and /folio)
@@ -17,6 +20,7 @@ export default function Layout({ children }) {
   const [isMobile, setIsMobile] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const closeGuide = useCallback(() => setIsGuideOpen(false), []);
+  const { can } = useAuth();
 
   useEffect(() => {
     // Check if window is available (client-side)
@@ -81,10 +85,15 @@ export default function Layout({ children }) {
               </h1>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <InstallAppButton />
+              <ConnectionBadge />
+              {can('sales.create') && <SyncButton />}
               <AppGuideButton onClick={() => setIsGuideOpen(true)} />
               <InboxBell />
             </div>
           </div>
+          <OfflineBanner />
+          <UpdateBanner />
         </div>
 
         {/* Rendered inside .app-content so the dark theme applies to it */}

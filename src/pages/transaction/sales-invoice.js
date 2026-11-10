@@ -3,8 +3,11 @@ import TransactionNav from "../../components/TransactionNav";
 import ProductPicker from "../../components/ProductPicker";
 import { useAuth } from "../../context/AuthContext";
 import { storesFor } from "../../../utils/permissions";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import http from "../../../services/http";
+import { isOnline, useConnection } from "../../offline/connection";
+import { pendingQuantities, saveOfflineSale, useOfflineSales } from "../../offline/salesQueue";
+import { loadReceiptSettings, printReceipt } from "../../../utils/receipt";
 import { BARCODE_PATTERN, createScanBuffer, findProductByCode } from "../../../utils/barcode";
 import {
 	AlertTriangle,
@@ -14,6 +17,7 @@ import {
 	Minus,
 	Package,
 	Plus,
+	Printer,
 	Search,
 	ShoppingCart,
 	Trash2,
@@ -316,6 +320,33 @@ export default function SalesInvoice() {
 	const cartRef = useRef([]);
 	const [showOrderModal, setShowOrderModal] = useState(false);
 	const [paymentMethod, setPaymentMethod] = useState("");
+	// Customer balance and credit need the live balance, so not offline
+	const { online } = useConnection();
+	const offlineBlocked = (method) => !online && CUSTOMER_METHODS.includes(method);
+	// Sales made offline and not synced yet still take stock off what's shown
+	const { sales: offlineSales } = useOfflineSales();
+	const pending = useMemo(() => pendingQuantities(offlineSales), [offlineSales]);
+	const sellable = useMemo(
+		() =>
+			pending.size === 0
+				? inventory
+				: inventory.map((product) => ({
+						...product,
+						stores: (product.stores || []).map((s) => {
+							const sold = pending.get(`${s.store_id}:${product.id}`);
+							return sold ? { ...s, stock: (Number(s.stock) || 0) - sold } : s;
+						}),
+				  })),
+		[inventory, pending]
+	);
+	const [paymentReference, setPaymentReference] = useState("");
+	const [inventoryReload, setInventoryReload] = useState(0);
+	// Synced offline sales: load the stock again
+	useEffect(() => {
+		const onSynced = () => setInventoryReload((n) => n + 1);
+		window.addEventListener("sellapad:sales-synced", onSynced);
+		return () => window.removeEventListener("sellapad:sales-synced", onSynced);
+	}, []);
 	const [selectedCustomer, setSelectedCustomer] = useState("");
 	const [customers, setCustomers] = useState([]);
 	const [bankAccounts, setBankAccounts] = useState(null); // null = not loaded yet
@@ -328,6 +359,12 @@ export default function SalesInvoice() {
 	const [posPayment, setPosPayment] = useState(null);
 	const [processing, setProcessing] = useState(false);
 	const [orderError, setOrderError] = useState("");
+	useEffect(() => {
+		if (!online && CUSTOMER_METHODS.includes(paymentMethod)) {
+			setPaymentMethod("");
+			setOrderError("You're offline. Customer balance and credit need the internet, so choose another payment method.");
+		}
+	}, [online, paymentMethod]);
 	const [completedOrder, setCompletedOrder] = useState(null);
 	const [queuedOrders, setQueuedOrders] = useState([]);
 	const [queueLoaded, setQueueLoaded] = useState(false);
@@ -442,7 +479,7 @@ export default function SalesInvoice() {
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [inventoryReload]);
 
 	// The filter lists every store from /stores. A product stocked in several
 	// stores is listed under each of them.
@@ -477,7 +514,7 @@ export default function SalesInvoice() {
 	// Filter inventory based on store and search term
 	useEffect(() => {
 		// The list shows what can be sold: shop stock only, and only products a shop holds
-		let filtered = inventory.flatMap((item) => {
+		let filtered = sellable.flatMap((item) => {
 			const shops = shopStock(item.stores);
 			if (shops.length === 0) return [];
 			return [{ ...item, stores: shops, stock: totalStock(shops), store: shops.map((s) => s.store).join(", ") }];
@@ -514,7 +551,7 @@ export default function SalesInvoice() {
 		}
 
 		setFilteredInventory(filtered);
-	}, [selectedStore, searchTerm, inventory]);
+	}, [selectedStore, searchTerm, sellable]);
 
 	// Handle store filter change; the order is sold from the filtered store by default
 	const handleStoreChange = (e) => {
@@ -556,19 +593,52 @@ export default function SalesInvoice() {
 	// Fetch all cart items (kept off the product list's loading flag so the
 	// list doesn't flash a spinner every time an item is added)
 	const fetchCart = async () => {
+		// Offline the order lives on this computer only
+		if (!isOnline()) return;
 		try {
 			const response = await http.get("/cart");
 			const items = response.data.data || [];
-			cartRef.current = items;
-			setCart(items);
+			// Keep anything added while offline
+			const local = cartRef.current.filter((item) => item.local);
+			const merged = [...items, ...local.filter((l) => !items.some((i) => String(i.product_id) === String(l.product_id)))];
+			cartRef.current = merged;
+			setCart(merged);
 		} catch (error) {
 			console.error("Error fetching cart:", error);
-			notify("error", "Could not load the current order.");
+			if (isOnline()) notify("error", "Could not load the current order.");
 		}
+	};
+
+	// An order line kept on this computer (offline), shaped like a /cart row
+	const localCartItem = (product, quantity = 1) => {
+		const shops = shopStock(product.stores);
+		return {
+			id: `local-${product.id}`,
+			local: true,
+			product_id: product.id,
+			product_name: product.name,
+			product_sku: product.sku,
+			product_price: product.price,
+			product_stock: totalStock(shops),
+			product_stores: product.stores || [],
+			default_quantity_added: quantity,
+		};
+	};
+
+	const addLocally = (product, quantity = 1) => {
+		if (cartRef.current.some((item) => String(item.product_id) === String(product.id))) return;
+		const next = [...cartRef.current, localCartItem(product, quantity)];
+		cartRef.current = next;
+		setCart(next);
 	};
 
 	// Add a product to the order (POST /cart/{id} adds it, or removes it if it is already there)
 	const addToCart = async (item, successTitle = "Item added") => {
+		if (!isOnline()) {
+			addLocally(item);
+			notify("success", `${item.name} added to the order.`, successTitle);
+			return;
+		}
 		try {
 			setAddingId(item.id);
 			await http.post(`/cart/${item.id}`, {});
@@ -576,6 +646,12 @@ export default function SalesInvoice() {
 			await fetchCart();
 		} catch (error) {
 			console.error("Error adding cart item:", error);
+			// The connection dropped just now: keep the item on this computer
+			if (!isOnline()) {
+				addLocally(item);
+				notify("success", `${item.name} added to the order (offline).`, successTitle);
+				return;
+			}
 			notify(
 				"error",
 				error.response?.data?.message || `Could not add ${item.name} to the order.`,
@@ -591,6 +667,11 @@ export default function SalesInvoice() {
 	// can't be ticked)
 	const addManyToCart = async (products) => {
 		setBrowsing(false);
+		if (!isOnline()) {
+			products.forEach((product) => addLocally(product));
+			notify("success", `${products.length} ${products.length === 1 ? "product" : "products"} added to the order.`, "Items added");
+			return;
+		}
 		let added = 0;
 		const failed = [];
 		for (const product of products) {
@@ -669,7 +750,7 @@ export default function SalesInvoice() {
 			return;
 		}
 
-		const product = findProductByCode(inventory, code);
+		const product = findProductByCode(sellable, code);
 		if (!product) {
 			notify("error", `No product has barcode ${code}. Check it on the Manage Products page.`, "Not found");
 			return;
@@ -743,7 +824,7 @@ export default function SalesInvoice() {
 		const code = searchTerm.trim();
 		if (!code) return;
 
-		if (findProductByCode(inventory, code)) {
+		if (findProductByCode(sellable, code)) {
 			e.preventDefault();
 			setSearchTerm("");
 			queueScan(code);
@@ -758,7 +839,7 @@ export default function SalesInvoice() {
 	// 🗑️ Delete cart item
 	const handleDelete = async (item) => {
 		try {
-			await http.delete(`/cart/${item.id}`);
+			if (!item.local && isOnline()) await http.delete(`/cart/${item.id}`);
 			setCart((prev) => prev.filter((cartItem) => cartItem.id !== item.id));
 			notify("success", `${item.product_name} removed from the order.`, "Item removed");
 		} catch (err) {
@@ -843,8 +924,102 @@ export default function SalesInvoice() {
 	// Process the order
 	// posPaymentId: the card machine payment that paid this sale (card sales only).
 	// Called from a click too, so anything that isn't a number is ignored.
+	// Receipt: the shop's name, address and phone from /stores
+	const shopFor = (storeId) => {
+		const store = stores.find((s) => String(s.id) === String(storeId));
+		return store ? { name: storeNameOf(store), address: store.address || "", phone: store.phone || "" } : null;
+	};
+
+	// Print the customer's receipt if this computer prints after every sale
+	const finishWithReceipt = (receipt) => {
+		if (loadReceiptSettings().autoPrint) printReceipt(receipt).catch(() => {});
+	};
+
+	// The shop an offline sale comes from: the chosen one, or the only shop
+	// every item is stocked in
+	const offlineSaleStore = () => {
+		const chosen = orderStore || selectedStore || (fixedShop ? String(fixedShop.id) : "");
+		if (chosen) return chosen;
+		const shopsPerItem = cart.map((item) => shopStock(item.product_stores).map((s) => String(s.store_id)));
+		const common = (shopsPerItem[0] || []).filter((id) => shopsPerItem.every((ids) => ids.includes(id)));
+		return common.length === 1 ? common[0] : "";
+	};
+
+	// Offline: keep the sale on this computer; it syncs when the internet is back
+	const saveSaleOffline = async () => {
+		const storeId = offlineSaleStore();
+		if (!storeId) {
+			setOrderError("Choose the shop you're selling from (top of the page) before taking the payment.");
+			return;
+		}
+		if (CUSTOMER_METHODS.includes(paymentMethod)) {
+			setOrderError("Customer balance and credit need the internet. Choose another payment method.");
+			return;
+		}
+		const bankId = needsBank ? receivingBank : "";
+		const bank = bankId ? findBank(bankAccounts || [], bankId) : null;
+		const method = PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label || paymentMethod;
+		const saved = await saveOfflineSale({
+			store_id: storeId,
+			store_name: storeName(storeId),
+			payment_method: paymentMethod,
+			payment_label: method,
+			payment_reference: paymentReference.trim() || null,
+			bank_account_id: bankId || null,
+			bank_label: bank ? bankLabel(bank) : null,
+			cashier_name: user?.name || null,
+			items: cart.map((item) => ({
+				product_id: item.product_id,
+				name: item.product_name,
+				quantity: Number(item.default_quantity_added),
+				unit_price: Number(item.product_price),
+			})),
+		});
+		await clearServerCart(cart).catch(() => {});
+		const receipt = {
+			number: saved.client_ref,
+			date: saved.sold_at,
+			shop: shopFor(storeId),
+			cashier: user?.name,
+			items: saved.items.map((item) => ({ name: item.name, quantity: item.quantity, unit_price: item.unit_price })),
+			total: saved.total,
+			payment: method,
+			bank: bank ? bankLabel(bank) : null,
+			reference: saved.payment_reference,
+			offline: true,
+		};
+		setCompletedOrder({
+			total,
+			itemCount,
+			method,
+			bank: bank ? bankLabel(bank) : null,
+			offline: true,
+			reference: saved.client_ref,
+			receipt,
+		});
+		finishWithReceipt(receipt);
+		cartRef.current = [];
+		setCart([]);
+		setShowOrderModal(false);
+		setPaymentMethod("");
+		setPaymentReference("");
+	};
+
 	const handleProcessOrder = async (posPaymentId) => {
 		const posId = typeof posPaymentId === "number" ? posPaymentId : null;
+		if (!isOnline() && !posId) {
+			try {
+				setProcessing(true);
+				setOrderError("");
+				await saveSaleOffline();
+			} catch (error) {
+				console.error("Error saving offline sale:", error);
+				setOrderError("Couldn't save the sale on this computer. Try again.");
+			} finally {
+				setProcessing(false);
+			}
+			return;
+		}
 		try {
 			setProcessing(true);
 			setOrderError("");
@@ -877,6 +1052,7 @@ export default function SalesInvoice() {
 				items: orderItems,
 				payment_method: paymentMethod,
 				bank_account_id: bankId ? Number(bankId) : null,
+				payment_reference: paymentReference.trim() || undefined,
 				pos_payment_id: posId || undefined,
 			};
 
@@ -898,8 +1074,32 @@ export default function SalesInvoice() {
 					}
 				}
 
+				const sold = response.data;
+				const method = PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label || paymentMethod;
+				const soldItems = Array.isArray(sold.items) && sold.items.length
+					? sold.items.map((item) => ({
+							name: item.product?.name || item.product_name || "Item",
+							quantity: Number(item.quantity),
+							unit_price: Number(item.unit_price),
+					  }))
+					: cart.map((item) => ({ name: item.product_name, quantity: Number(item.default_quantity_added), unit_price: Number(item.product_price) }));
+				const receipt = {
+					number: `#${sold.id}`,
+					date: sold.created_at,
+					shop: shopFor(sold.items?.[0]?.store_id || orderStore || selectedStore),
+					cashier: sold.processed_by || user?.name,
+					customer: sold.customer?.name,
+					items: soldItems,
+					total: Number(sold.total_amount ?? total),
+					payment: method,
+					bank: bank ? bankLabel(bank) : null,
+					reference: paymentReference.trim() || sold.pos_payment?.card || null,
+				};
+				finishWithReceipt(receipt);
+
 				setPosPayment(null);
 				setCompletedOrder({
+					receipt,
 					total,
 					itemCount,
 					method:
@@ -911,6 +1111,7 @@ export default function SalesInvoice() {
 				setCart([]);
 				setShowOrderModal(false);
 				setPaymentMethod("");
+				setPaymentReference("");
 			}
 		} catch (error) {
 			console.error("Error processing order:", error);
@@ -928,12 +1129,12 @@ export default function SalesInvoice() {
 		}
 	};
 
-	const clearServerCart = (items) =>
-		http.delete("/clear-selected-cart", {
-			data: {
-				cart_ids: items.map((item) => item.id),
-			},
-		});
+	// Lines kept on this computer (offline) aren't on the server
+	const clearServerCart = (items) => {
+		const serverIds = items.filter((item) => !item.local).map((item) => item.id);
+		if (serverIds.length === 0 || !isOnline()) return Promise.resolve();
+		return http.delete("/clear-selected-cart", { data: { cart_ids: serverIds } });
+	};
 
 	// Clear all items from cart
 	const handleClearOrder = async () => {
@@ -1004,6 +1205,27 @@ export default function SalesInvoice() {
 
 			const parked = cart.length > 0 ? snapshotCart(cart) : null;
 			if (parked) await clearServerCart(cart);
+
+			// Offline: rebuild it on this computer from the saved product list
+			if (!isOnline()) {
+				const rows = [];
+				const missing = [];
+				for (const item of order.items) {
+					const product = sellable.find((p) => String(p.id) === String(item.product_id));
+					if (product) rows.push(localCartItem(product, item.quantity));
+					else missing.push(item.product_name);
+				}
+				cartRef.current = rows;
+				setCart(rows);
+				setQueuedOrders((prev) => [...prev.filter((queued) => queued.id !== order.id), ...(parked ? [parked] : [])]);
+				setShowRecallModal(false);
+				notify(
+					missing.length ? "error" : "success",
+					missing.length ? `Recalled, but ${missing.join(", ")} isn't in the saved product list.` : "Order recalled.",
+					"Order recalled"
+				);
+				return;
+			}
 
 			const failed = [];
 			for (const item of order.items) {
@@ -1080,7 +1302,9 @@ export default function SalesInvoice() {
 	// The shop's card machines, when paying by card
 	const cardStore = orderStore || selectedStore;
 	const storeTerminals = terminals.filter((t) => !cardStore || String(t.store?.id) === String(cardStore));
-	const usesTerminal = paymentMethod === "card" && storeTerminals.length > 0;
+	// Offline the card machine can't be reached: the customer pays on it on
+	// its own and the cashier types the slip reference
+	const usesTerminal = online && paymentMethod === "card" && storeTerminals.length > 0;
 	const waitingForCard = posPayment?.status === "pending";
 
 	const chooseTerminal = (id) => {
@@ -1264,8 +1488,9 @@ export default function SalesInvoice() {
 							>
 								<option value="">Select payment method</option>
 								{PAYMENT_METHODS.map((method) => (
-									<option key={method.value} value={method.value}>
+									<option key={method.value} value={method.value} disabled={offlineBlocked(method.value)}>
 										{method.label}
+										{offlineBlocked(method.value) ? " (needs internet)" : ""}
 									</option>
 								))}
 							</Select>
@@ -1315,6 +1540,29 @@ export default function SalesInvoice() {
 												  } is added to this account's balance.`}
 										</p>
 									</>
+								)}
+							</div>
+						)}
+
+						{needsBank && !usesTerminal && (
+							<div>
+								<label htmlFor="payment-reference" className={labelClass}>
+									{paymentMethod === "card" ? "Card slip reference" : "Transfer reference"}{" "}
+									<span className="font-normal text-gray-400">(optional)</span>
+								</label>
+								<input
+									id="payment-reference"
+									value={paymentReference}
+									onChange={(e) => setPaymentReference(e.target.value)}
+									maxLength={100}
+									disabled={processing}
+									placeholder={paymentMethod === "card" ? "From the card machine's slip" : "From the customer's transfer"}
+									className="w-full px-3 py-2 text-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+								/>
+								{!online && paymentMethod === "card" && (
+									<p className="mt-1.5 text-xs text-gray-500">
+										Offline: take the payment on the card machine on its own, then type the slip&apos;s reference so it can be matched later.
+									</p>
 								)}
 							</div>
 						)}
@@ -1453,7 +1701,9 @@ export default function SalesInvoice() {
 								? "Record the sale"
 								: usesTerminal
 								? `Send ${formatNaira(total)} to card machine`
-								: "Confirm Order"}
+								: online
+								? "Confirm Order"
+								: "Save sale offline"}
 						</button>
 					</ModalFooter>
 				</ModalShell>
@@ -1463,7 +1713,7 @@ export default function SalesInvoice() {
 			{browsing && (
 				<ProductPicker
 					title="Add products to the order"
-					products={inventory.map((p) => {
+					products={sellable.map((p) => {
 						const shops = shopStock(p.stores);
 						return { ...p, stores: shops, stock: totalStock(shops) };
 					})}
@@ -1565,10 +1815,14 @@ export default function SalesInvoice() {
 			{/* Order Success Modal */}
 			{completedOrder && (
 				<ModalShell
-					title="Order Processed"
-					subtitle="The sale has been recorded"
+					title={completedOrder.offline ? "Sale saved offline" : "Order Processed"}
+					subtitle={
+						completedOrder.offline
+							? "Kept on this computer; it syncs when the internet is back"
+							: "The sale has been recorded"
+					}
 					icon={CheckCircle2}
-					iconClass="bg-green-600"
+					iconClass={completedOrder.offline ? "bg-amber-600" : "bg-green-600"}
 					onClose={() => setCompletedOrder(null)}
 				>
 					<div className="px-6 py-5">
@@ -1588,6 +1842,12 @@ export default function SalesInvoice() {
 								<SummaryRow label="Customer" value={completedOrder.customer} />
 							)}
 						</div>
+						{completedOrder.offline && (
+							<p className="mt-4 text-xs text-gray-600">
+								Offline sale <span className="font-mono">{completedOrder.reference}</span>. It shows under{" "}
+								<span className="font-semibold">Sync</span> in the top bar until it reaches SellaPad.
+							</p>
+						)}
 						{completedOrder.bankNotCredited && (
 							<div
 								role="alert"
@@ -1603,6 +1863,18 @@ export default function SalesInvoice() {
 						)}
 					</div>
 					<ModalFooter>
+						{completedOrder.receipt && (
+							<button
+								type="button"
+								onClick={() =>
+									printReceipt({ ...completedOrder.receipt, copy: loadReceiptSettings().autoPrint }).catch(() => {})
+								}
+								className={secondaryButtonClass}
+							>
+								<Printer size={16} />
+								Print receipt
+							</button>
+						)}
 						<button
 							type="button"
 							autoFocus

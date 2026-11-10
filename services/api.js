@@ -1,4 +1,6 @@
 import BASE_URL from "../config";
+import { reportOffline, reportOnline } from "../src/offline/connection";
+import { OFFLINE_SAVE_MESSAGE } from "./http";
 
 const NO_TOKEN_MESSAGE = "No authentication token found. Please log in again.";
 const AUTH_FAILED_MESSAGE = "Authentication failed. Please log in again.";
@@ -27,11 +29,27 @@ export const getAuthHeaders = () => {
 // Redirects to login on a missing token or 401, and surfaces the server's
 // `message` (falling back to `${errorLabel}: <status>`) on other failures.
 export const apiRequest = async (path, { method = "GET", body, errorLabel = "Request failed" } = {}) => {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers: getAuthHeaders(),
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: getAuthHeaders(),
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (error) {
+    // No answer: no network or the backend is down
+    reportOffline();
+    if (method !== "GET") throw new Error(OFFLINE_SAVE_MESSAGE);
+    throw error;
+  }
+
+  // Saved answers from the offline service worker carry this header
+  if (response.headers.get("X-SellaPad-Offline")) {
+    reportOffline();
+    if (method !== "GET") throw new Error(OFFLINE_SAVE_MESSAGE);
+  } else {
+    reportOnline();
+  }
 
   if (response.status === 401) {
     redirectToLogin();

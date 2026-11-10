@@ -9,12 +9,21 @@ import RouteGuard from '../components/RouteGuard';
 import IdleSignOut from '../components/IdleSignOut';
 import { isPublicPath } from '../../utils/permissions';
 import { APPEARANCE_KEY, applyAppearance, loadAppearance } from '../../utils/appearance';
+import { startOffline } from '../offline/connection';
+import { startAutoSync } from '../offline/salesQueue';
 
 export default function MyApp({ 
   Component, 
   pageProps: { session, ...pageProps } 
 }) {
   const router = useRouter();
+
+  // Offline mode: save the app so it opens without internet (public/sw.js)
+  useEffect(() => {
+    startOffline();
+    // Offline sales saved on this computer sync by themselves when it's back
+    startAutoSync();
+  }, []);
 
   // Keep appearance in step with the device ("System" theme) and other tabs
   useEffect(() => {

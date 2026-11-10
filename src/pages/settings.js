@@ -19,6 +19,7 @@ import {
   FaPalette,
   FaDatabase,
   FaReceipt,
+  FaPrint,
   FaCreditCard,
   FaCheck,
   FaCheckCircle,
@@ -39,6 +40,7 @@ import DataSection from "../components/settings/DataSection";
 import NotificationsSection from "../components/settings/NotificationsSection";
 import ExpensesSection from "../components/settings/ExpensesSection";
 import PosTerminalsSection from "../components/settings/PosTerminalsSection";
+import ReceiptSection from "../components/settings/ReceiptSection";
 import {
   ModalFooter,
   ModalShell,
@@ -346,6 +348,7 @@ const SECTIONS = [
   { id: "users", name: "Users", icon: FaUserCog, description: "Accounts and roles", permission: "users.manage" },
   { id: "roles", name: "Roles & permissions", icon: FaUserShield, description: "What each role may do", permission: "users.manage" },
   { id: "expenses", name: "Expenses", icon: FaReceipt, description: "Who approves, and expense categories", permission: "users.manage" },
+  { id: "receipts", name: "Receipts", icon: FaPrint, description: "Printing receipts on this computer", permission: "sales.create" },
   { id: "pos", name: "POS terminals", icon: FaCreditCard, description: "Card machines at each shop", permission: "pos.manage" },
   { id: "data", name: "Data Management", icon: FaDatabase, description: "Backups, exports and this device" },
 ];
@@ -817,6 +820,7 @@ export default function Settings() {
     if (activeSection === "users" && can("users.manage")) return <UsersSection notify={notify} />;
     if (activeSection === "roles" && can("users.manage")) return <RolesSection notify={notify} />;
     if (activeSection === "expenses" && can("users.manage")) return <ExpensesSection notify={notify} />;
+    if (activeSection === "receipts" && can("sales.create")) return <ReceiptSection notify={notify} />;
     if (activeSection === "pos" && can("pos.manage")) return <PosTerminalsSection notify={notify} />;
     if (activeSection === "security") return <SecuritySection notify={notify} />;
     if (activeSection === "notifications") return <NotificationsSection notify={notify} />;

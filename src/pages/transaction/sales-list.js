@@ -1,4 +1,5 @@
 // pages/transaction/sales-list.js
+import { printReceipt } from '../../../utils/receipt';
 import { useState, useEffect, useRef } from 'react';
 import TransactionNav from '../../components/TransactionNav';
 import { useAuth } from '../../context/AuthContext';
@@ -508,78 +509,21 @@ export default function SalesList() {
     );
   };
 
+  // Reprint: the same receipt as the sales point prints, marked COPY
   const handlePrintReceipt = (order) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      notify('error', 'Allow pop-ups for this site to print receipts.', 'Print blocked');
-      return;
-    }
-
-    const date = toDate(order.created_at) || new Date();
-    const items = orderItems(order);
-    const row = (label, value, cls = '') =>
-      `<tr class="${cls}"><td>${label}</td><td class="r">${value}</td></tr>`;
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Receipt - ${escapeHtml(orderRef(order))}</title>
-          <style>
-            * { box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; font-size: 12px; color: #111; max-width: 320px; margin: 0 auto; padding: 16px; }
-            h2 { margin: 0 0 4px; font-size: 16px; letter-spacing: 1px; }
-            .center { text-align: center; }
-            .muted { color: #555; }
-            .rule { border-top: 1px dashed #999; margin: 10px 0; }
-            table { width: 100%; border-collapse: collapse; }
-            td { padding: 3px 0; vertical-align: top; }
-            .r { text-align: right; white-space: nowrap; }
-            .total td { font-size: 14px; font-weight: bold; border-top: 1px solid #111; padding-top: 6px; }
-          </style>
-        </head>
-        <body>
-          <div class="center">
-            <h2>SALES RECEIPT</h2>
-            <div class="muted">#${escapeHtml(orderRef(order))}</div>
-            <div class="muted">${escapeHtml(date.toLocaleString())}</div>
-          </div>
-          <div class="rule"></div>
-          <table>
-            ${row('Customer', escapeHtml(customerOf(order)))}
-            ${row('Payment', escapeHtml(paymentLabel(order.payment_method)))}
-            ${locationOf(order) ? row('Store', escapeHtml(locationOf(order))) : ''}
-          </table>
-          <div class="rule"></div>
-          <table>
-            ${
-              items.length
-                ? items
-                    .map(
-                      (item) => `
-                <tr><td colspan="2">${escapeHtml(itemName(item))}</td></tr>
-                <tr class="muted"><td>${itemQty(item)} × ${formatCurrency(itemPrice(item))}</td>
-                  <td class="r">${formatCurrency(itemQty(item) * itemPrice(item))}</td></tr>`
-                    )
-                    .join('')
-                : '<tr><td class="muted">No items</td></tr>'
-            }
-          </table>
-          <div class="rule"></div>
-          <table>
-            ${row('Subtotal', formatCurrency(order.subtotal ?? orderAmount(order)))}
-            ${row('Tax', formatCurrency(order.tax_amount))}
-            ${row('Discount', formatCurrency(order.discount_amount))}
-            ${row('Total', formatCurrency(orderAmount(order)), 'total')}
-          </table>
-          <div class="rule"></div>
-          <div class="center muted">Processed by ${escapeHtml(userOf(order) || 'System')}</div>
-          <div class="center" style="margin-top:8px">Thank you for your patronage</div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    printReceipt({
+      number: `#${orderRef(order)}`,
+      date: toDate(order.created_at) || new Date(),
+      shop: locationOf(order) ? { name: locationOf(order) } : null,
+      cashier: userOf(order),
+      customer: customerOf(order),
+      items: orderItems(order).map((item) => ({ name: itemName(item), quantity: itemQty(item), unit_price: itemPrice(item) })),
+      total: orderAmount(order),
+      payment: paymentLabel(order.payment_method),
+      reference: order.payment_reference || null,
+      offline: Boolean(order.offline),
+      copy: true,
+    }).catch(() => notify('error', 'The receipt could not be printed.', 'Print failed'));
   };
 
   const openDelete = (order) => {

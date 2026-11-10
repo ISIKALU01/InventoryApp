@@ -7,6 +7,7 @@ import { useRouter } from "next/router";
 import http from "../../services/http";
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from "../../utils/auth";
 import { hasPermission } from "../../utils/permissions";
+import { clearOfflineData } from "../offline/connection";
 
 const AuthContext = createContext(null);
 
@@ -92,6 +93,8 @@ export function AuthProvider({ children }) {
       // Already expired or offline: clearing it locally is still right
     }
     clearSession();
+    // Saved offline data belongs to this user; the next person shouldn't see it
+    clearOfflineData();
     setUser(null);
     setStatus("guest");
     if (typeof window !== "undefined") {

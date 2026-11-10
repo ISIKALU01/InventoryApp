@@ -6,6 +6,11 @@ import BASE_URL from "../../config";
 import { useAuth } from "../context/AuthContext";
 import { homePathFor } from "../../utils/permissions";
 
+// Signing in needs the server. Someone already signed in on this computer
+// stays signed in while offline (until they sign out).
+const CANT_REACH_MESSAGE =
+  "Can't reach the SellaPad server, so you can't sign in right now. Check the internet and try again. If you were already signed in on this computer, don't sign out: the app keeps working offline.";
+
 // Loading Component
 const LoadingScreen = () => {
   return (
@@ -118,6 +123,12 @@ export default function Login() {
 
       const data = await response.json().catch(() => ({}));
 
+      if (!response.ok && (response.status >= 500 || response.headers.get("X-SellaPad-Offline"))) {
+        setError(CANT_REACH_MESSAGE);
+        setIsLoading(false);
+        return;
+      }
+
       if (!response.ok) {
         setPendingApproval(data.status === "pending_approval");
         setError(
@@ -139,7 +150,7 @@ export default function Login() {
       router.replace(homePathFor(data.user));
     } catch (error) {
       console.error("Login error:", error);
-      setError("Network error. Please try again.");
+      setError(CANT_REACH_MESSAGE);
       setIsLoading(false);
     }
   };
