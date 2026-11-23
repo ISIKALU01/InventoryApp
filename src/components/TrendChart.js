@@ -164,7 +164,7 @@ export default function TrendChart({ storeId = "" }) {
 							: "This Year"}
 					</h2>
 					{loading ? (
-						<p className="text-gray-400 text-sm">Loading total...</p>
+						<p className="text-gray-400 text-sm">Loading total..</p>
 					) : (
 						<p className="text-2xl font-bold text-indigo-600">
 							{formatAmount(total)}
