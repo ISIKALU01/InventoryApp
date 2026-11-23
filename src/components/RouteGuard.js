@@ -4,16 +4,15 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "../context/AuthContext";
+import SystemLoader from "./ui/SystemLoader";
 import { canAccessPath, isPublicPath } from "../../utils/permissions";
 
-const FullScreenMessage = ({ text }) => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-      <p className="mt-4 text-gray-600">{text}</p>
-    </div>
-  </div>
-);
+const ACCESS_STEPS = [
+  "Verifying session token",
+  "Loading your role & permissions",
+  "Syncing inventory ledger",
+  "Preparing your workspace",
+];
 
 export default function RouteGuard({ children }) {
   const router = useRouter();
@@ -33,8 +32,8 @@ export default function RouteGuard({ children }) {
   }, [isPublic, status, allowed, router]);
 
   if (isPublic) return children;
-  if (status === "loading") return <FullScreenMessage text="Checking your access..." />;
-  if (status === "guest" || !allowed) return <FullScreenMessage text="Redirecting..." />;
+  if (status === "loading") return <SystemLoader message="Checking your access" steps={ACCESS_STEPS} />;
+  if (status === "guest" || !allowed) return <SystemLoader message="Redirecting" steps={ACCESS_STEPS} />;
 
   return children;
 }

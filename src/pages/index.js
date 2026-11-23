@@ -5,40 +5,15 @@ import { FaShieldAlt, FaChartBar, FaUsers, FaBox, FaEnvelope, FaLock } from "rea
 import BASE_URL from "../../config";
 import { useAuth } from "../context/AuthContext";
 import { homePathFor } from "../../utils/permissions";
+import SystemLoader from "../components/ui/SystemLoader";
 
 // Signing in needs the server. Someone already signed in on this computer
 // stays signed in while offline (until they sign out).
 const CANT_REACH_MESSAGE =
   "Can't reach the SellaPad server, so you can't sign in right now. Check the internet and try again. If you were already signed in on this computer, don't sign out: the app keeps working offline.";
 
-// Loading Component
-const LoadingScreen = () => {
-  return (
-    <div className="fixed inset-0 bg-indigo-900 flex items-center justify-center z-50">
-      <div className="text-center text-white">
-        <div className="animate-pulse">
-          <h1 className="text-5xl md:text-6xl font-bold mb-4">SellaPad</h1>
-          <p className="text-xl md:text-2xl font-light">
-            Own Your Inventory. Control Your Sales. Scale With Confidence.
-          </p>
-        </div>
-        <div className="mt-8">
-          <div className="w-64 h-2 bg-blue-400 rounded-full overflow-hidden mx-auto">
-            <div className="h-full bg-white animate-[progress_7s_linear]"></div>
-          </div>
-          <p className="mt-4 text-blue-200">Loading your experience...</p>
-        </div>
-        
-        <style jsx>{`
-          @keyframes progress {
-            0% { width: 0%; }
-            100% { width: 100%; }
-          }
-        `}</style>
-      </div>
-    </div>
-  );
-};
+// First-load splash, timed to match the 7 second loading screen below
+const LoadingScreen = () => <SystemLoader duration={7000} />;
 
 export default function Login() {
   const { user, status, startSession } = useAuth();
@@ -169,14 +144,7 @@ export default function Login() {
 
   // Show loading state while checking client-side
   if (!isClient) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <SystemLoader message="Loading" />;
   }
 
   return (
